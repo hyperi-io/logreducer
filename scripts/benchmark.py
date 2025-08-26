@@ -24,9 +24,14 @@ from typing import Dict, List, Optional, Tuple
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from logreducer import LogReducer
+from logreducer import LogReducer, setup_logging
 from logreducer.config import ProcessingLevel, ProcessingMode
+from logreducer.logging_config import get_logger
 import psutil
+
+# Setup console logging for benchmark script
+setup_logging(enable=True, console=True, log_level="INFO")
+logger = get_logger("benchmark")
 
 
 class BenchmarkRunner:
@@ -43,7 +48,7 @@ class BenchmarkRunner:
         datasets = []
         
         if not self.samples_dir.exists():
-            print(f"WARNING: Samples directory not found: {self.samples_dir}")
+            logger.warning(f"Samples directory not found: {self.samples_dir}")
             return datasets
             
         for log_file in self.samples_dir.glob("*.log"):
@@ -76,7 +81,7 @@ class BenchmarkRunner:
             "configurations": []
         }
         
-        print(f"\nBenchmarking {dataset['name']} ({dataset['size_mb']} MB)")
+        logger.info(f"Benchmarking {dataset['name']} ({dataset['size_mb']} MB)")
         
         for level in processing_levels:
             for mode in processing_modes:
@@ -180,7 +185,7 @@ class BenchmarkRunner:
             "datasets": []
         }
         
-        print(f"Starting comprehensive benchmark on {len(datasets)} datasets")
+        logger.info(f"Starting comprehensive benchmark on {len(datasets)} datasets")
         print(f"💻 System: {system_info['cpu_count']} cores, {system_info['memory_total_gb']} GB RAM")
         
         total_start = time.time()
@@ -287,7 +292,7 @@ def main():
         output_path = Path(args.output)
         with open(output_path, 'w') as f:
             json.dump(results, f, indent=2)
-        print(f"\nDetailed results saved to: {output_path}")
+        logger.info(f"Detailed results saved to: {output_path}")
     
     # Also save to .tmp for reference
     timestamp = time.strftime("%Y%m%d_%H%M%S")
@@ -295,7 +300,7 @@ def main():
     with open(auto_output, 'w') as f:
         json.dump(results, f, indent=2)
     
-    print(f"Results automatically saved to: {auto_output}")
+    logger.info(f"Results automatically saved to: {auto_output}")
 
 
 if __name__ == "__main__":

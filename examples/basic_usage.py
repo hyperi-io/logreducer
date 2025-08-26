@@ -12,9 +12,14 @@ from pathlib import Path
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from logreducer import LogReducer
+from logreducer import LogReducer, setup_logging
+from logreducer.logging_config import get_logger
 import tempfile
 import time
+
+# Setup console logging for examples
+setup_logging(enable=True, console=True, log_level="INFO")
+logger = get_logger("examples")
 
 
 def create_sample_log():
@@ -57,13 +62,13 @@ def create_sample_log():
 
 def example_basic_usage():
     """Example 1: Basic usage with default settings"""
-    print("=" * 60)
-    print("Example 1: Basic Usage")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("Example 1: Basic Usage")
+    logger.info("=" * 60)
     
     # Create sample data
     log_file = create_sample_log()
-    print(f"Created sample log file: {log_file}")
+    logger.info(f"Created sample log file: {log_file}")
     
     try:
         # Create reducer with default settings
@@ -75,16 +80,16 @@ def example_basic_usage():
         processing_time = time.time() - start_time
         
         # Show results
-        print(f"✅ Processing completed in {processing_time:.2f} seconds")
-        print(f"Reduced to {len(reduced_lines)} lines")
+        logger.info(f"Processing completed in {processing_time:.2f} seconds")
+        logger.info(f"Reduced to {len(reduced_lines)} lines")
         
         # Show first few reduced lines
-        print("\nFirst 5 reduced lines:")
+        logger.info("First 5 reduced lines:")
         for i, line in enumerate(reduced_lines[:5]):
-            print(f"  {i+1}: {line}")
+            logger.info(f"  {i+1}: {line}")
         
         if len(reduced_lines) > 5:
-            print(f"  ... and {len(reduced_lines) - 5} more lines")
+            logger.info(f"  ... and {len(reduced_lines) - 5} more lines")
     
     finally:
         # Clean up
@@ -93,9 +98,9 @@ def example_basic_usage():
 
 def example_with_output_file():
     """Example 2: Save output to file"""
-    print("\n" + "=" * 60)
-    print("Example 2: Save to Output File")
-    print("=" * 60)
+    logger.info("\n" + "=" * 60)
+    logger.info("Example 2: Save to Output File")
+    logger.info("=" * 60)
     
     log_file = create_sample_log()
     output_file = Path(__file__).parent.parent / ".tmp" / "basic_example_output.log"
@@ -108,7 +113,7 @@ def example_with_output_file():
         reduced_lines = reducer.process_file(log_file, str(output_file))
         
         print(f"✅ Processed and saved to: {output_file}")
-        print(f"Reduced to {len(reduced_lines)} lines")
+        logger.info(f"Reduced to {len(reduced_lines)} lines")
         
         # Verify file was created
         if output_file.exists():
@@ -152,7 +157,7 @@ def example_with_statistics():
         # Get statistics
         stats = reducer.stats
         
-        print("Processing Statistics:")
+        logger.info("Processing Statistics:")
         print(f"   Input lines:     {stats.get('input_lines', 'N/A'):,}")
         print(f"   Output lines:    {stats.get('output_lines', 'N/A'):,}")
         print(f"   Input size:      {stats.get('input_size_mb', 'N/A')} MB")
@@ -162,7 +167,7 @@ def example_with_statistics():
         
         # Show configuration used
         config = reducer.config
-        print(f"\nConfiguration:")
+        logger.info("Configuration:")
         print(f"   Processing level: {getattr(config, 'level', 'N/A')}")
         print(f"   Processing mode:  {getattr(config, 'mode', 'N/A')}")
         print(f"   Worker threads:   {config.n_workers}")
@@ -203,7 +208,7 @@ def example_different_processing_modes():
                   f"Reduction: {results[mode]['reduction']}%")
         
         # Summary comparison
-        print(f"\nMode Comparison:")
+        logger.info("Mode Comparison:")
         print(f"   {'Mode':<10} {'Lines':<8} {'Time':<8} {'Reduction':<10}")
         print(f"   {'-'*10} {'-'*8} {'-'*8} {'-'*10}")
         

@@ -376,18 +376,18 @@ class LogReducer:
                 self.logger.info(f"Metadata saved to {meta_file}")
     
     def _print_summary(self):
-        """Print processing summary"""
-        print("\n" + "="*60)
-        print("LOG REDUCTION SUMMARY")
-        print("="*60)
-        print(f"Mode: {self.mode.value}")
-        print(f"Level: {self.level.value}")
-        print(f"Input: {self.stats['input_size_mb']:.1f} MB")
-        print(f"Output: {self.stats['output_lines']} lines")
-        print(f"Reduction: {self.stats['reduction_percent']:.1f}%")
-        print(f"Time: {self.stats['processing_time_seconds']:.1f} seconds")
-        print(f"Rate: {self.stats['processing_rate_mb_per_sec']:.1f} MB/sec")
-        print("="*60)
+        """Log processing summary"""
+        self.logger.info("\n" + "="*60)
+        self.logger.info("LOG REDUCTION SUMMARY")
+        self.logger.info("="*60)
+        self.logger.info(f"Mode: {self.mode.value}")
+        self.logger.info(f"Level: {self.level.value}")
+        self.logger.info(f"Input: {self.stats['input_size_mb']:.1f} MB")
+        self.logger.info(f"Output: {self.stats['output_lines']} lines")
+        self.logger.info(f"Reduction: {self.stats['reduction_percent']:.1f}%")
+        self.logger.info(f"Time: {self.stats['processing_time_seconds']:.1f} seconds")
+        self.logger.info(f"Rate: {self.stats['processing_rate_mb_per_sec']:.1f} MB/sec")
+        self.logger.info("="*60)
     
     def estimate_processing(self, file_path: str) -> dict:
         """Estimate processing requirements before running"""
