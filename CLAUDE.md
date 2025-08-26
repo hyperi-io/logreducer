@@ -199,15 +199,6 @@ Enables verbose logging and performance profiling.
   - Metrics: processing_total, processing_duration, bytes_processed, reduction_ratio, memory_usage
   - Support both pull (metrics endpoint) and push (pushgateway) patterns
   - Replace JSON-based telemetry system with Prometheus metric telemetry that fits monitoring architecture
-- **Tokeniser Stage**: Add configurable tokenization preprocessing stage for better pattern recognition
-  - Support custom delimiters, regex patterns, and field extraction
-  - Structured log format parsing (JSON, key=value pairs)
-  - Token-level analysis for improved pattern matching
-- **LLM Integration**: Optional Large Language Model integration for advanced log analysis
-  - Semantic log classification and categorization
-  - Natural language summaries of log patterns
-  - Automated error description and root cause suggestions
-  - Configurable LLM providers (OpenAI, Anthropic, local models)
 
 ### Medium Priority
 - Real-time streaming mode

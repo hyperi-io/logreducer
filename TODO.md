@@ -24,6 +24,3 @@
 - [ ] Add Prometheus integration documentation
 
 **Priority**: High - Required for production monitoring
-
-### LLM Integration
-**Epic**: Optional Large Language Model integration for advanced log analysis

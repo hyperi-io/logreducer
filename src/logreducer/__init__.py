@@ -10,7 +10,7 @@ Licensed under the HyperSec EULA: https://hypersec.io/eula
 Author: Derek <noreply@hypersec.io>
 """
 
-__version__ = "3.1.14"
+__version__ = "3.2.1"
 __author__ = "Derek"
 __email__ = "noreply@hypersec.io"
 __license__ = "HyperSec EULA"
