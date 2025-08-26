@@ -1,0 +1,181 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "logreducer"
+version = "3.1.14"
+authors = [
+    {name = "Corporate Development Team", email = "devops@company.com"},
+]
+description = "High-performance log reduction with intelligent pattern extraction and anomaly detection"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.8.1"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "Topic :: System :: Logging",
+    "Topic :: System :: Systems Administration", 
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+]
+keywords = ["log", "logging", "reduction", "analysis", "pattern-extraction", "memory-efficient", "streaming", "anomaly-detection"]
+dependencies = [
+    "drain3>=0.9.0",
+    "tqdm>=4.65.0", 
+    "psutil>=5.9.0",
+    "python-dateutil>=2.8.0",
+    "loguru>=0.7.0",
+]
+
+[project.optional-dependencies]
+enhanced = [
+    "xxhash>=3.0.0",
+    "polars>=0.20.0",
+    "numpy>=1.24.0",
+    "scipy>=1.10.0",
+    "scikit-learn>=1.3.0",
+    "datasketch>=1.5.0",
+]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "flake8>=6.0.0",
+    "mypy>=1.0.0",
+    "build>=0.10.0",
+    "twine>=4.0.0",
+]
+docs = [
+    "sphinx>=5.0.0",
+    "sphinx-rtd-theme>=1.0.0",
+    "myst-parser>=0.18.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/company/logreducer"
+Documentation = "https://docs.company.com/logreducer"
+Repository = "https://github.com/company/logreducer"
+"Bug Reports" = "https://github.com/company/logreducer/issues"
+Changelog = "https://github.com/company/logreducer/blob/main/CHANGELOG.md"
+
+[project.scripts]
+logreducer = "logreducer.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["logreducer*"]
+exclude = ["tests*"]
+
+[tool.setuptools.package-data]
+logreducer = ["py.typed"]
+
+# Black code formatting
+[tool.black]
+line-length = 88
+target-version = ['py38', 'py39', 'py310', 'py311', 'py312']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+  | \.tmp
+  | logs
+)/
+'''
+
+# MyPy type checking
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+# pytest configuration
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q --strict-markers --strict-config"
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+]
+
+# Coverage configuration  
+[tool.coverage.run]
+source = ["logreducer"]
+omit = [
+    "*/tests/*",
+    "*/test_*",
+    "*/.venv/*",
+    "*/venv/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
+
+# Bandit security linting configuration
+[tool.bandit]
+exclude_dirs = [
+    "tests",
+    "test", 
+    ".venv",
+    "venv",
+    ".tox",
+    "build",
+    "dist",
+    "data/samples"
+]
+skips = ["B101", "B603"]
+
+[tool.bandit.assert_used]
+# Allow asserts in test files
+skips = ["*test*.py", "*tests*.py"]
+
+# Safety dependency vulnerability scanner configuration
+[tool.safety]
+# Add any vulnerability IDs to ignore (with justification)
+ignore = []
+full_report = true
