@@ -11,7 +11,7 @@ from pathlib import Path
 
 def update_init_py(version):
     """Update version in __init__.py"""
-    init_file = Path("logreducer/__init__.py")
+    init_file = Path("src/logreducer/__init__.py")
     
     if not init_file.exists():
         print(f"❌ {init_file} not found")
@@ -48,11 +48,14 @@ def update_pyproject_toml(version):
     with open(pyproject_file, 'r') as f:
         content = f.read()
     
-    # Update version in [project] section
+    # Update version ONLY in [project] section
+    # Use a more specific regex to avoid matching other version fields
     new_content = re.sub(
-        r'version\s*=\s*["\'][^"\']*["\']',
+        r'^version\s*=\s*["\'][^"\']*["\']',
         f'version = "{version}"',
-        content
+        content,
+        count=1,  # Only replace the first occurrence
+        flags=re.MULTILINE
     )
     
     # Write back
@@ -90,14 +93,30 @@ def update_package_json(version):
     return True
 
 
+def update_version_file(version):
+    """Update VERSION file"""
+    version_file = Path("VERSION")
+    
+    # Write version to file
+    with open(version_file, 'w') as f:
+        f.write(version + '\n')
+    
+    print(f"✅ Updated {version_file} to version {version}")
+    return True
+
+
 def main():
     """Main version update process"""
-    if len(sys.argv) != 2:
-        print("Usage: python update_version.py <version>")
-        print("Example: python update_version.py 1.2.3")
+    # Handle both formats: "version.py --set X.Y.Z" or "version.py X.Y.Z"
+    if len(sys.argv) == 3 and sys.argv[1] == '--set':
+        version = sys.argv[2]
+    elif len(sys.argv) == 2:
+        version = sys.argv[1]
+    else:
+        print("Usage: python version.py [--set] <version>")
+        print("Example: python version.py --set 1.2.3")
+        print("Example: python version.py 1.2.3")
         sys.exit(1)
-    
-    version = sys.argv[1]
     
     # Validate version format (basic semver check)
     if not re.match(r'^\d+\.\d+\.\d+(-.*)?$', version):
@@ -113,7 +132,8 @@ def main():
     os.chdir(project_root)
     
     updates = [
-        ("logreducer/__init__.py", update_init_py),
+        ("VERSION", update_version_file),
+        ("src/logreducer/__init__.py", update_init_py),
         ("pyproject.toml", update_pyproject_toml), 
         ("package.json", update_package_json),
     ]
