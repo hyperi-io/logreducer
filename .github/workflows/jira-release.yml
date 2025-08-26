@@ -1,0 +1,197 @@
+name: Update JIRA on Release
+
+on:
+  release:
+    types: [published]
+  workflow_run:
+    workflows: ["Semantic Release"]
+    types: [completed]
+
+jobs:
+  update-jira:
+    name: Update JIRA Issues
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release' || github.event.workflow_run.conclusion == 'success'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Get Release Info
+      id: release_info
+      run: |
+        if [ "${{ github.event_name }}" == "release" ]; then
+          echo "version=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+          echo "body=${{ github.event.release.body }}" >> $GITHUB_OUTPUT
+        else
+          # Get latest tag for workflow_run trigger
+          LATEST_TAG=$(git describe --tags --abbrev=0)
+          echo "version=${LATEST_TAG}" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Extract JIRA Issues from Commits
+      id: extract_issues
+      run: |
+        # Get commits since last release
+        PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+        
+        if [ -z "$PREV_TAG" ]; then
+          # First release, get all commits
+          COMMITS=$(git log --format=%B)
+        else
+          # Get commits between tags
+          COMMITS=$(git log ${PREV_TAG}..HEAD --format=%B)
+        fi
+        
+        # Extract JIRA issue keys (PROJECT-123 format)
+        ISSUES=$(echo "$COMMITS" | grep -oE '${{ secrets.JIRA_PROJECT }}-[0-9]+' | sort -u | tr '\n' ' ')
+        
+        echo "issues=${ISSUES}" >> $GITHUB_OUTPUT
+        echo "Found JIRA issues: ${ISSUES}"
+    
+    - name: Create or Update Fix Version in JIRA
+      if: steps.extract_issues.outputs.issues != ''
+      run: |
+        VERSION="${{ steps.release_info.outputs.version }}"
+        VERSION=${VERSION#v}  # Remove 'v' prefix if present
+        
+        # Check if version exists
+        EXISTING=$(curl -s -X GET \
+          "${{ secrets.JIRA_DOMAIN }}/rest/api/3/project/${{ secrets.JIRA_PROJECT }}/versions" \
+          -H "Authorization: Basic ${{ secrets.JIRA_AUTH }}" \
+          -H "Accept: application/json" | \
+          python3 -c "import sys, json; versions = json.load(sys.stdin); print(any(v['name'] == '${VERSION}' for v in versions))")
+        
+        if [ "$EXISTING" != "True" ]; then
+          echo "Creating version ${VERSION} in JIRA..."
+          
+          curl -X POST \
+            "${{ secrets.JIRA_DOMAIN }}/rest/api/3/version" \
+            -H "Authorization: Basic ${{ secrets.JIRA_AUTH }}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"name\": \"${VERSION}\",
+              \"project\": \"${{ secrets.JIRA_PROJECT }}\",
+              \"released\": true,
+              \"releaseDate\": \"$(date -u +%Y-%m-%d)\"
+            }"
+        fi
+    
+    - name: Update JIRA Issues
+      if: steps.extract_issues.outputs.issues != ''
+      run: |
+        VERSION="${{ steps.release_info.outputs.version }}"
+        VERSION=${VERSION#v}  # Remove 'v' prefix if present
+        ISSUES="${{ steps.extract_issues.outputs.issues }}"
+        
+        for ISSUE in $ISSUES; do
+          echo "Updating ${ISSUE}..."
+          
+          # Get current fix versions
+          CURRENT_VERSIONS=$(curl -s -X GET \
+            "${{ secrets.JIRA_DOMAIN }}/rest/api/3/issue/${ISSUE}?fields=fixVersions" \
+            -H "Authorization: Basic ${{ secrets.JIRA_AUTH }}" \
+            -H "Accept: application/json" | \
+            python3 -c "import sys, json; data = json.load(sys.stdin); print(json.dumps(data['fields']['fixVersions']))")
+          
+          # Add new version to existing ones
+          if [ "$CURRENT_VERSIONS" != "null" ] && [ "$CURRENT_VERSIONS" != "[]" ]; then
+            # Parse existing versions and add new one
+            FIX_VERSIONS=$(echo "$CURRENT_VERSIONS" | python3 -c "
+import sys, json
+versions = json.load(sys.stdin)
+version_objects = [{'name': v['name']} for v in versions]
+version_objects.append({'name': '${VERSION}'})
+print(json.dumps(version_objects))
+")
+          else
+            FIX_VERSIONS="[{\"name\": \"${VERSION}\"}]"
+          fi
+          
+          # Update issue with fix version
+          curl -X PUT \
+            "${{ secrets.JIRA_DOMAIN }}/rest/api/3/issue/${ISSUE}" \
+            -H "Authorization: Basic ${{ secrets.JIRA_AUTH }}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"fields\": {
+                \"fixVersions\": ${FIX_VERSIONS}
+              }
+            }"
+          
+          # Add comment about release
+          RELEASE_URL="https://github.com/${{ github.repository }}/releases/tag/${{ steps.release_info.outputs.version }}"
+          
+          curl -X POST \
+            "${{ secrets.JIRA_DOMAIN }}/rest/api/3/issue/${ISSUE}/comment" \
+            -H "Authorization: Basic ${{ secrets.JIRA_AUTH }}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"body\": {
+                \"type\": \"doc\",
+                \"version\": 1,
+                \"content\": [
+                  {
+                    \"type\": \"paragraph\",
+                    \"content\": [
+                      {
+                        \"type\": \"text\",
+                        \"text\": \"Released in version ${VERSION}\"
+                      }
+                    ]
+                  },
+                  {
+                    \"type\": \"paragraph\",
+                    \"content\": [
+                      {
+                        \"type\": \"text\",
+                        \"text\": \"View release: \"
+                      },
+                      {
+                        \"type\": \"text\",
+                        \"text\": \"${RELEASE_URL}\",
+                        \"marks\": [
+                          {
+                            \"type\": \"link\",
+                            \"attrs\": {
+                              \"href\": \"${RELEASE_URL}\"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            }"
+          
+          echo "✅ Updated ${ISSUE}"
+        done
+    
+    - name: Transition Issues to Done (Optional)
+      if: steps.extract_issues.outputs.issues != '' && github.event_name == 'release'
+      continue-on-error: true
+      run: |
+        # This step is optional and requires knowing your JIRA workflow transition IDs
+        # Uncomment and modify the transition ID (31) to match your "Done" transition
+        
+        ISSUES="${{ steps.extract_issues.outputs.issues }}"
+        
+        for ISSUE in $ISSUES; do
+          echo "Attempting to transition ${ISSUE} to Done..."
+          
+          # Get available transitions
+          # curl -X GET \
+          #   "${{ secrets.JIRA_DOMAIN }}/rest/api/3/issue/${ISSUE}/transitions" \
+          #   -H "Authorization: Basic ${{ secrets.JIRA_AUTH }}" \
+          #   -H "Accept: application/json"
+          
+          # Transition to Done (replace 31 with your transition ID)
+          # curl -X POST \
+          #   "${{ secrets.JIRA_DOMAIN }}/rest/api/3/issue/${ISSUE}/transitions" \
+          #   -H "Authorization: Basic ${{ secrets.JIRA_AUTH }}" \
+          #   -H "Content-Type: application/json" \
+          #   -d '{"transition": {"id": "31"}}'
+        done

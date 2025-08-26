@@ -1,0 +1,66 @@
+name: JIRA OAuth Token Management
+
+on:
+  schedule:
+    # Check token daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  refresh-token:
+    name: Refresh JIRA OAuth Token
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Check Token Expiry
+      id: check_token
+      env:
+        JIRA_REFRESH_TOKEN: ${{ secrets.JIRA_REFRESH_TOKEN }}
+        JIRA_CLIENT_ID: ${{ secrets.JIRA_CLIENT_ID }}
+        JIRA_CLIENT_SECRET: ${{ secrets.JIRA_CLIENT_SECRET }}
+      run: |
+        # OAuth 2.0 token refresh
+        RESPONSE=$(curl -X POST \
+          "https://auth.atlassian.com/oauth/token" \
+          -H "Content-Type: application/json" \
+          -d "{
+            \"grant_type\": \"refresh_token\",
+            \"client_id\": \"${JIRA_CLIENT_ID}\",
+            \"client_secret\": \"${JIRA_CLIENT_SECRET}\",
+            \"refresh_token\": \"${JIRA_REFRESH_TOKEN}\"
+          }")
+        
+        ACCESS_TOKEN=$(echo $RESPONSE | jq -r '.access_token')
+        NEW_REFRESH_TOKEN=$(echo $RESPONSE | jq -r '.refresh_token')
+        EXPIRES_IN=$(echo $RESPONSE | jq -r '.expires_in')
+        
+        echo "access_token=${ACCESS_TOKEN}" >> $GITHUB_OUTPUT
+        echo "refresh_token=${NEW_REFRESH_TOKEN}" >> $GITHUB_OUTPUT
+        echo "expires_in=${EXPIRES_IN}" >> $GITHUB_OUTPUT
+    
+    - name: Update GitHub Secrets
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ secrets.ADMIN_GITHUB_TOKEN }}
+        script: |
+          const { access_token, refresh_token } = ${{ steps.check_token.outputs }};
+          
+          // Update access token
+          await github.rest.actions.createOrUpdateRepoSecret({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            secret_name: 'JIRA_ACCESS_TOKEN',
+            encrypted_value: await encryptSecret(access_token)
+          });
+          
+          // Update refresh token if changed
+          if (refresh_token !== '${{ secrets.JIRA_REFRESH_TOKEN }}') {
+            await github.rest.actions.createOrUpdateRepoSecret({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              secret_name: 'JIRA_REFRESH_TOKEN',
+              encrypted_value: await encryptSecret(refresh_token)
+            });
+          }
+          
+          console.log('✅ Tokens updated successfully');
