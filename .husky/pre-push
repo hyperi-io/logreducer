@@ -10,9 +10,36 @@ echo "🚀 Running pre-push checks..."
 remote="$1"
 url="$2"
 
+# Branch name validation
+current_branch=$(git rev-parse --abbrev-ref HEAD)
+protected_branches="main|master|develop|development|staging|production"
+
+# Skip branch name validation for protected branches
+if echo "$current_branch" | grep -qE "^($protected_branches)$"; then
+  echo "✅ Protected branch detected, skipping branch name validation"
+else
+  echo "🔍 Validating branch name..."
+  npx branch-name-lint .branchlintrc.json
+
+  if [ $? -ne 0 ]; then
+    echo "❌ Branch name validation failed!"
+    echo ""
+    echo "Valid patterns:"
+    echo "  feature/description or feature/JIRA-123-description"
+    echo "  fix/bug-description"
+    echo "  hotfix/critical-fix"
+    echo "  release/3.2.0"
+    echo "  docs/update-readme"
+    echo "  chore/update-deps"
+    echo ""
+    echo "See .branchlintrc.json for full configuration"
+    exit 1
+  fi
+  echo "✅ Branch name valid"
+fi
+
 # Check if we're pushing to main or develop
 protected_branches="main|develop"
-current_branch=$(git rev-parse --abbrev-ref HEAD)
 
 if echo "$current_branch" | grep -qE "^($protected_branches)$"; then
     echo "🛡️  Pushing to protected branch: $current_branch"

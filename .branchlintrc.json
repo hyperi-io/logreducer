@@ -1,0 +1,90 @@
+{
+  "branchNameLinter": {
+    "prefixes": [
+      "feature",
+      "feat",
+      "fix",
+      "hotfix",
+      "release",
+      "docs",
+      "chore",
+      "test",
+      "refactor",
+      "perf",
+      "build",
+      "ci",
+      "style",
+      "revert",
+      "deps"
+    ],
+    "separator": "/",
+    "regex": "^(feature|feat|fix|hotfix|release|docs|chore|test|refactor|perf|build|ci|style|revert|deps)\\/(([A-Z]+-\\d+)-)?[a-z0-9-]+$",
+    "msgBranchName": "Branch name must follow pattern: {prefix}/{optional-jira-id}-{description}",
+    "msgPrefixNotAllowed": "Branch prefix must be one of: feature, fix, hotfix, release, docs, chore, test, refactor, perf, build, ci, style, revert, deps",
+    "msgSeparatorRequired": "Branch name must use '/' separator after prefix",
+    "msgRegexFormatNotMatched": "Branch name format invalid. Use lowercase kebab-case: {prefix}/{JIRA-123-}description-here",
+    "suggestions": {
+      "feat": "feature",
+      "bugfix": "fix",
+      "bug": "fix",
+      "doc": "docs",
+      "dep": "deps",
+      "dependency": "deps",
+      "dependencies": "deps",
+      "tests": "test",
+      "testing": "test",
+      "performance": "perf",
+      "refactoring": "refactor",
+      "housekeeping": "chore",
+      "maintenance": "chore",
+      "pipeline": "ci",
+      "cicd": "ci",
+      "formatting": "style"
+    },
+    "prohibited": [
+      "wip",
+      "temp",
+      "tmp",
+      "experiment",
+      "exp",
+      "delete-me",
+      "deleteme",
+      "do-not-merge",
+      "dontmerge"
+    ],
+    "examples": {
+      "valid": [
+        "feature/add-prometheus-metrics",
+        "feature/PROJ-123-add-prometheus-metrics",
+        "fix/memory-leak-in-processor",
+        "fix/PROJ-456-memory-leak",
+        "hotfix/critical-security-patch",
+        "release/3.2.0",
+        "docs/update-api-guide",
+        "chore/update-dependencies",
+        "test/add-integration-tests",
+        "refactor/extract-pattern-module",
+        "perf/optimize-streaming",
+        "ci/fix-semantic-release",
+        "deps/update-numpy"
+      ],
+      "invalid": [
+        "feature_add_prometheus",
+        "add-prometheus-metrics",
+        "FEATURE/add-prometheus",
+        "feature/Add-Prometheus-Metrics",
+        "wip/something",
+        "feature//double-slash",
+        "feature/",
+        "feature"
+      ]
+    },
+    "options": {
+      "disallowUpperCase": true,
+      "requireSeparator": true,
+      "maxLength": 60,
+      "msgMaxLengthExceeded": "Branch name too long. Maximum 60 characters allowed.",
+      "skipCI": false
+    }
+  }
+}
