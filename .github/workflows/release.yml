@@ -10,6 +10,12 @@ on:
 env:
   NODE_VERSION: '20'
 
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  packages: write
+
 jobs:
   release:
     name: Semantic Release
@@ -100,7 +106,14 @@ jobs:
         ARTIFACTORY_USER: ${{ secrets.ARTIFACTORY_USERNAME }}
         ARTIFACTORY_TOKEN: ${{ secrets.ARTIFACTORY_PASSWORD }}
       run: |
-        npx semantic-release
+        echo "Running semantic-release with debug output..."
+        echo "Current directory: $(pwd)"
+        echo "Git status:"
+        git status
+        echo "Recent commits:"
+        git log --oneline -5
+        echo "Running semantic-release..."
+        npx semantic-release --debug
     
     # VERSION file and pyproject.toml are automatically updated by semantic-release
     # via the @semantic-release/exec plugin configuration in .releaserc.json
