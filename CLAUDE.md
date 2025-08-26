@@ -178,13 +178,13 @@ Enables verbose logging and performance profiling.
 ## Future Enhancements
 
 ### High Priority
-- **Prometheus Metrics Integration**: Replace current telemetry system with proper Prometheus metrics
+- **Prometheus Metrics Integration**: Replace current telemetry system with proper Prometheus metric telemetry
   - Add prometheus-client dependency for metrics endpoint
   - Implement Counter, Histogram, and Gauge metrics for processing stats
   - Create /metrics endpoint for Prometheus scraping
   - Metrics: processing_total, processing_duration, bytes_processed, reduction_ratio, memory_usage
   - Support both pull (metrics endpoint) and push (pushgateway) patterns
-  - Remove JSON-based telemetry system that doesn't fit Prometheus architecture
+  - Replace JSON-based telemetry system with Prometheus metric telemetry that fits monitoring architecture
 - **Tokeniser Stage**: Add configurable tokenization preprocessing stage for better pattern recognition
   - Support custom delimiters, regex patterns, and field extraction
   - Structured log format parsing (JSON, key=value pairs)

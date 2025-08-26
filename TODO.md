@@ -3,7 +3,7 @@
 ## High Priority Features
 
 ### Prometheus Metrics Integration
-**Epic**: Replace current telemetry system with proper Prometheus metrics
+**Epic**: Replace current telemetry system with proper Prometheus metric telemetry
 
 **Context**: Current telemetry system uses JSON events and HTTP push, which doesn't fit Prometheus pull-based architecture. Need enterprise-grade metrics for monitoring.
 
@@ -20,7 +20,7 @@
 - [ ] Support both pull (metrics endpoint) and push (Prometheus Pushgateway) patterns
 - [ ] Add metrics configuration to BigDialConfig
 - [ ] Update CLI to expose metrics endpoint option
-- [ ] Remove existing JSON-based telemetry system
+- [ ] Replace existing JSON-based telemetry system with Prometheus metric telemetry
 - [ ] Add Prometheus integration documentation
 
 **Priority**: High - Required for production monitoring
