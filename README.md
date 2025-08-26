@@ -125,7 +125,7 @@ reducer = LogReducer(
 )
 ```
 
-## 📈 Performance Benchmarks
+## Performance Benchmarks
 
 | File Size | Mode | Level | Processing Time | Memory Usage | Reduction % |
 |-----------|------|-------|----------------|--------------|-------------|
@@ -134,7 +134,7 @@ reducer = LogReducer(
 | 10 GB | pattern | standard | 5m | 1 GB | 99.9% |
 | 10 GB | hybrid | enhanced | 8m | 2 GB | 99.95% |
 
-## 🛠️ Advanced Usage
+## Advanced Usage
 
 ### Programmatic Processing
 
@@ -176,7 +176,7 @@ errors = [line for line in reduced_logs if 'ERROR' in line.upper()]
 print(f"Found {len(errors)} error patterns")
 ```
 
-## 🔍 Log Format Support
+## Log Format Support
 
 LogReducer automatically detects and handles various log formats:
 
@@ -186,7 +186,7 @@ LogReducer automatically detects and handles various log formats:
 - **Application**: `2024-01-01 12:00:00.123`
 - **Custom formats** via timestamp parsing
 
-## 🚦 Error Handling
+## Error Handling
 
 ```python
 try:
@@ -200,7 +200,7 @@ except Exception as e:
     print(f"Processing error: {e}")
 ```
 
-## 🏗️ Development
+## Development
 
 ### Setup Development Environment
 
@@ -228,7 +228,7 @@ flake8 logreducer/             # Lint code
 mypy logreducer/               # Type check
 ```
 
-## 📋 Requirements
+## Requirements
 
 ### Core Dependencies
 - Python 3.8+
@@ -258,16 +258,16 @@ For complete license terms, visit: https://hypersec.io/eula
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## 📞 Support
+## Support
 
 - **Documentation**: [https://docs.company.com/logreducer](https://docs.company.com/logreducer)
 - **Issues**: [GitHub Issues](https://github.com/company/logreducer/issues)
 - **Enterprise Support**: Contact devops@company.com
 
-## 🗂️ Changelog
+## Changelog
 
 See [CHANGELOG.md](CHANGELOG.md) for a list of changes and version history.
 
 ---
 
-**Built with ❤️ by the Corporate Development Team**
+**Built by the HyperSec Development Team**
