@@ -2,7 +2,7 @@
 
 ## High Priority Features
 
-### 🔤 Tokeniser Stage
+### Tokeniser Stage
 **Epic**: Add configurable tokenization preprocessing stage for better pattern recognition
 
 **User Story**: As a user processing structured logs, I want configurable tokenization so that pattern extraction works better with different log formats.
@@ -24,7 +24,7 @@
 - Performance impact < 10% for standard processing
 - Backward compatibility with existing processing modes
 
-### 🤖 LLM Integration
+### LLM Integration
 **Epic**: Optional Large Language Model integration for advanced log analysis
 
 **User Story**: As a DevOps engineer, I want LLM-powered log analysis to get semantic insights and natural language summaries of log patterns.
@@ -52,19 +52,19 @@
 
 ## Technical Debt & Improvements
 
-### 📊 Performance Optimization
+### Performance Optimization
 - [ ] Profile memory usage patterns across different log types
 - [ ] Optimize pattern matching algorithms for large pattern sets
 - [ ] Implement adaptive chunk sizing based on available memory
 - [ ] Add parallel processing for independent log files
 
-### 🧪 Testing & Quality
+### Testing & Quality
 - [ ] Increase test coverage to 95%+ 
 - [ ] Add property-based testing for pattern extraction
 - [ ] Create performance regression test suite
 - [ ] Add integration tests with real-world log datasets
 
-### 📚 Documentation
+### Documentation
 - [ ] Create video tutorials for common use cases
 - [ ] Add interactive examples in documentation
 - [ ] Write troubleshooting guide for common issues
@@ -72,19 +72,19 @@
 
 ## Long-term Roadmap
 
-### 🌊 Real-time Processing
+### Real-time Processing
 - [ ] Design streaming log processing architecture
 - [ ] Implement real-time pattern detection
 - [ ] Add alerting for anomaly detection
 - [ ] Support for log shipping integration (Filebeat, Fluentd)
 
-### 🔗 Ecosystem Integration  
+### Ecosystem Integration  
 - [ ] Elasticsearch plugin for direct integration
 - [ ] Grafana dashboard templates
 - [ ] Prometheus metrics export
 - [ ] Kubernetes operator for log processing jobs
 
-### 🎯 Specialized Features
+### Specialized Features
 - [ ] Custom pattern libraries for specific domains (AWS, K8s, etc.)
 - [ ] Machine learning model training from processed logs
 - [ ] Log correlation across multiple sources
