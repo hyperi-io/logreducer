@@ -151,6 +151,18 @@ Enables verbose logging and performance profiling.
 
 ## Future Enhancements
 
+### High Priority
+- **Tokeniser Stage**: Add configurable tokenization preprocessing stage for better pattern recognition
+  - Support custom delimiters, regex patterns, and field extraction
+  - Structured log format parsing (JSON, key=value pairs)
+  - Token-level analysis for improved pattern matching
+- **LLM Integration**: Optional Large Language Model integration for advanced log analysis
+  - Semantic log classification and categorization
+  - Natural language summaries of log patterns
+  - Automated error description and root cause suggestions
+  - Configurable LLM providers (OpenAI, Anthropic, local models)
+
+### Medium Priority
 - Real-time streaming mode
 - Distributed processing support
 - Custom pattern libraries
