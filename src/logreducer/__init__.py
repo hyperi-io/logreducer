@@ -4,15 +4,19 @@ LogReducer - High-performance log analysis and reduction system
 Enterprise-grade log processing module that intelligently reduces large log files while 
 preserving critical patterns and anomalies. Features memory-safe streaming, temporal analysis, 
 and advanced pattern extraction for operational insights.
+
+Copyright (c) HyperSec 2025. All rights reserved.
+Licensed under the HyperSec EULA: https://hypersec.io/eula
+Author: Derek <noreply@hypersec.io>
 """
 
 __version__ = "3.1.14"
-__author__ = "Corporate Development Team"
-__email__ = "devops@company.com"
-__license__ = "MIT"
-__copyright__ = "Copyright (c) 2024 Company Corp"
+__author__ = "Derek"
+__email__ = "noreply@hypersec.io"
+__license__ = "HyperSec EULA"
+__copyright__ = "Copyright (c) HyperSec 2025"
 __description__ = "High-performance log reduction with intelligent pattern extraction and anomaly detection"
-__url__ = "https://github.com/company/logreducer"
+__url__ = "https://github.com/hypersec-io/logreducer"
 
 from .core import LogReducer
 from .config import ProcessingLevel, ProcessingMode, BigDialConfig, OutputFormat

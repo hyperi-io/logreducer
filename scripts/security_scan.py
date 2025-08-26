@@ -66,7 +66,7 @@ class SecurityScanner:
     
     def scan_dependencies_safety(self) -> Dict:
         """Scan dependencies with Safety"""
-        print("\n🔍 Running Safety dependency scan...")
+        print("\nSCANNING: Running Safety dependency scan...")
         
         report_file = self.reports_dir / "safety-report.json"
         exit_code, stdout, stderr = self.run_command([
@@ -80,7 +80,7 @@ class SecurityScanner:
             
             vuln_count = len(report.get("vulnerabilities", []))
             if vuln_count > 0:
-                print(f"  ⚠️  Found {vuln_count} dependency vulnerabilities")
+                print(f"  WARNING:  Found {vuln_count} dependency vulnerabilities")
                 for vuln in report["vulnerabilities"][:3]:  # Show first 3
                     print(f"     - {vuln.get('package_name', 'Unknown')}: {vuln.get('advisory', 'No details')}")
                 if vuln_count > 3:
@@ -95,7 +95,7 @@ class SecurityScanner:
                 "report_file": str(report_file)
             }
         else:
-            print(f"  ❌ Safety scan failed: {stderr}")
+            print(f"  FAILED: Safety scan failed: {stderr}")
             return {
                 "tool": "safety", 
                 "status": "failed",
@@ -104,7 +104,7 @@ class SecurityScanner:
     
     def scan_dependencies_pip_audit(self) -> Dict:
         """Scan dependencies with pip-audit"""
-        print("\n🔍 Running pip-audit dependency scan...")
+        print("\nSCANNING: Running pip-audit dependency scan...")
         
         report_file = self.reports_dir / "pip-audit-report.json"
         exit_code, stdout, stderr = self.run_command([
@@ -117,7 +117,7 @@ class SecurityScanner:
             
             vuln_count = len(report.get("vulnerabilities", []))
             if vuln_count > 0:
-                print(f"  ⚠️  Found {vuln_count} dependency vulnerabilities")
+                print(f"  WARNING:  Found {vuln_count} dependency vulnerabilities")
             else:
                 print("  ✓ No dependency vulnerabilities found")
             
@@ -128,7 +128,7 @@ class SecurityScanner:
                 "report_file": str(report_file)
             }
         else:
-            print(f"  ❌ pip-audit scan failed: {stderr}")
+            print(f"  FAILED: pip-audit scan failed: {stderr}")
             return {
                 "tool": "pip-audit",
                 "status": "failed", 
@@ -137,7 +137,7 @@ class SecurityScanner:
     
     def scan_static_bandit(self) -> Dict:
         """Run Bandit static security analysis"""
-        print("\n🔍 Running Bandit static security scan...")
+        print("\nSCANNING: Running Bandit static security scan...")
         
         report_file = self.reports_dir / "bandit-report.json"
         exit_code, stdout, stderr = self.run_command([
@@ -150,7 +150,7 @@ class SecurityScanner:
             
             issue_count = len(report.get("results", []))
             if issue_count > 0:
-                print(f"  ⚠️  Found {issue_count} potential security issues")
+                print(f"  WARNING:  Found {issue_count} potential security issues")
                 
                 # Show summary by severity
                 severity_counts = {}
@@ -170,7 +170,7 @@ class SecurityScanner:
                 "report_file": str(report_file)
             }
         else:
-            print(f"  ❌ Bandit scan failed: {stderr}")
+            print(f"  FAILED: Bandit scan failed: {stderr}")
             return {
                 "tool": "bandit",
                 "status": "failed",
@@ -179,7 +179,7 @@ class SecurityScanner:
     
     def scan_semantic_semgrep(self) -> Dict:
         """Run Semgrep semantic security analysis"""
-        print("\n🔍 Running Semgrep semantic security scan...")
+        print("\nSCANNING: Running Semgrep semantic security scan...")
         
         report_file = self.reports_dir / "semgrep-report.json"
         exit_code, stdout, stderr = self.run_command([
@@ -193,7 +193,7 @@ class SecurityScanner:
             
             issue_count = len(report.get("results", []))
             if issue_count > 0:
-                print(f"  ⚠️  Found {issue_count} potential security issues")
+                print(f"  WARNING:  Found {issue_count} potential security issues")
                 
                 # Show summary by severity
                 severity_counts = {}
@@ -213,7 +213,7 @@ class SecurityScanner:
                 "report_file": str(report_file)
             }
         else:
-            print(f"  ❌ Semgrep scan failed: {stderr}")
+            print(f"  FAILED: Semgrep scan failed: {stderr}")
             return {
                 "tool": "semgrep",
                 "status": "failed",
@@ -222,7 +222,7 @@ class SecurityScanner:
     
     def generate_summary_report(self, scan_results: List[Dict]) -> None:
         """Generate a comprehensive summary report"""
-        print("\n📊 Security Scan Summary")
+        print("\nANALYSIS: Security Scan Summary")
         print("=" * 50)
         
         total_issues = 0
@@ -249,13 +249,13 @@ class SecurityScanner:
         print(f"{'Total':12}: {total_issues:3} issues found")
         
         if total_issues == 0:
-            print("\n✅ No security issues detected!")
+            print("\nSUCCESS: No security issues detected!")
         else:
-            print(f"\n⚠️  {total_issues} security issues require attention")
+            print(f"\nWARNING:  {total_issues} security issues require attention")
             if critical_issues > 0:
-                print(f"🚨 {critical_issues} issues are potentially critical")
+                print(f"CRITICAL: {critical_issues} issues are potentially critical")
         
-        print(f"\n📁 Detailed reports saved to: {self.reports_dir}")
+        print(f"\nFILES: Detailed reports saved to: {self.reports_dir}")
         
         # Save summary as JSON
         summary_file = self.reports_dir / "security-summary.json"
@@ -270,11 +270,11 @@ class SecurityScanner:
         with open(summary_file, 'w') as f:
             json.dump(summary, f, indent=2)
         
-        print(f"📋 Summary report saved to: {summary_file}")
+        print(f"REPORT: Summary report saved to: {summary_file}")
     
     def run_full_scan(self) -> bool:
         """Run all security scans"""
-        print("🛡️  Starting comprehensive security scan for LogReducer")
+        print("SECURITY:  Starting comprehensive security scan for LogReducer")
         print(f"Project root: {self.project_root}")
         
         # Install tools if needed
@@ -290,7 +290,7 @@ class SecurityScanner:
             scan_results.append(self.scan_static_bandit())
             scan_results.append(self.scan_semantic_semgrep())
         except KeyboardInterrupt:
-            print("\n⚠️  Scan interrupted by user")
+            print("\nWARNING:  Scan interrupted by user")
             return False
         
         # Generate summary
@@ -325,7 +325,7 @@ def main():
     success = scanner.run_full_scan()
     
     if args.report_only:
-        print("\n📋 Report-only mode: exiting with success regardless of findings")
+        print("\nREPORT: Report-only mode: exiting with success regardless of findings")
         sys.exit(0)
     
     sys.exit(0 if success else 1)

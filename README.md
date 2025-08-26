@@ -1,12 +1,12 @@
 # LogReducer
 
 [![Python Version](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://python.org)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: HyperSec EULA](https://img.shields.io/badge/License-HyperSec_EULA-red.svg)](https://hypersec.io/eula)
 [![Package Version](https://img.shields.io/badge/version-1.0.0-green.svg)](https://pypi.org/project/logreducer/)
 
 A high-performance Python module for intelligently reducing large log files (GB+) to representative samples while preserving critical patterns. Features memory-safe processing, temporal awareness, and anomaly detection.
 
-## 🚀 Features
+## Features
 
 - **Memory-Safe Processing**: Handle multi-GB log files with constant memory usage
 - **Multiple Processing Modes**: Pattern-based, anomaly detection, temporal analysis, and hybrid approaches
@@ -16,7 +16,7 @@ A high-performance Python module for intelligently reducing large log files (GB+
 - **Anomaly Detection**: ML-powered identification of unusual log entries
 - **Flexible Configuration**: Three processing levels with extensive customization options
 
-## 📦 Installation
+## Installation
 
 ### From Private PyPI Repository (Corporate)
 
@@ -31,12 +31,12 @@ pip install --index-url https://your-company.jfrog.io/artifactory/api/pypi/pypi/
 ### Development Installation
 
 ```bash
-git clone https://github.com/company/logreducer.git
+git clone https://github.com/hypersec-io/logreducer.git
 cd logreducer
 pip install -e ".[dev]"
 ```
 
-## ⚡ Quick Start
+## Quick Start
 
 ### Basic Usage
 
@@ -76,7 +76,7 @@ logreducer --input app.log --output reduced.log --level standard
 logreducer --input production.log --mode anomaly --level enhanced --memory 8GB
 ```
 
-## 🎯 Processing Modes
+## Processing Modes
 
 | Mode | Description | Best For | Performance |
 |------|-------------|----------|-------------|
@@ -85,7 +85,7 @@ logreducer --input production.log --mode anomaly --level enhanced --memory 8GB
 | `temporal` | Time-aware pattern analysis | Time-series logs, monitoring | Fast |
 | `hybrid` | Combined approach | Complex logs, maximum coverage | Comprehensive |
 
-## 📊 Processing Levels
+## Processing Levels
 
 | Level | Speed | Memory | Reduction % | Features |
 |-------|-------|--------|-------------|----------|
@@ -93,7 +93,7 @@ logreducer --input production.log --mode anomaly --level enhanced --memory 8GB
 | `enhanced` | Moderate | Medium | 99.5%+ | + Fuzzy deduplication + ML |
 | `maximum` | Thorough | High | 99.9%+ | + Advanced algorithms + entropy |
 
-## 🔧 Configuration Options
+## Configuration Options
 
 ### Memory Management
 
@@ -205,7 +205,7 @@ except Exception as e:
 ### Setup Development Environment
 
 ```bash
-git clone https://github.com/company/logreducer.git
+git clone https://github.com/hypersec-io/logreducer.git
 cd logreducer
 python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
@@ -242,11 +242,15 @@ mypy logreducer/               # Type check
 - xxhash >= 3.0.0 (fast hashing)
 - datasketch >= 1.5.0 (fuzzy deduplication)
 
-## 📜 License
+## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the HyperSec EULA - see the [LICENSE](LICENSE) file for details.
 
-## 🤝 Contributing
+Copyright (c) HyperSec 2025. All rights reserved.
+
+For complete license terms, visit: https://hypersec.io/eula
+
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)

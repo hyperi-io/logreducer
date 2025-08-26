@@ -6,20 +6,20 @@ build-backend = "setuptools.build_meta"
 name = "logreducer"
 version = "3.1.14"
 authors = [
-    {name = "Corporate Development Team", email = "devops@company.com"},
+    {name = "HyperSec Development Team", email = "dev@hypersec.io"},
 ]
 description = "High-performance log reduction with intelligent pattern extraction and anomaly detection"
 readme = "README.md"
-license = {text = "MIT"}
+license = {text = "HyperSec EULA"}
 requires-python = ">=3.8.1"
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "Intended Audience :: System Administrators",
     "Topic :: System :: Logging",
     "Topic :: System :: Systems Administration", 
     "Topic :: Software Development :: Libraries :: Python Modules",
-    "License :: OSI Approved :: MIT License",
+    "License :: Other/Proprietary License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
@@ -62,11 +62,11 @@ docs = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/company/logreducer"
-Documentation = "https://docs.company.com/logreducer"
-Repository = "https://github.com/company/logreducer"
-"Bug Reports" = "https://github.com/company/logreducer/issues"
-Changelog = "https://github.com/company/logreducer/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/hypersec-io/logreducer"
+Documentation = "https://hypersec-io.github.io/logreducer/"
+Repository = "https://github.com/hypersec-io/logreducer"
+"Bug Reports" = "https://github.com/hypersec-io/logreducer/issues"
+Changelog = "https://github.com/hypersec-io/logreducer/blob/main/CHANGELOG.md"
 
 [project.scripts]
 logreducer = "logreducer.cli:main"
