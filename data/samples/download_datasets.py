@@ -99,8 +99,8 @@ def download_file(url: str, filename: str, compressed: bool = False) -> bool:
         
         # Skip FTP URLs since requests doesn't support them
         if url.startswith('ftp://'):
-            logger.warning(f"⚠️ Skipping FTP URL: {url}")
-            logger.info(f"💡 Note: FTP downloads require additional tools like ftplib or wget")
+            logger.warning(f"WARNING: Skipping FTP URL: {url}")
+            logger.info(f"NOTE: FTP downloads require additional tools like ftplib or wget")
             return False
         
         response = requests.get(url, stream=True, timeout=30)
@@ -204,7 +204,7 @@ No sensitive or private information is included in these datasets.
 
 def main():
     """Main download process"""
-    print("🚀 LogReducer Sample Dataset Downloader")
+    print("LogReducer Sample Dataset Downloader")
     print("=" * 50)
     
     # Create samples directory if it doesn't exist
@@ -218,7 +218,7 @@ def main():
     
     # Download each dataset
     for filename, info in DATASETS.items():
-        print(f"\n📋 Dataset: {filename}")
+        print(f"\nDataset: {filename}")
         print(f"   Source: {info['source']}")
         print(f"   Description: {info['description']}")
         print(f"   Expected Size: {info['size']}")
@@ -226,7 +226,7 @@ def main():
         # Skip if file already exists
         if os.path.exists(filename):
             file_size = os.path.getsize(filename) / 1024 / 1024
-            print(f"   ⚠️ File already exists ({file_size:.1f} MB), skipping")
+            print(f"   WARNING: File already exists ({file_size:.1f} MB), skipping")
             successful_downloads += 1
             total_size += file_size
             continue
@@ -244,7 +244,7 @@ def main():
     
     # Summary
     print("\n" + "=" * 50)
-    print("📊 Download Summary")
+    print("Download Summary")
     print("=" * 50)
     print(f"✅ Successful downloads: {successful_downloads}")
     print(f"❌ Failed downloads: {failed_downloads}")
@@ -252,7 +252,7 @@ def main():
     print(f"📁 Files available in: {os.getcwd()}")
     
     if successful_downloads > 0:
-        print("\n🎯 Next Steps:")
+        print("\nNext Steps:")
         print("1. Test LogReducer on different datasets:")
         print("   python -c \"from logreducer import LogReducer; LogReducer().process_file('samples/apache_access.log')\"")
         print("2. Run comprehensive tests:")

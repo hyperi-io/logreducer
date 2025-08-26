@@ -43,7 +43,7 @@ class BenchmarkRunner:
         datasets = []
         
         if not self.samples_dir.exists():
-            print(f"⚠️  Samples directory not found: {self.samples_dir}")
+            print(f"WARNING: Samples directory not found: {self.samples_dir}")
             return datasets
             
         for log_file in self.samples_dir.glob("*.log"):
@@ -76,7 +76,7 @@ class BenchmarkRunner:
             "configurations": []
         }
         
-        print(f"\n📊 Benchmarking {dataset['name']} ({dataset['size_mb']} MB)")
+        print(f"\nBenchmarking {dataset['name']} ({dataset['size_mb']} MB)")
         
         for level in processing_levels:
             for mode in processing_modes:
@@ -180,7 +180,7 @@ class BenchmarkRunner:
             "datasets": []
         }
         
-        print(f"🚀 Starting comprehensive benchmark on {len(datasets)} datasets")
+        print(f"Starting comprehensive benchmark on {len(datasets)} datasets")
         print(f"💻 System: {system_info['cpu_count']} cores, {system_info['memory_total_gb']} GB RAM")
         
         total_start = time.time()
@@ -242,7 +242,7 @@ class BenchmarkRunner:
                     best_config = config
             
             if best_config:
-                report.append(f"🚀 Best performance: {best_config['configuration']}")
+                report.append(f"Best performance: {best_config['configuration']}")
                 report.append(f"   Throughput: {best_config['throughput_mb_sec']} MB/sec")
                 report.append(f"   Reduction:  {best_config['reduction_percent']}%")
                 report.append(f"   Time:       {best_config['processing_time_sec']}s")
@@ -287,7 +287,7 @@ def main():
         output_path = Path(args.output)
         with open(output_path, 'w') as f:
             json.dump(results, f, indent=2)
-        print(f"\n📊 Detailed results saved to: {output_path}")
+        print(f"\nDetailed results saved to: {output_path}")
     
     # Also save to .tmp for reference
     timestamp = time.strftime("%Y%m%d_%H%M%S")
@@ -295,7 +295,7 @@ def main():
     with open(auto_output, 'w') as f:
         json.dump(results, f, indent=2)
     
-    print(f"📊 Results automatically saved to: {auto_output}")
+    print(f"Results automatically saved to: {auto_output}")
 
 
 if __name__ == "__main__":

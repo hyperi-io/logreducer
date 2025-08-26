@@ -76,7 +76,7 @@ def example_basic_usage():
         
         # Show results
         print(f"✅ Processing completed in {processing_time:.2f} seconds")
-        print(f"📊 Reduced to {len(reduced_lines)} lines")
+        print(f"Reduced to {len(reduced_lines)} lines")
         
         # Show first few reduced lines
         print("\nFirst 5 reduced lines:")
@@ -108,7 +108,7 @@ def example_with_output_file():
         reduced_lines = reducer.process_file(log_file, str(output_file))
         
         print(f"✅ Processed and saved to: {output_file}")
-        print(f"📊 Reduced to {len(reduced_lines)} lines")
+        print(f"Reduced to {len(reduced_lines)} lines")
         
         # Verify file was created
         if output_file.exists():
@@ -152,7 +152,7 @@ def example_with_statistics():
         # Get statistics
         stats = reducer.stats
         
-        print("📊 Processing Statistics:")
+        print("Processing Statistics:")
         print(f"   Input lines:     {stats.get('input_lines', 'N/A'):,}")
         print(f"   Output lines:    {stats.get('output_lines', 'N/A'):,}")
         print(f"   Input size:      {stats.get('input_size_mb', 'N/A')} MB")
@@ -162,7 +162,7 @@ def example_with_statistics():
         
         # Show configuration used
         config = reducer.config
-        print(f"\n⚙️  Configuration:")
+        print(f"\nConfiguration:")
         print(f"   Processing level: {getattr(config, 'level', 'N/A')}")
         print(f"   Processing mode:  {getattr(config, 'mode', 'N/A')}")
         print(f"   Worker threads:   {config.n_workers}")
@@ -203,7 +203,7 @@ def example_different_processing_modes():
                   f"Reduction: {results[mode]['reduction']}%")
         
         # Summary comparison
-        print(f"\n📊 Mode Comparison:")
+        print(f"\nMode Comparison:")
         print(f"   {'Mode':<10} {'Lines':<8} {'Time':<8} {'Reduction':<10}")
         print(f"   {'-'*10} {'-'*8} {'-'*8} {'-'*10}")
         
