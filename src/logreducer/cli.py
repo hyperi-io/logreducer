@@ -109,11 +109,11 @@ def estimate_processing(args: argparse.Namespace) -> None:
         print(f"Expected output lines: ~{estimate['estimated_output_lines']:,}")
         
         if estimate['memory_required_gb'] > 8.0:
-            print("\n⚠️  Warning: Large memory requirements detected")
+            print("\nWARNING: Large memory requirements detected")
             print("   Consider using --max-memory to limit usage")
             
         if estimate['will_sample']:
-            print("\n📊 Note: File size requires sampling strategy")
+            print("\nNOTE: File size requires sampling strategy")
             print("   Full processing may not be possible with current memory limits")
             
     except Exception as e:

@@ -2,7 +2,7 @@
 
 This document provides comprehensive instructions for deploying LogReducer to your private corporate PyPI repository on JFrog Artifactory.
 
-## 📋 Prerequisites
+## Prerequisites
 
 ### Required Tools
 - Python 3.8+ 
@@ -24,7 +24,7 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 uv pip install -e ".[dev,enhanced]"
 ```
 
-## 🚀 Quick Deployment
+## Quick Deployment
 
 ### 1. Build Package
 ```bash
@@ -114,7 +114,7 @@ The package is configured with both `setup.py` (legacy) and `pyproject.toml` (mo
 - **Enhanced features**: scikit-learn, numpy, scipy, xxhash, datasketch
 - **Development tools**: pytest, black, flake8, mypy
 
-## 🏗️ JFrog Artifactory Setup
+## JFrog Artifactory Setup
 
 ### Repository Configuration
 
@@ -224,7 +224,7 @@ def test_installation():
         
         if len(result) > 0:
             print(f"✅ LogReducer processed test file: {len(result)} lines")
-            print("🎉 Deployment validation successful!")
+            print("Deployment validation successful!")
             return True
         else:
             print("❌ LogReducer returned empty result")
@@ -254,7 +254,7 @@ from logreducer import LogReducer
 
 def benchmark_performance():
     """Run performance benchmarks"""
-    print("🚀 LogReducer Performance Benchmark")
+    print("LogReducer Performance Benchmark")
     print("=" * 40)
     
     # Download sample data if available
@@ -270,7 +270,7 @@ def benchmark_performance():
         if not os.path.exists(file_path):
             continue
             
-        print(f"\\n📋 Benchmarking: {file_path}")
+        print(f"\\nBenchmarking: {file_path}")
         
         file_size = os.path.getsize(file_path) / 1024 / 1024  # MB
         
@@ -336,7 +336,7 @@ env:
   # Never expose secrets in logs
 ```
 
-## 🎯 Monitoring & Maintenance
+## Monitoring & Maintenance
 
 ### Health Checks
 
@@ -363,7 +363,7 @@ with tempfile.NamedTemporaryFile(mode='w', suffix='.log') as f:
 print('✅ Basic functionality OK')
 "
 
-echo "🎉 All health checks passed!"
+echo "All health checks passed!"
 ```
 
 ### Update Process
@@ -383,7 +383,7 @@ echo "🎉 All health checks passed!"
    - User notification for breaking changes
    - Documentation updates
 
-## 📞 Support & Troubleshooting
+## Support & Troubleshooting
 
 ### Common Issues
 
@@ -424,6 +424,6 @@ print(f"Strategy: {estimate['strategy']}")
 
 ---
 
-**🎯 Ready for Production!**
+**Ready for Production!**
 
 LogReducer is now fully configured for deployment to your corporate PyPI repository with comprehensive CI/CD, testing, and monitoring capabilities.
