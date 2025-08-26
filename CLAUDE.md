@@ -22,6 +22,7 @@ LogReducer is a high-performance log processing system designed for reducing lar
 - **Git Repository**: Initialized with semantic versioning and automated releases
 - **Dependencies**: Core deps updated (numpy, scikit-learn moved to core from optional)
 - **Production Ready**: Full API testing passed, ready for PyPI deployment
+- **Version 3.2.0**: Manually bumped version due to CI issues, semantic-release temporarily disabled
 
 ### Verified Working ✓  
 - **API Import**: `import logreducer` successful, LogReducer instances create without errors
@@ -185,6 +186,12 @@ Enables verbose logging and performance profiling.
 ## Future Enhancements
 
 ### High Priority
+- **Fix Semantic-Release CI**: Troubleshoot and fix GitHub Actions semantic-release automation
+  - Currently disabled due to failing builds causing CI spam
+  - Workflow has permissions and environment loading issues
+  - Debug output added but automation still not triggering version bumps
+  - Need to investigate GitHub token permissions and semantic-release configuration
+  - Version manually updated to 3.2.0 until automation is fixed
 - **Prometheus Metrics Integration**: Replace current telemetry system with proper Prometheus metric telemetry
   - Add prometheus-client dependency for metrics endpoint
   - Implement Counter, Histogram, and Gauge metrics for processing stats
@@ -273,3 +280,9 @@ python -c "import logreducer; print('Version:', logreducer.__version__)"
 - CPU detection is container-aware for proper threading
 - Memory limits are enforced and tested
 - All text has been cleaned of unprofessional emojis
+- Current version: 3.2.0 (manually updated)
+
+### Known Issues
+- **Semantic-release CI**: GitHub Actions automation failing, currently disabled to prevent spam
+- Need to debug semantic-release configuration and GitHub token permissions
+- Manual version management in use until CI is fixed
