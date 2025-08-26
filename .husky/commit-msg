@@ -1,0 +1,67 @@
+#!/bin/sh
+. "$(dirname "$0")/_/husky.sh"
+
+# Commit message hook for semantic release compliance
+# Validates commit messages follow conventional commit format
+
+commit_msg_file="$1"
+commit_msg=$(cat "$commit_msg_file")
+
+echo "📝 Validating commit message format for semantic release..."
+
+# Skip validation for merge commits
+if echo "$commit_msg" | grep -q "^Merge "; then
+    echo "✅ Merge commit detected, skipping validation"
+    exit 0
+fi
+
+# Skip validation for revert commits
+if echo "$commit_msg" | grep -q "^Revert "; then
+    echo "✅ Revert commit detected, skipping validation"
+    exit 0
+fi
+
+# Check for conventional commit format
+# Format: type(scope): description
+# Types: feat, fix, docs, style, refactor, test, chore, perf, ci, build, revert
+if ! echo "$commit_msg" | grep -qE "^(feat|fix|docs|style|refactor|test|chore|perf|ci|build|revert)(\(.+\))?: .+"; then
+    echo "❌ Commit message doesn't follow conventional commit format"
+    echo ""
+    echo "Required format: type(scope): description"
+    echo ""
+    echo "Types:"
+    echo "  feat:     New feature"
+    echo "  fix:      Bug fix"
+    echo "  docs:     Documentation changes"
+    echo "  style:    Code style changes (formatting, etc.)"
+    echo "  refactor: Code refactoring"
+    echo "  test:     Adding or updating tests"
+    echo "  chore:    Maintenance tasks"
+    echo "  perf:     Performance improvements"
+    echo "  ci:       CI/CD changes"
+    echo "  build:    Build system changes"
+    echo "  revert:   Revert previous commit"
+    echo ""
+    echo "Examples:"
+    echo "  feat: add anomaly detection algorithm"
+    echo "  fix(cli): resolve output format validation error"
+    echo "  docs: update API documentation"
+    echo "  chore: update dependencies"
+    echo "  perf(core): optimize pattern extraction performance"
+    echo ""
+    echo "Your commit message: '$commit_msg'"
+    exit 1
+fi
+
+# Check for breaking changes indicator
+if echo "$commit_msg" | grep -q "BREAKING CHANGE"; then
+    echo "🚨 Breaking change detected - this will trigger a major version bump"
+fi
+
+# Check for ! indicator for breaking changes
+if echo "$commit_msg" | grep -qE "^(feat|fix|docs|style|refactor|test|chore|perf|ci|build|revert)(\(.+\))?!: .+"; then
+    echo "🚨 Breaking change detected (!) - this will trigger a major version bump"
+fi
+
+echo "✅ Commit message follows conventional commit format"
+exit 0

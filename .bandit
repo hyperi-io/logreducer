@@ -1,0 +1,25 @@
+[bandit]
+# Bandit security configuration for LogReducer
+exclude_dirs = [
+    "tests",
+    "test",
+    ".venv",
+    "venv",
+    ".tox",
+    "build",
+    "dist",
+    "data/samples"
+]
+
+# Skip specific tests that may have false positives
+skips = [
+    "B101",  # assert_used - we use asserts in tests
+    "B603",  # subprocess_without_shell_equals_true - we control our subprocess calls
+]
+
+# Test severity levels
+confidence = "medium"
+severity = "medium"
+
+# Output format
+format = "json"

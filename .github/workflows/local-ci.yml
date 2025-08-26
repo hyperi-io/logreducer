@@ -1,0 +1,109 @@
+name: Local CI Runner
+
+# This workflow is designed to be run locally using act
+# Install: curl https://raw.githubusercontent.com/nektos/act/master/install.sh | sudo bash
+# Usage: act -j test
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, develop, feature/*]
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  local-test:
+    name: Local Test Suite
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: Create virtual environment
+      run: |
+        python -m venv .venv
+        source .venv/bin/activate
+        echo "VIRTUAL_ENV=$VIRTUAL_ENV" >> $GITHUB_ENV
+        echo "$VIRTUAL_ENV/bin" >> $GITHUB_PATH
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[dev,enhanced]"
+    
+    - name: Run quick checks
+      run: |
+        echo "=== Code Quality Checks ==="
+        black --check logreducer/ || (echo "❌ Black formatting failed" && exit 1)
+        echo "✅ Black formatting passed"
+        
+        flake8 logreducer/ --count --select=E9,F63,F7,F82 --show-source --statistics
+        echo "✅ Critical flake8 checks passed"
+    
+    - name: Run unit tests
+      run: |
+        echo "=== Unit Tests ==="
+        pytest tests/unit/ -v --tb=short
+        echo "✅ Unit tests passed"
+    
+    - name: Run integration tests (fast)
+      run: |
+        echo "=== Integration Tests (Fast) ==="
+        pytest tests/integration/ -v -m "not slow" --tb=short
+        echo "✅ Fast integration tests passed"
+    
+    - name: Test package build
+      run: |
+        echo "=== Package Build Test ==="
+        pip install build
+        python -m build
+        echo "✅ Package build successful"
+        ls -la dist/
+
+  local-comprehensive:
+    name: Local Comprehensive Tests
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'  # Only on manual trigger
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: Create virtual environment
+      run: |
+        python -m venv .venv
+        source .venv/bin/activate
+        echo "VIRTUAL_ENV=$VIRTUAL_ENV" >> $GITHUB_ENV
+        echo "$VIRTUAL_ENV/bin" >> $GITHUB_PATH
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[dev,enhanced]"
+    
+    - name: Run comprehensive tests
+      run: |
+        echo "=== Comprehensive Test Suite ==="
+        pytest tests/ -v --cov=logreducer --cov-report=term-missing --cov-report=html
+        echo "✅ All tests passed"
+    
+    - name: Upload test results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: test-results
+        path: |
+          htmlcov/
+          .coverage
