@@ -2,7 +2,7 @@
 
 [![Python Version](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://python.org)
 [![License: HyperSec EULA](https://img.shields.io/badge/License-HyperSec_EULA-red.svg)](https://hypersec.io/eula)
-[![Package Version](https://img.shields.io/badge/version-3.1.14-green.svg)](https://pypi.org/project/logreducer/)
+[![Package Version](https://img.shields.io/badge/version-3.2.0-green.svg)](https://pypi.org/project/logreducer/)
 
 A high-performance Python module for intelligently reducing large log files (GB+) to representative samples while preserving critical patterns. Features memory-safe processing, temporal awareness, and anomaly detection.
 
