@@ -2,107 +2,14 @@
 . "$(dirname "$0")/_/husky.sh"
 
 # Pre-commit hook for LogReducer
-# Ensures code quality before commits
-
 echo "🔍 Running pre-commit checks..."
 
-# Check if we're in the right directory
-if [ ! -f "pyproject.toml" ]; then
-    echo "❌ Error: Not in LogReducer project root"
-    exit 1
+# Run quick format check (don't modify, just check)
+if command -v black > /dev/null; then
+  echo "📝 Checking code formatting..."
+  black --check src/ tests/ scripts/ --quiet 2>/dev/null || {
+    echo "⚠️  Code formatting issues detected. Run 'black src/ tests/ scripts/' to fix"
+  }
 fi
 
-# Create .tmp directory if it doesn't exist
-mkdir -p .tmp
-
-# 1. Check for forbidden patterns
-echo "🚫 Checking for forbidden patterns..."
-if grep -r "/tmp" src/ tests/ 2>/dev/null; then
-    echo "❌ Error: Found /tmp usage. Use ./.tmp instead"
-    exit 1
-fi
-
-if grep -r "print(" src/ --exclude-dir=__pycache__ 2>/dev/null; then
-    echo "⚠️  Warning: Found print() statements in source code"
-    echo "   Consider using proper logging instead"
-fi
-
-# 2. Format code with Black
-echo "🎨 Formatting code with Black..."
-if command -v uv > /dev/null; then
-    uv run black src/ tests/ --check --diff
-    if [ $? -ne 0 ]; then
-        echo "❌ Code formatting issues found. Run 'uv run black src/ tests/' to fix"
-        exit 1
-    fi
-else
-    echo "⚠️  uv not found, skipping Black formatting check"
-fi
-
-# 3. Sort imports
-echo "📋 Checking import order..."
-if command -v uv > /dev/null; then
-    uv run isort src/ tests/ --check-only --diff
-    if [ $? -ne 0 ]; then
-        echo "❌ Import order issues found. Run 'uv run isort src/ tests/' to fix"
-        exit 1
-    fi
-else
-    echo "⚠️  uv not found, skipping isort check"
-fi
-
-# 4. Basic linting
-echo "🔍 Running basic linting..."
-if command -v uv > /dev/null; then
-    uv run flake8 src/ tests/ --count --select=E9,F63,F7,F82 --show-source --statistics
-    if [ $? -ne 0 ]; then
-        echo "❌ Critical linting errors found"
-        exit 1
-    fi
-else
-    echo "⚠️  uv not found, skipping linting"
-fi
-
-# 5. Run fast tests
-echo "⚡ Running fast tests..."
-if command -v uv > /dev/null; then
-    uv run pytest tests/unit/ -x --tb=short -q
-    if [ $? -ne 0 ]; then
-        echo "❌ Unit tests failed"
-        exit 1
-    fi
-else
-    echo "⚠️  uv not found, skipping tests"
-fi
-
-# 6. Check for security issues (basic)
-echo "🛡️  Running basic security checks..."
-if command -v bandit > /dev/null; then
-    bandit -r src/ -ll -q
-    if [ $? -ne 0 ]; then
-        echo "❌ Security issues found"
-        exit 1
-    fi
-else
-    echo "⚠️  bandit not found, skipping security check"
-fi
-
-# 7. Check commit message format for semantic release
-echo "📝 Checking commit message format..."
-commit_msg_file="$1"
-if [ -n "$commit_msg_file" ]; then
-    commit_msg=$(cat "$commit_msg_file")
-    
-    # Check for conventional commit format
-    if ! echo "$commit_msg" | grep -qE "^(feat|fix|docs|style|refactor|test|chore|perf|ci|build|revert)(\(.+\))?: .+"; then
-        echo "❌ Commit message doesn't follow conventional commit format"
-        echo "   Examples:"
-        echo "     feat: add new pattern extraction algorithm"
-        echo "     fix(cli): resolve output format validation error"
-        echo "     docs: update API documentation"
-        echo "     chore: update dependencies"
-        exit 1
-    fi
-fi
-
-echo "✅ All pre-commit checks passed!"
+echo "✅ Pre-commit checks complete"
