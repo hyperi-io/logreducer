@@ -13,7 +13,8 @@ def setup_logging(
     enable: bool = False,
     log_file: Optional[str] = None,
     log_level: str = "INFO",
-    log_format: str = "rfc3339"
+    log_format: str = "rfc3339",
+    console: bool = False
 ) -> None:
     """
     Configure logging for LogReducer.
@@ -23,6 +24,7 @@ def setup_logging(
         log_file: Path to log file (None = no file logging)
         log_level: Logging level (DEBUG, INFO, WARNING, ERROR)
         log_format: Format style ('rfc3339' or 'simple')
+        console: Whether to also log to console/stderr (default False)
     """
     # Remove all existing handlers
     logger.remove()
@@ -40,13 +42,14 @@ def setup_logging(
         fmt = "<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>"
         file_fmt = "{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {message}"
     
-    # Add stderr handler for console output
-    logger.add(
-        sys.stderr,
-        format=fmt,
-        level=log_level,
-        filter="logreducer"
-    )
+    # Add stderr handler for console output (only if console=True)
+    if console:
+        logger.add(
+            sys.stderr,
+            format=fmt,
+            level=log_level,
+            filter="logreducer"
+        )
     
     # Add file handler if specified
     if log_file:
@@ -81,4 +84,4 @@ def get_logger(name: str = "logreducer"):
     Returns:
         Logger instance
     """
-    return logger.bind(name=name)
+    return logger.bind(name=f"logreducer.{name}")

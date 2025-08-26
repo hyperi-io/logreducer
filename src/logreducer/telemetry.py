@@ -20,6 +20,10 @@ from pathlib import Path
 from typing import Dict, Optional, Any
 import threading
 
+from .logging_config import get_logger
+
+logger = get_logger("telemetry")
+
 try:
     import requests
     REQUESTS_AVAILABLE = True
@@ -311,7 +315,7 @@ def opt_in_telemetry() -> None:
     opt_in_file = Path.home() / ".logreducer" / "telemetry_opt_in"
     opt_in_file.parent.mkdir(parents=True, exist_ok=True)
     opt_in_file.write_text(f"Opted in on {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
-    print("✅ Opted into LogReducer usage analytics")
+    logger.info("Opted into LogReducer usage analytics")
 
 
 def opt_out_telemetry() -> None:
@@ -319,7 +323,7 @@ def opt_out_telemetry() -> None:
     opt_in_file = Path.home() / ".logreducer" / "telemetry_opt_in"
     if opt_in_file.exists():
         opt_in_file.unlink()
-    print("✅ Opted out of LogReducer usage analytics")
+    logger.info("Opted out of LogReducer usage analytics")
 
 
 def show_telemetry_status() -> None:
@@ -327,25 +331,25 @@ def show_telemetry_status() -> None:
     collector = get_telemetry_collector()
     stats = collector.get_local_stats()
     
-    print("LogReducer Telemetry Status")
-    print("=" * 30)
-    print(f"Enabled: {'Yes' if stats['enabled'] else 'No'}")
+    logger.info("LogReducer Telemetry Status")
+    logger.info("=" * 30)
+    logger.info(f"Enabled: {'Yes' if stats['enabled'] else 'No'}")
     
     if stats["enabled"]:
-        print(f"Total events recorded: {stats['total_events']}")
+        logger.info(f"Total events recorded: {stats['total_events']}")
         if stats["event_types"]:
-            print("Event types:")
+            logger.info("Event types:")
             for event_type, count in stats["event_types"].items():
-                print(f"  {event_type}: {count}")
+                logger.info(f"  {event_type}: {count}")
         if stats["date_range"]:
-            print(f"Data range: {stats['date_range'][0]} to {stats['date_range'][-1]}")
+            logger.info(f"Data range: {stats['date_range'][0]} to {stats['date_range'][-1]}")
         
         telemetry_dir = Path.home() / ".logreducer" / "telemetry"
-        print(f"Local data stored in: {telemetry_dir}")
+        logger.info(f"Local data stored in: {telemetry_dir}")
     else:
-        print("No telemetry data collected")
-        print("To opt in: export LOGREDUCER_TELEMETRY_ENABLED=1")
-        print("Or run: python -c 'from logreducer.telemetry import opt_in_telemetry; opt_in_telemetry()'")
+        logger.info("No telemetry data collected")
+        logger.info("To opt in: export LOGREDUCER_TELEMETRY_ENABLED=1")
+        logger.info("Or run: python -c 'from logreducer.telemetry import opt_in_telemetry; opt_in_telemetry()'")
 
 
 if __name__ == "__main__":
@@ -361,6 +365,6 @@ if __name__ == "__main__":
         elif command == "status":
             show_telemetry_status()
         else:
-            print("Usage: python -m logreducer.telemetry {opt-in|opt-out|status}")
+            logger.error("Usage: python -m logreducer.telemetry {opt-in|opt-out|status}")
     else:
         show_telemetry_status()

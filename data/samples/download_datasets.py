@@ -204,7 +204,7 @@ No sensitive or private information is included in these datasets.
 
 def main():
     """Main download process"""
-    print("LogReducer Sample Dataset Downloader")
+    logger.info("LogReducer Sample Dataset Downloader")
     print("=" * 50)
     
     # Create samples directory if it doesn't exist
@@ -218,7 +218,7 @@ def main():
     
     # Download each dataset
     for filename, info in DATASETS.items():
-        print(f"\nDataset: {filename}")
+        logger.info(f"Dataset: {filename}")
         print(f"   Source: {info['source']}")
         print(f"   Description: {info['description']}")
         print(f"   Expected Size: {info['size']}")
@@ -226,7 +226,7 @@ def main():
         # Skip if file already exists
         if os.path.exists(filename):
             file_size = os.path.getsize(filename) / 1024 / 1024
-            print(f"   WARNING: File already exists ({file_size:.1f} MB), skipping")
+            logger.warning(f"File already exists ({file_size:.1f} MB), skipping")
             successful_downloads += 1
             total_size += file_size
             continue
@@ -244,7 +244,7 @@ def main():
     
     # Summary
     print("\n" + "=" * 50)
-    print("Download Summary")
+    logger.info("Download Summary")
     print("=" * 50)
     print(f"✅ Successful downloads: {successful_downloads}")
     print(f"❌ Failed downloads: {failed_downloads}")
@@ -252,7 +252,7 @@ def main():
     print(f"📁 Files available in: {os.getcwd()}")
     
     if successful_downloads > 0:
-        print("\nNext Steps:")
+        logger.info("Next Steps:")
         print("1. Test LogReducer on different datasets:")
         print("   python -c \"from logreducer import LogReducer; LogReducer().process_file('samples/apache_access.log')\"")
         print("2. Run comprehensive tests:")

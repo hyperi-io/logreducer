@@ -11,8 +11,9 @@ import json
 from pathlib import Path
 from typing import Optional
 
-from . import LogReducer, __version__
+from . import LogReducer, __version__, setup_logging
 from .config import ProcessingLevel, ProcessingMode, OutputFormat
+from .logging_config import get_logger
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -99,25 +100,27 @@ def estimate_processing(args: argparse.Namespace) -> None:
         reducer = LogReducer(level=args.level, mode=args.mode)
         estimate = reducer.estimate_processing(args.input_file)
         
-        print("Processing Estimation")
-        print("=" * 50)
-        print(f"File size: {estimate['file_size_gb']:.2f} GB")
-        print(f"Estimated memory: {estimate['memory_required_gb']:.2f} GB")
-        print(f"Processing strategy: {estimate['strategy']}")
-        print(f"Estimated time: {estimate['estimated_time_seconds']:.0f} seconds")
-        print(f"Will sample data: {'Yes' if estimate['will_sample'] else 'No'}")
-        print(f"Expected output lines: ~{estimate['estimated_output_lines']:,}")
+        logger = get_logger("cli")
+        logger.info("Processing Estimation")
+        logger.info("=" * 50)
+        logger.info(f"File size: {estimate['file_size_gb']:.2f} GB")
+        logger.info(f"Estimated memory: {estimate['memory_required_gb']:.2f} GB")
+        logger.info(f"Processing strategy: {estimate['strategy']}")
+        logger.info(f"Estimated time: {estimate['estimated_time_seconds']:.0f} seconds")
+        logger.info(f"Will sample data: {'Yes' if estimate['will_sample'] else 'No'}")
+        logger.info(f"Expected output lines: ~{estimate['estimated_output_lines']:,}")
         
         if estimate['memory_required_gb'] > 8.0:
-            print("\nWARNING: Large memory requirements detected")
-            print("   Consider using --max-memory to limit usage")
+            logger.warning("Large memory requirements detected")
+            logger.warning("Consider using --max-memory to limit usage")
             
         if estimate['will_sample']:
-            print("\nNOTE: File size requires sampling strategy")
-            print("   Full processing may not be possible with current memory limits")
+            logger.info("File size requires sampling strategy")
+            logger.info("Full processing may not be possible with current memory limits")
             
     except Exception as e:
-        print(f"Error estimating processing: {e}", file=sys.stderr)
+        logger = get_logger("cli")
+        logger.error(f"Error estimating processing: {e}")
         sys.exit(1)
 
 
@@ -193,6 +196,14 @@ def main() -> None:
         sys.exit(1)
     
     args = parser.parse_args()
+    
+    # Setup logging with console output for CLI if enabled
+    setup_logging(
+        enable=args.log,
+        console=args.log,  # Enable console logging if logging is enabled
+        log_file=args.log_file,
+        log_level=args.log_level
+    )
     
     # Validate input file
     if not Path(args.input_file).exists():
