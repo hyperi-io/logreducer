@@ -63,9 +63,15 @@ for venv in "${VENV_PATHS[@]}"; do
     fi
 done
 
+# ALWAYS create .venv if it doesn't exist
+if [ ! -d "$PROJECT_ROOT/.venv" ]; then
+    echo "⚠️  No .venv found - Creating it now!"
+    VENV_FOUND=false
+fi
+
 # If no venv found but .python-version exists, try to create one
 if [ "$VENV_FOUND" = false ] && [ -f ".python-version" ]; then
-    echo "📦 No virtual environment found, attempting to create one..."
+    echo "📦 Creating virtual environment..."
     
     PYTHON_CMD=$(find_python "$REQUIRED_PYTHON")
     if [ -n "$PYTHON_CMD" ]; then
