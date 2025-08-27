@@ -22,13 +22,13 @@ echo "=================================================="
 echo
 
 # Ensure we have the required dependencies
-echo "📦 Installing required dependencies..."
+echo "INSTALLING: Required dependencies..."
 python -m pip install --upgrade vermin python-dotenv pyyaml
 
 # Run the detection script
-echo "🔍 Running Python version detection..."
+echo "RUNNING: Python version detection..."
 python "$SCRIPT_DIR/detect_python_version.py" "$@"
 
 echo
-echo "✅ Python version detection and update complete!"
+echo "SUCCESS: Python version detection and update complete!"
 echo "   Review the changes and commit them to apply across your project."

@@ -15,7 +15,7 @@ NC='\033[0m' # No Color
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
-echo -e "${BLUE}🚀 LogReducer Development Environment Setup${NC}"
+echo -e "${BLUE}LogReducer Development Environment Setup${NC}"
 echo "=================================================="
 
 # Step 1: Check for required tools
@@ -23,11 +23,11 @@ echo -e "\n${BLUE}Step 1: Checking required development tools...${NC}"
 if python3 "$SCRIPT_DIR/check_dev_tools.py"; then
     echo -e "${GREEN}✅ All required tools are available!${NC}"
 else
-    echo -e "${RED}❌ Some required tools are missing.${NC}"
-    echo -e "${YELLOW}💡 Run this for installation guidance:${NC}"
+    echo -e "${RED}ERROR: Some required tools are missing.${NC}"
+    echo -e "${YELLOW}GUIDANCE: Run this for installation guidance:${NC}"
     echo "   python scripts/check_dev_tools.py --install"
     echo ""
-    echo -e "${YELLOW}💡 Or use a pre-configured VM:${NC}"
+    echo -e "${YELLOW}GUIDANCE: Or use a pre-configured VM:${NC}"
     echo "   python scripts/check_dev_tools.py --vm-info"
     exit 1
 fi
@@ -78,7 +78,7 @@ else
 fi
 
 # Final summary
-echo -e "\n${GREEN}🎉 Development environment setup complete!${NC}"
+echo -e "\n${GREEN}Development environment setup complete!${NC}"
 echo "=================================================="
 echo -e "${BLUE}Next steps:${NC}"
 echo "1. Activate the virtual environment:"
@@ -94,4 +94,4 @@ echo "4. Before committing, verify code quality:"
 echo "   black src/ tests/"
 echo "   pytest tests/"
 echo ""
-echo -e "${GREEN}Happy coding! 🚀${NC}"
+echo -e "${GREEN}Happy coding!${NC}"

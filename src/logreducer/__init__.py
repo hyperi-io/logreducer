@@ -1,8 +1,8 @@
 """
 LogReducer - High-performance log analysis and reduction system
 
-Enterprise-grade log processing module that intelligently reduces large log files while 
-preserving critical patterns and anomalies. Features memory-safe streaming, temporal analysis, 
+Enterprise-grade log processing module that intelligently reduces large log files while
+preserving critical patterns and anomalies. Features memory-safe streaming, temporal analysis,
 and advanced pattern extraction for operational insights.
 
 Copyright (c) HyperSec 2025. All rights reserved.
@@ -23,18 +23,18 @@ from .config import ProcessingLevel, ProcessingMode, BigDialConfig, OutputFormat
 from .logging_config import setup_logging
 
 __all__ = [
-    'LogReducer', 
-    'ProcessingLevel', 
-    'ProcessingMode', 
-    'BigDialConfig',
-    'OutputFormat',
-    'setup_logging',
-    '__version__',
-    '__author__',
-    '__email__',
-    '__license__',
-    '__description__',
-    '__url__'
+    "LogReducer",
+    "ProcessingLevel",
+    "ProcessingMode",
+    "BigDialConfig",
+    "OutputFormat",
+    "setup_logging",
+    "__version__",
+    "__author__",
+    "__email__",
+    "__license__",
+    "__description__",
+    "__url__",
 ]
 
 # Type annotation for mypy

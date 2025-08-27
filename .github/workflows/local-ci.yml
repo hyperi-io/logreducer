@@ -10,7 +10,7 @@ on:
     branches: [main, develop, feature/*]
 
 env:
-  PYTHON_VERSION: "3.11"
+  PYTHON_VERSION: "3.12"
 
 jobs:
   local-test:
@@ -42,23 +42,23 @@ jobs:
     - name: Run quick checks
       run: |
         echo "=== Code Quality Checks ==="
-        black --check logreducer/ || (echo "❌ Black formatting failed" && exit 1)
-        echo "✅ Black formatting passed"
+        black --check src/logreducer/ || (echo "ERROR: Black formatting failed" && exit 1)
+        echo "SUCCESS: Black formatting passed"
         
-        flake8 logreducer/ --count --select=E9,F63,F7,F82 --show-source --statistics
-        echo "✅ Critical flake8 checks passed"
+        flake8 src/logreducer/ --count --select=E9,F63,F7,F82 --show-source --statistics
+        echo "SUCCESS: Critical flake8 checks passed"
     
     - name: Run unit tests
       run: |
         echo "=== Unit Tests ==="
         pytest tests/unit/ -v --tb=short
-        echo "✅ Unit tests passed"
+        echo "SUCCESS: Unit tests passed"
     
     - name: Run integration tests (fast)
       run: |
         echo "=== Integration Tests (Fast) ==="
         pytest tests/integration/ -v -m "not slow" --tb=short
-        echo "✅ Fast integration tests passed"
+        echo "SUCCESS: Fast integration tests passed"
     
     - name: Test package build
       run: |
@@ -66,7 +66,7 @@ jobs:
         python -m pip install --upgrade pip setuptools wheel
         pip install --upgrade build
         python -m build
-        echo "✅ Package build successful"
+        echo "SUCCESS: Package build successful"
         ls -la dist/
 
   local-comprehensive:
@@ -100,7 +100,7 @@ jobs:
       run: |
         echo "=== Comprehensive Test Suite ==="
         pytest tests/ -v --cov=logreducer --cov-report=term-missing --cov-report=html
-        echo "✅ All tests passed"
+        echo "SUCCESS: All tests passed"
     
     - name: Upload test results
       uses: actions/upload-artifact@v3
