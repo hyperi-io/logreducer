@@ -110,6 +110,18 @@ if echo "$current_branch" | grep -qE "^($protected_branches)$"; then
     fi
     
     echo "✅ All pre-push checks passed for protected branch"
+    
+    # 6. Push Git LFS objects if needed
+    echo "📤 Checking for Git LFS objects..."
+    if command -v git-lfs > /dev/null 2>&1 && git lfs ls-files | grep -q .; then
+        echo "   Pushing LFS objects to origin..."
+        git lfs push --all origin
+        if [ $? -eq 0 ]; then
+            echo "✅ LFS objects pushed successfully"
+        else
+            echo "⚠️  LFS push failed, but continuing"
+        fi
+    fi
 else
     echo "📝 Pushing to feature branch: $current_branch"
     
