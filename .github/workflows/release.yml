@@ -24,7 +24,7 @@ permissions:
 jobs:
   release:
     name: Semantic Release
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
     
     steps:

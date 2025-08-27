@@ -28,7 +28,7 @@ env:
 jobs:
   detect-python-version:
     name: Load Python Version Configuration
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     outputs:
       min-version: ${{ steps.config.outputs.min-version }}
       test-matrix: ${{ steps.config.outputs.test-matrix }}
@@ -64,7 +64,7 @@ jobs:
 
   test:
     name: Test Suite
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     needs: detect-python-version
     strategy:
       matrix:
@@ -134,7 +134,7 @@ jobs:
 
   security:
     name: Security Checks
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     needs: [test, detect-python-version]
     
     steps:
@@ -163,7 +163,7 @@ jobs:
 
   build:
     name: Build Package
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     needs: [test, security]
     
     steps:
@@ -198,7 +198,7 @@ jobs:
 
   release:
     name: Release
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     needs: [build, detect-python-version]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     permissions:
@@ -239,7 +239,7 @@ jobs:
 
   deploy-staging:
     name: Deploy to Staging
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     needs: [build, detect-python-version]
     if: github.ref == 'refs/heads/develop'
     environment: staging
@@ -274,7 +274,7 @@ jobs:
 
   deploy-production:
     name: Deploy to Production (JFrog - GitHub Hosted)
-    runs-on: ubuntu-latest  # Keep GitHub-hosted for JFrog security
+    runs-on: ubuntu-latest  # Always GitHub-hosted for JFrog security
     needs: [release, detect-python-version]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment: production
@@ -305,6 +305,6 @@ jobs:
         ARTIFACTORY_TOKEN: ${{ secrets.ARTIFACTORY_PASSWORD }}
         TWINE_USERNAME: ${{ secrets.ARTIFACTORY_USERNAME }}
         TWINE_PASSWORD: ${{ secrets.ARTIFACTORY_PASSWORD }}
-        TWINE_REPOSITORY_URL: "https://hypersec.jfrog.io/artifactory/api/pypi/hypersec-pypi-local/simple/"
+        TWINE_REPOSITORY_URL: "https://hypersec.jfrog.io/artifactory/api/pypi/hypersec-pypi-local/"
       run: |
         twine upload dist/* --verbose
