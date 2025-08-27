@@ -19,6 +19,11 @@ class MemoryMonitor:
         self.max_memory_bytes = max_memory_gb * 1024 * 1024 * 1024
         self.effective_limit = self.max_memory_bytes * 0.8  # 80% safety margin
         self.process = psutil.Process()
+        self.peak_usage_bytes = 0
+        
+        # Initialize peak usage
+        current_usage = self.process.memory_info().rss
+        self.peak_usage_bytes = current_usage
         
         # Calculate safe parameters
         avg_line_size = 200  # bytes
@@ -35,6 +40,10 @@ class MemoryMonitor:
         current_gb = current / (1024**3)
         is_safe = current < self.effective_limit
         
+        # Update peak usage
+        if current > self.peak_usage_bytes:
+            self.peak_usage_bytes = current
+        
         if not is_safe:
             gc.collect()
             current = self.process.memory_info().rss
@@ -42,6 +51,32 @@ class MemoryMonitor:
             is_safe = current < self.effective_limit
         
         return current_gb, is_safe
+    
+    def get_current_usage_gb(self) -> float:
+        """Get current memory usage in GB"""
+        current = self.process.memory_info().rss
+        # Update peak usage
+        if current > self.peak_usage_bytes:
+            self.peak_usage_bytes = current
+        return current / (1024**3)
+    
+    def get_peak_usage_gb(self) -> float:
+        """Get peak memory usage in GB"""
+        # Update current peak if needed
+        current = self.process.memory_info().rss
+        if current > self.peak_usage_bytes:
+            self.peak_usage_bytes = current
+        return self.peak_usage_bytes / (1024**3)
+    
+    def is_limit_exceeded(self) -> bool:
+        """Check if memory limit is exceeded"""
+        current = self.process.memory_info().rss
+        return current > self.effective_limit
+    
+    def reset(self):
+        """Reset peak memory tracking"""
+        current_usage = self.process.memory_info().rss
+        self.peak_usage_bytes = current_usage
     
     def estimate_file_strategy(self, file_size_bytes: int) -> str:
         """Determine processing strategy"""
