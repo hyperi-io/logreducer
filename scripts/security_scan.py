@@ -77,9 +77,14 @@ class SecurityScanner:
         print("\nSCANNING: Running pip-audit dependency scan...")
         
         report_file = self.reports_dir / "pip-audit-report.json"
+        # Try uv run first, fallback to direct command
         exit_code, stdout, stderr = self.run_command([
-            "pip-audit", "--format=json", "--output", str(report_file)
+            "uv", "run", "pip-audit", "--format=json", "--output", str(report_file)
         ])
+        if exit_code != 0 and "command not found" in stderr.lower():
+            exit_code, stdout, stderr = self.run_command([
+                "pip-audit", "--format=json", "--output", str(report_file)
+            ])
         
         # pip-audit returns non-zero if vulnerabilities found, which is expected
         if report_file.exists():
@@ -117,9 +122,14 @@ class SecurityScanner:
         print("\nSCANNING: Running pip-audit dependency scan...")
         
         report_file = self.reports_dir / "pip-audit-report.json"
+        # Try uv run first, fallback to direct command
         exit_code, stdout, stderr = self.run_command([
-            "pip-audit", "--format=json", f"--output={report_file}"
+            "uv", "run", "pip-audit", "--format=json", f"--output={report_file}"
         ])
+        if exit_code != 0 and "command not found" in stderr.lower():
+            exit_code, stdout, stderr = self.run_command([
+                "pip-audit", "--format=json", f"--output={report_file}"
+            ])
         
         if exit_code == 0 and report_file.exists():
             with open(report_file) as f:
@@ -150,9 +160,14 @@ class SecurityScanner:
         print("\nSCANNING: Running Bandit static security scan...")
         
         report_file = self.reports_dir / "bandit-report.json"
+        # Try uv run first, fallback to direct command
         exit_code, stdout, stderr = self.run_command([
-            "bandit", "-r", str(self.src_dir), "-f", "json", "-o", str(report_file)
+            "uv", "run", "bandit", "-r", str(self.src_dir), "-f", "json", "-o", str(report_file)
         ])
+        if exit_code != 0 and "command not found" in stderr.lower():
+            exit_code, stdout, stderr = self.run_command([
+                "bandit", "-r", str(self.src_dir), "-f", "json", "-o", str(report_file)
+            ])
         
         if report_file.exists():
             with open(report_file) as f:
@@ -192,10 +207,16 @@ class SecurityScanner:
         print("\nSCANNING: Running Semgrep semantic security scan...")
         
         report_file = self.reports_dir / "semgrep-report.json"
+        # Try uv run first, fallback to direct command
         exit_code, stdout, stderr = self.run_command([
-            "semgrep", "--config=auto", str(self.src_dir), 
+            "uv", "run", "semgrep", "--config=auto", str(self.src_dir), 
             "--json", f"--output={report_file}"
         ])
+        if exit_code != 0 and "command not found" in stderr.lower():
+            exit_code, stdout, stderr = self.run_command([
+                "semgrep", "--config=auto", str(self.src_dir), 
+                "--json", f"--output={report_file}"
+            ])
         
         if report_file.exists():
             with open(report_file) as f:
