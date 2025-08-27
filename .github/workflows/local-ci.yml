@@ -36,6 +36,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
+        python -m pip install --upgrade pip setuptools wheel
         pip install -e ".[dev,enhanced]"
     
     - name: Run quick checks
@@ -62,7 +63,8 @@ jobs:
     - name: Test package build
       run: |
         echo "=== Package Build Test ==="
-        pip install build
+        python -m pip install --upgrade pip setuptools wheel
+        pip install --upgrade build
         python -m build
         echo "✅ Package build successful"
         ls -la dist/
@@ -91,6 +93,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
+        python -m pip install --upgrade pip setuptools wheel
         pip install -e ".[dev,enhanced]"
     
     - name: Run comprehensive tests

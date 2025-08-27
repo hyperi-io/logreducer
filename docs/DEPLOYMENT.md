@@ -316,7 +316,7 @@ if __name__ == "__main__":
 ### Dependency Management
 
 - **Pin versions** in `requirements.txt` for production
-- **Scan dependencies** for vulnerabilities using `safety`
+- **Scan dependencies** for vulnerabilities using `pip-audit`
 - **Regular updates** via Dependabot or manual review
 
 ### Access Control

@@ -70,11 +70,11 @@ jobs:
         python -m pip install --upgrade pip
         pip install build twine
     
-    - name: Run vulnerability scan with safety
+    - name: Run vulnerability scan with pip-audit
       run: |
-        pip install safety bandit semgrep
+        pip install --upgrade pip-audit bandit semgrep
         echo "Running dependency vulnerability scan..."
-        safety check --json --output safety-report.json || echo "Safety scan completed with warnings"
+        pip-audit --format=json --output=pip-audit-report.json || echo "pip-audit scan completed with warnings"
         
         echo "Running static security analysis with bandit..."
         bandit -r src/ -f json -o bandit-report.json || echo "Bandit scan completed with warnings"
@@ -91,7 +91,7 @@ jobs:
       with:
         name: security-scan-results
         path: |
-          safety-report.json
+          pip-audit-report.json
           bandit-report.json  
           semgrep-report.json
     

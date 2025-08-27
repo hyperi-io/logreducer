@@ -73,7 +73,7 @@ skips = ["B101", "B603"]  # Allow asserts in tests, controlled subprocess usage
 
 #### Safety Configuration
 ```toml
-[tool.safety]
+# pip-audit configuration via CLI
 ignore = []  # No ignored vulnerabilities
 full_report = true
 ```
@@ -101,7 +101,7 @@ full_report = true
 
 1. **Code Security**
    - Run security scans before committing: `bandit -r src/`
-   - Check dependencies regularly: `safety check`
+   - Check dependencies regularly: `pip-audit`
    - Use type hints to prevent common bugs
 
 2. **Testing**

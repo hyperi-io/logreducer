@@ -1,10 +1,15 @@
 #!/bin/sh
-. "$(dirname "$0")/_/husky.sh"
 
-# Pre-push hook for LogReducer
+# Load environment variables
+if [ -f .env ]; then
+    export $(grep -E '^CICD_ENTITY=' .env | xargs)
+fi
+CICD_ENTITY=${CICD_ENTITY:-"HyperSec"}
+
+# Pre-push hook
 # Ensures comprehensive quality checks before pushing to remote
 
-echo "🚀 Running pre-push checks..."
+echo "🚀 Running ${CICD_ENTITY} pre-push checks..."
 
 # Get the remote and branch being pushed to
 remote="$1"

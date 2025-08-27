@@ -152,10 +152,10 @@ fi
 
 # Step 6: Security checks (optional)
 print_status "Running security checks"
-if command -v safety &> /dev/null; then
-    run_step "Dependency vulnerability scan" "safety check"
+if command -v pip-audit &> /dev/null; then
+    run_step "Dependency vulnerability scan" "pip-audit"
 else
-    print_warning "Safety not installed, skipping vulnerability scan"
+    print_warning "pip-audit not installed, skipping vulnerability scan"
 fi
 
 if command -v bandit &> /dev/null; then

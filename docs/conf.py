@@ -17,7 +17,7 @@ copyright = '2025, Corporate Development Team'
 author = 'Corporate Development Team'
 
 # The full version, including alpha/beta/rc tags
-release = '3.1.14'
+release = '3.2.1'
 
 # -- General configuration ---------------------------------------------------
 
@@ -54,8 +54,11 @@ html_theme = 'sphinx_rtd_theme'
 html_static_path = ['_static']
 
 # Theme options
+# For Read the Docs Addons compatibility
+html_baseurl = os.environ.get('READTHEDOCS_CANONICAL_URL', '')
+
 html_theme_options = {
-    'canonical_url': '',
+    'canonical_url': html_baseurl,
     'analytics_id': '',
     'logo_only': False,
     'display_version': True,
@@ -98,11 +101,13 @@ autodoc_default_options = {
 }
 
 # Intersphinx mapping
+# Note: Disabled during build testing due to SSL connectivity issues
+# Enable in production with proper SSL context
 intersphinx_mapping = {
-    'python': ('https://docs.python.org/3/', None),
-    'numpy': ('https://numpy.org/doc/stable/', None),
-    'scipy': ('https://docs.scipy.org/doc/scipy/', None),
-    'sklearn': ('https://scikit-learn.org/stable/', None),
+    # 'python': ('https://docs.python.org/3/', None),
+    # 'numpy': ('https://numpy.org/doc/stable/', None),
+    # 'scipy': ('https://docs.scipy.org/doc/scipy/', None),
+    # 'sklearn': ('https://scikit-learn.org/stable/', None),
 }
 
 # MyST Parser settings

@@ -1,0 +1,68 @@
+# Python Version Configuration
+# ===========================================================================
+# THIS IS THE ONLY FILE YOU NEED TO MODIFY FOR VERSION CHANGES
+# ===========================================================================
+# Change the template_minimum below and CI/CD will automatically update:
+# - pyproject.toml (requires-python, classifiers, mypy, black)
+# - .github/workflows/ci.yml (Python versions, test matrix)
+# - .readthedocs.yaml (build Python version)
+# - All other configuration files
+
+# Template/baseline minimum version
+# MODIFY THIS VALUE TO CHANGE PROJECT PYTHON VERSION REQUIREMENTS
+template_minimum: "3.12"
+
+# Version detection settings
+detection:
+  enabled: true
+  tools:
+    - vermin    # Analyze source code for language features
+    - pip-audit # Check dependency requirements (future enhancement)
+  
+  # Only increase version, never decrease
+  increase_only: true
+  
+  # Exclude paths from analysis
+  exclude_paths:
+    - "tests/"
+    - ".venv/"
+    - "build/"
+    - "dist/"
+    - ".tmp/"
+    - "__pycache__/"
+
+# Configuration file update settings
+update_targets:
+  pyproject_toml:
+    enabled: true
+    fields:
+      - "project.requires-python"
+      - "tool.mypy.python_version"
+      - "tool.black.target-version"
+  
+  github_workflows:
+    enabled: true
+    files:
+      - ".github/workflows/ci.yml"
+    fields:
+      - "env.PYTHON_VERSION"
+      - "strategy.matrix.python-version"
+  
+  readthedocs:
+    enabled: true
+    files:
+      - ".readthedocs.yaml"
+    fields:
+      - "build.tools.python"
+  
+  tox:
+    enabled: true
+    generate_envlist: true
+    include_future_versions: true
+
+# Environment variable overrides
+# These can be set in .env file or system environment
+env_overrides:
+  template_minimum: "PYTHON_MIN_VERSION"  # Override template minimum
+  detection_enabled: "PYTHON_VERSION_DETECTION_ENABLED"
+  increase_only: "PYTHON_VERSION_INCREASE_ONLY"

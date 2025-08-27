@@ -172,7 +172,7 @@ uv.lock
 bandit-report.json
 
 # Safety dependency check results
-safety-report.json
+pip-audit-report.json
 
 # Package management
 poetry.lock

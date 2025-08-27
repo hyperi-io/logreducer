@@ -1,0 +1,100 @@
+name: Python Version Sync
+
+on:
+  push:
+    paths:
+      - '.python-version-config.yaml'
+  workflow_dispatch:
+    inputs:
+      force_update:
+        description: 'Force update all Python versions'
+        required: false
+        default: 'false'
+
+env:
+  # Suppress uv hardlink warnings in CI
+  UV_LINK_MODE: copy
+
+jobs:
+  sync-python-versions:
+    name: Sync Python Versions Across Project
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        fetch-depth: 0
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.12"
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install vermin python-dotenv pyyaml
+    
+    - name: Run Python version detection and sync
+      run: |
+        # Ensure project tmp directory exists
+        mkdir -p .tmp
+        
+        # Set environment to use project tmp directory
+        export TMPDIR="$(pwd)/.tmp"
+        export TEMP="$(pwd)/.tmp"
+        export TMP="$(pwd)/.tmp"
+        
+        python scripts/detect_python_version.py
+        
+        # Check if any files were modified
+        if git diff --quiet; then
+          echo "No changes needed - all files already in sync"
+          exit 0
+        fi
+        
+        echo "Files updated by Python version sync:"
+        git diff --name-only
+    
+    - name: Get entity name for commit message
+      id: entity
+      run: |
+        ENTITY="HyperSec"
+        if [ -f .env ]; then
+          ENTITY=$(grep "^CICD_ENTITY=" .env | cut -d= -f2 | sed 's/^"//' | sed 's/"$//' || echo "HyperSec")
+        fi
+        echo "entity=$ENTITY" >> $GITHUB_OUTPUT
+    
+    - name: Commit changes
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "${{ steps.entity.outputs.entity }} Python Version Sync"
+        
+        # Add all modified files
+        git add -A
+        
+        # Create commit
+        git commit -m "chore: sync Python version requirements across project
+
+        Automatically updated all configuration files to match the Python
+        version requirements defined in .python-version-config.yaml.
+        
+        
+        
+        # Push changes
+        git push origin ${{ github.ref_name }}
+    
+    - name: Summary
+      run: |
+        echo "✅ Python version synchronization complete!"
+        echo "All project configuration files have been updated to match .python-version-config.yaml"
+        echo ""
+        echo "Updated files may include:"
+        echo "- pyproject.toml (requires-python, classifiers, mypy, black)"
+        echo "- .github/workflows/ci.yml (Python versions, test matrix)"
+        echo "- .readthedocs.yaml (build Python version)"
+        echo "- Generated tox.ini (if applicable)"
+        echo ""
+        echo "Next time, just modify .python-version-config.yaml and this automation handles the rest!"
