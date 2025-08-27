@@ -1,11 +1,15 @@
 name: Semantic Release
 
 on:
+  workflow_dispatch:  # Manual trigger for testing
   push:
     branches:
       - main
-      - develop
-  workflow_dispatch:
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.gitignore'
+      - 'LICENSE'
 
 env:
   NODE_VERSION: '20'
@@ -71,30 +75,8 @@ jobs:
         python -m pip install --upgrade pip
         pip install build twine
     
-    - name: Run vulnerability scan with pip-audit
-      run: |
-        pip install --upgrade pip-audit bandit semgrep
-        echo "Running dependency vulnerability scan..."
-        pip-audit --format=json --output=pip-audit-report.json || echo "pip-audit scan completed with warnings"
-        
-        echo "Running static security analysis with bandit..."
-        bandit -r src/ -f json -o bandit-report.json || echo "Bandit scan completed with warnings"
-        
-        echo "Running semantic security analysis with semgrep..."
-        semgrep --config=auto src/ --json --output=semgrep-report.json || echo "Semgrep scan completed with warnings"
-        
-        # Upload scan results as artifacts
-        echo "Security scans completed. Check artifacts for detailed reports."
-    
-    - name: Upload security scan results
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: security-scan-results
-        path: |
-          pip-audit-report.json
-          bandit-report.json  
-          semgrep-report.json
+    # Security scanning moved to security.yml workflow to avoid duplication
+    # Run security workflow separately when needed
     
     - name: Build Python package
       run: python -m build
