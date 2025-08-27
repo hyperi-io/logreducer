@@ -347,12 +347,12 @@ For VM access, contact your system administrator.
             print("2. Run tests: pytest tests/ -v")
             print("3. Start coding!")
         elif all_good and self.warnings:
-            print("⚠️  Environment mostly ready with some warnings:")
+            print("WARNING: Environment mostly ready with some warnings:")
             for warning in self.warnings:
                 print(f"   • {warning}")
-            print("\n✅ You can proceed with development.")
+            print("\nSUCCESS: You can proceed with development.")
         else:
-            print("❌ Development environment needs setup.")
+            print("ERROR: Development environment needs setup.")
             print(f"\n{len(self.missing_tools)} required tools missing.")
             all_good = False
         

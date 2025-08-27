@@ -9,7 +9,7 @@ CICD_ENTITY=${CICD_ENTITY:-"HyperSec"}
 # Pre-push hook
 # Ensures comprehensive quality checks before pushing to remote
 
-echo "🚀 Running ${CICD_ENTITY} pre-push checks..."
+echo "RUNNING: ${CICD_ENTITY} pre-push checks..."
 
 # Get the remote and branch being pushed to
 remote="$1"
@@ -138,4 +138,4 @@ else
     echo "✅ Feature branch checks passed"
 fi
 
-echo "🎉 Ready to push to $remote"
+echo "READY: Push to $remote"

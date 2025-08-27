@@ -10,6 +10,9 @@ on:
     - cron: '0 2 * * *'
   workflow_dispatch:
 
+env:
+  PYTHON_VERSION: "3.12"
+
 permissions:
   contents: read
   security-events: write
@@ -27,7 +30,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.11'
+        python-version: ${{ env.PYTHON_VERSION }}
         
     - name: Install dependencies
       run: |
@@ -61,7 +64,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.11'
+        python-version: ${{ env.PYTHON_VERSION }}
         
     - name: Install security tools
       run: |
@@ -152,8 +155,8 @@ jobs:
       
     - name: Build Docker image for scanning
       run: |
-        cat > Dockerfile.security << 'EOF'
-        FROM python:3.11-slim
+        cat > Dockerfile.security << EOF
+        FROM python:${PYTHON_VERSION}-slim
         WORKDIR /app
         COPY . .
         RUN pip install --no-cache-dir -e .
