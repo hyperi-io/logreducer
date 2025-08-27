@@ -89,7 +89,7 @@ Desktop.ini
 
 # Logs
 *.log
-!data/samples/samples/*.log
+!data/samples/*.log
 logs/
 .tmp/
 

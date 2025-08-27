@@ -84,7 +84,7 @@ jobs:
         git lfs install
         git lfs pull
         echo "Verifying sample files:"
-        ls -la data/samples/samples/*.log || echo "Sample files not found"
+        ls -la data/samples/*.log || echo "Sample files not found"
     
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v4

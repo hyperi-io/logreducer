@@ -12,7 +12,7 @@ from datetime import datetime
 from logreducer import LogReducer
 from logreducer.config import ProcessingLevel, ProcessingMode
 
-# Real sample files from ./samples/samples/
+# Real sample files from data/samples/
 SAMPLE_FILES = [
     "apache_access.log",
     "bgl_supercomputer.log", 
@@ -30,7 +30,7 @@ SAMPLE_FILES = [
 @pytest.fixture
 def samples_dir():
     """Get samples directory path"""
-    return Path(__file__).parent.parent.parent / "data" / "samples" / "samples"
+    return Path(__file__).parent.parent.parent / "data" / "samples"
 
 
 @pytest.fixture
