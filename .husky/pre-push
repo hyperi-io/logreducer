@@ -21,13 +21,13 @@ protected_branches="main|master|develop|development|staging|production"
 
 # Skip branch name validation for protected branches
 if echo "$current_branch" | grep -qE "^($protected_branches)$"; then
-  echo "✅ Protected branch detected, skipping branch name validation"
+  echo "SUCCESS: Protected branch detected, skipping branch name validation"
 else
-  echo "🔍 Validating branch name..."
+  echo "RUNNING: Validating branch name..."
   npx branch-name-lint .branchlintrc.json
 
   if [ $? -ne 0 ]; then
-    echo "❌ Branch name validation failed!"
+    echo "ERROR: Branch name validation failed!"
     echo ""
     echo "Valid patterns:"
     echo "  feature/description or feature/JIRA-123-description"
@@ -40,102 +40,102 @@ else
     echo "See .branchlintrc.json for full configuration"
     exit 1
   fi
-  echo "✅ Branch name valid"
+  echo "SUCCESS: Branch name valid"
 fi
 
 # Check if we're pushing to main or develop
 protected_branches="main|develop"
 
 if echo "$current_branch" | grep -qE "^($protected_branches)$"; then
-    echo "🛡️  Pushing to protected branch: $current_branch"
+    echo "RUNNING: Pushing to protected branch: $current_branch"
     echo "   Running comprehensive checks..."
     
     # 1. Ensure all tests pass
-    echo "🧪 Running full test suite..."
+    echo "TESTING: Running full test suite..."
     if command -v uv > /dev/null; then
         uv run pytest tests/ -v
         if [ $? -ne 0 ]; then
-            echo "❌ Test suite failed"
+            echo "ERROR: Test suite failed"
             exit 1
         fi
     else
-        echo "⚠️  uv not found, skipping tests"
+        echo "WARNING: uv not found, skipping tests"
     fi
     
     # 2. Run security scan
-    echo "🛡️  Running security scan..."
+    echo "SCANNING: Running security scan..."
     if [ -f "scripts/security_scan.py" ]; then
         python scripts/security_scan.py --report-only
         if [ $? -ne 0 ]; then
-            echo "⚠️  Security scan completed with warnings"
+            echo "WARNING: Security scan completed with warnings"
         fi
     fi
     
     # 3. Check documentation builds (non-blocking for CI/CD testing)
-    echo "📚 Checking documentation builds..."
+    echo "BUILDING: Checking documentation builds..."
     if command -v uv > /dev/null; then
         uv run sphinx-build -b html docs/ docs/_build/html > /dev/null 2>&1
         if [ $? -ne 0 ]; then
-            echo "⚠️  Documentation build has warnings (non-blocking)"
+            echo "WARNING: Documentation build has warnings (non-blocking)"
         else
-            echo "✅ Documentation build successful"
+            echo "SUCCESS: Documentation build successful"
         fi
     fi
     
     # 4. Verify package can be built
-    echo "📦 Verifying package build..."
+    echo "VERIFYING: Package build..."
     if command -v uv > /dev/null; then
         uv run python -m build --wheel --outdir .tmp/ > /dev/null 2>&1
         if [ $? -ne 0 ]; then
-            echo "❌ Package build failed"
+            echo "ERROR: Package build failed"
             exit 1
         fi
     elif command -v python > /dev/null; then
         python -m build --wheel --outdir .tmp/ > /dev/null 2>&1
         if [ $? -ne 0 ]; then
-            echo "❌ Package build failed (install python-build)"
+            echo "ERROR: Package build failed (install python-build)"
             exit 1
         fi
     fi
     
     # 5. Check for version consistency
-    echo "🔢 Checking version consistency..."
+    echo "CHECKING: Version consistency..."
     if [ -f "VERSION" ] && [ -f "pyproject.toml" ]; then
         version_file=$(cat VERSION)
         toml_version=$(grep '^version = "' pyproject.toml | head -1 | sed 's/version = "\([^"]*\)"/\1/')
         if [ "$version_file" != "$toml_version" ]; then
-            echo "❌ Version mismatch: VERSION file ($version_file) != pyproject.toml ($toml_version)"
+            echo "ERROR: Version mismatch: VERSION file ($version_file) != pyproject.toml ($toml_version)"
             exit 1
         fi
     fi
     
-    echo "✅ All pre-push checks passed for protected branch"
+    echo "SUCCESS: All pre-push checks passed for protected branch"
     
     # 6. Push Git LFS objects if needed
-    echo "📤 Checking for Git LFS objects..."
+    echo "CHECKING: Git LFS objects..."
     if command -v git-lfs > /dev/null 2>&1 && git lfs ls-files | grep -q .; then
         echo "   Pushing LFS objects to origin..."
         git lfs push --all origin
         if [ $? -eq 0 ]; then
-            echo "✅ LFS objects pushed successfully"
+            echo "SUCCESS: LFS objects pushed successfully"
         else
-            echo "⚠️  LFS push failed, but continuing"
+            echo "WARNING: LFS push failed, but continuing"
         fi
     fi
 else
-    echo "📝 Pushing to feature branch: $current_branch"
+    echo "RUNNING: Pushing to feature branch: $current_branch"
     
     # Lighter checks for feature branches
-    echo "🧪 Running unit tests..."
+    echo "TESTING: Running unit tests..."
     if command -v uv > /dev/null; then
         uv run pytest tests/unit/ -x --tb=short -q
         if [ $? -ne 0 ]; then
-            echo "❌ Unit tests failed"
+            echo "ERROR: Unit tests failed"
             exit 1
         fi
     fi
     
-    echo "✅ Feature branch checks passed"
+    echo "SUCCESS: Feature branch checks passed"
 fi
 
 echo "READY: Push to $remote"
