@@ -55,9 +55,16 @@ class SecurityScanner:
         print("Installing security tools...")
         for tool in tools:
             print(f"  Installing {tool}...")
+            # Try uv first, fallback to pip
             exit_code, _, stderr = self.run_command([
-                sys.executable, "-m", "pip", "install", "--upgrade", tool
+                "uv", "pip", "install", "--upgrade", tool
             ])
+            if exit_code != 0:
+                # Fallback to regular pip
+                exit_code, _, stderr = self.run_command([
+                    sys.executable, "-m", "pip", "install", "--upgrade", tool
+                ])
+            
             if exit_code != 0:
                 print(f"  Failed to install {tool}: {stderr}")
                 return False
