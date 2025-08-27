@@ -20,9 +20,9 @@ classifiers = [
     "Topic :: System :: Logging",
     "Topic :: System :: Systems Administration", 
     "Topic :: Software Development :: Libraries :: Python Modules",
+    "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.12 :: Only",
+    "Programming Language :: Python :: 3 :: Only",
     "Operating System :: OS Independent",
 ]
 keywords = ["log", "logging", "reduction", "analysis", "pattern-extraction", "memory-efficient", "streaming", "anomaly-detection"]
@@ -38,30 +38,28 @@ dependencies = [
 
 [project.optional-dependencies]
 enhanced = [
-    "xxhash>=3.0.0",
-    "polars>=0.20.0",  # Using polars not pandas (as requested)
-    "numpy>=2.0.0",    # Consistent with core dependencies
-    "scipy>=1.10.0",
-    "scikit-learn>=1.3.0",
-    "datasketch>=1.5.0",
+    "xxhash>=3.0.0",      # Fast hash functions for better performance
+    "polars>=0.20.0",     # High-performance DataFrames (preferred over pandas)
+    "scipy>=1.10.0",      # Advanced scientific computing
+    "datasketch>=1.5.0",  # MinHash and LSH for similarity analysis
 ]
 dev = [
-    "pytest>=8.0.0",      # Modern pytest, drops nose support, handles async fixtures
-    "pytest-cov>=5.0.0",  # Updated for modern pytest compatibility
-    "black>=24.0.0",      # Latest Black with stable feature set
-    "flake8>=7.0.0",      # Updated flake8
-    "mypy>=1.8.0",        # Modern mypy with better Python 3.11+ support
-    "build>=1.0.0",       # Modern Python build tool
-    "twine>=5.0.0",       # Latest twine for secure uploads
-    "vermin>=1.6.0",      # Python version detection
+    "pytest>=8.0.0",         # Modern test framework
+    "pytest-cov>=5.0.0",     # Test coverage reporting
+    "black>=24.0.0",         # Code formatting
+    "flake8>=7.0.0",         # Code linting
+    "mypy>=1.8.0",           # Static type checking
+    "build>=1.0.0",          # Package building
+    "twine>=5.0.0",          # PyPI package uploads
+    "vermin>=1.6.0",         # Python version detection for automation
     "python-dotenv>=1.0.0",  # Environment configuration
-    "pyyaml>=6.0.0",      # YAML configuration support
+    "pyyaml>=6.0.0",         # YAML configuration support
 ]
 docs = [
-    "sphinx>=5.0.0",
-    "sphinx-rtd-theme>=1.0.0",
-    "myst-parser>=0.18.0",
-    "linkify-it-py>=2.0.0",  # Required for myst-parser linkify extension
+    "sphinx>=8.0.0",          # Documentation generator
+    "sphinx-rtd-theme>=3.0.0", # Read the Docs theme
+    "myst-parser>=3.0.0",     # Markdown parser for Sphinx
+    "sphinx-autobuild>=2024.0.0", # Live reload during development
 ]
 
 [project.urls]
