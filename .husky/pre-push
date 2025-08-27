@@ -84,10 +84,16 @@ if echo "$current_branch" | grep -qE "^($protected_branches)$"; then
     
     # 4. Verify package can be built
     echo "📦 Verifying package build..."
-    if command -v python > /dev/null; then
-        python -m build --wheel --outdir .tmp/ > /dev/null 2>&1
+    if command -v uv > /dev/null; then
+        uv run python -m build --wheel --outdir .tmp/ > /dev/null 2>&1
         if [ $? -ne 0 ]; then
             echo "❌ Package build failed"
+            exit 1
+        fi
+    elif command -v python > /dev/null; then
+        python -m build --wheel --outdir .tmp/ > /dev/null 2>&1
+        if [ $? -ne 0 ]; then
+            echo "❌ Package build failed (install python-build)"
             exit 1
         fi
     fi
