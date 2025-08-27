@@ -4,11 +4,10 @@ Memory management and monitoring utilities
 
 import gc
 import os
-import psutil
 from collections import deque
-from functools import lru_cache
 from typing import Iterator, Tuple
-from loguru import logger
+
+import psutil
 
 
 class MemoryMonitor:
@@ -201,7 +200,7 @@ class BoundedDeduplicator:
         else:
             import hashlib
 
-            self.hash_func = lambda x: hashlib.md5(x.encode()).hexdigest()
+            self.hash_func = lambda x: hashlib.md5(x.encode(), usedforsecurity=False).hexdigest()
 
         self.seen_hashes = deque(maxlen=max_cache_size)
         self.seen_set = set()

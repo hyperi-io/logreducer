@@ -13,11 +13,26 @@ sys.path.insert(0, os.path.abspath('../src'))
 # -- Project information -----------------------------------------------------
 
 project = 'LogReducer'
-copyright = '2025, Corporate Development Team'
-author = 'Corporate Development Team'
+copyright = '2025, HyperSec Development Team'
+author = 'HyperSec Development Team'
+
+# Get version dynamically
+import re
+from pathlib import Path
+
+def get_version():
+    """Get version from pyproject.toml"""
+    pyproject = Path(__file__).parent.parent / "pyproject.toml"
+    if pyproject.exists():
+        content = pyproject.read_text()
+        match = re.search(r'^\[project\].*?^version = "(.*?)"', content, re.MULTILINE | re.DOTALL)
+        if match:
+            return match.group(1)
+    return "unknown"
 
 # The full version, including alpha/beta/rc tags
-release = '3.2.1'
+release = get_version()
+version = release
 
 # -- General configuration ---------------------------------------------------
 

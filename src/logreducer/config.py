@@ -2,9 +2,10 @@
 Configuration and tuning parameters for LogReducer
 """
 
+import multiprocessing as mp
 from dataclasses import dataclass
 from enum import Enum
-import multiprocessing as mp
+
 import psutil
 
 

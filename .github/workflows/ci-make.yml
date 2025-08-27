@@ -1,0 +1,170 @@
+# Alternative CI/CD Pipeline using Make
+# This demonstrates using Make commands instead of direct tool calls
+# Can replace ci.yml if you prefer Make-based CI
+
+name: CI/CD Pipeline (Make-based)
+
+on:
+  workflow_dispatch:  # Manual trigger for testing
+  # Uncomment to enable on push/PR:
+  # push:
+  #   branches: [ main ]
+  # pull_request:
+  #   branches: [ main ]
+
+env:
+  UV_LINK_MODE: copy
+
+jobs:
+  detect-python-version:
+    name: Load Python Version Configuration
+    runs-on: ubuntu-latest
+    outputs:
+      min-version: ${{ steps.config.outputs.min-version }}
+      test-matrix: ${{ steps.config.outputs.test-matrix }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        lfs: true
+    
+    - name: Load Python version configuration
+      id: config
+      run: |
+        if [ -f .python-version-config.yaml ]; then
+          MIN_VERSION=$(python3 -c "
+          import yaml
+          with open('.python-version-config.yaml') as f:
+              config = yaml.safe_load(f)
+              print(config['template_minimum'])
+          " 2>/dev/null || echo "3.12")
+        else
+          MIN_VERSION="3.12"
+        fi
+        
+        echo "min-version=$MIN_VERSION" >> $GITHUB_OUTPUT
+        echo "test-matrix=[\"$MIN_VERSION\"]" >> $GITHUB_OUTPUT
+        
+        echo "[INFO] Configuration loaded:"
+        echo "  Minimum Python: $MIN_VERSION"
+        echo "  Test matrix: [\"$MIN_VERSION\"]"
+
+  test:
+    name: Test Suite (Make-based)
+    runs-on: ubuntu-latest
+    needs: detect-python-version
+    strategy:
+      matrix:
+        python-version: ${{ fromJson(needs.detect-python-version.outputs.test-matrix) }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        lfs: true
+    
+    - name: Pull LFS files
+      run: |
+        git lfs install
+        git lfs pull
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Cache dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Setup development environment
+      run: |
+        # Use our setup script which handles dependencies
+        python3 scripts/setup
+    
+    - name: Run linting
+      run: |
+        make lint
+    
+    - name: Run format check
+      run: |
+        # Check format without changing files
+        .venv/bin/python -m black --check src/logreducer/
+    
+    - name: Test PEP 660 editable install compatibility
+      run: |
+        .venv/bin/python scripts/ci-helper test-editable
+    
+    - name: Run unit tests
+      run: |
+        make test-unit
+    
+    - name: Run integration tests
+      run: |
+        make test-integration
+
+  security:
+    name: Security Checks (Make-based)
+    runs-on: ubuntu-latest
+    needs: [test, detect-python-version]
+    continue-on-error: true
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        lfs: true
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ needs.detect-python-version.outputs.min-version }}
+    
+    - name: Setup development environment
+      run: |
+        python3 scripts/setup
+    
+    - name: Run security scan
+      run: |
+        make security
+
+  build:
+    name: Build Package (Make-based)
+    runs-on: ubuntu-latest
+    needs: [test, security]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        lfs: true
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ needs.detect-python-version.outputs.min-version }}
+    
+    - name: Setup development environment
+      run: |
+        python3 scripts/setup
+    
+    - name: Build package
+      run: |
+        make build
+    
+    - name: Check package
+      run: |
+        .venv/bin/python -m twine check dist/*
+    
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: dist
+        path: dist/

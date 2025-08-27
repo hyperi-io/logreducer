@@ -135,30 +135,16 @@ jobs:
     
     - name: Test documentation examples
       run: |
-        # Extract and test Python code blocks from documentation
-        python -c "
-        import subprocess
-        import os
-        from pathlib import Path
-        
         # Test basic usage example
-        test_code = '''
-from logreducer import LogReducer
-reducer = LogReducer()
-print('LogReducer imported successfully')
-        '''
+        mkdir -p .tmp
+        cat > .tmp/test_example.py << 'EOF'
+        from logreducer import LogReducer
+        reducer = LogReducer()
+        print('LogReducer imported successfully')
+        EOF
         
-        with open('.tmp/test_example.py', 'w') as f:
-            f.write(test_code)
-        
-        result = subprocess.run(['python', '.tmp/test_example.py'], 
-                              capture_output=True, text=True)
-        if result.returncode != 0:
-            print(f'Example test failed: {result.stderr}')
-            exit(1)
-        else:
-            print('Documentation examples validated successfully')
-        "
+        python .tmp/test_example.py
+        echo "Documentation examples validated successfully"
     
     - name: Test CLI examples
       run: |

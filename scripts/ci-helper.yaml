@@ -1,0 +1,75 @@
+# CI/CD Helper Configuration
+# This file defines paths and patterns for CI/CD operations
+
+# Version file locations and patterns
+version:
+  files:
+    version_file: "VERSION"
+    pyproject_toml: "pyproject.toml"
+    init_file: "src/logreducer/__init__.py"
+  
+  patterns:
+    pyproject:
+      # Pattern to find version in pyproject.toml [project] section
+      section: '^\[project\]'
+      version: '^version = "(.*?)"'
+    
+    init:
+      # Pattern to find __version__ in __init__.py
+      version: "__version__\\s*=\\s*[\"']([^\"']+)[\"']"
+    
+    # Alternative patterns for different project structures
+    alternatives:
+      poetry:
+        section: '^\[tool\.poetry\]'
+        version: '^version = "(.*?)"'
+      
+      setuppy:
+        file: "setup.py"
+        pattern: "version\\s*=\\s*[\"']([^\"']+)[\"']"
+
+# Release configuration
+release:
+  tag_format: "v{version}"
+  initial_tag_message: "Initial version tag for semantic-release baseline"
+  
+# CI/CD specific settings
+ci:
+  # GitHub Actions specific
+  github_actions:
+    output_format: "{key}={value} >> $GITHUB_OUTPUT"
+  
+  # Build commands
+  build:
+    command: "python -m build"
+    artifacts:
+      - "dist/*.whl"
+      - "dist/*.tar.gz"
+
+# Project structure detection
+project:
+  # Patterns to detect project type and structure
+  detection:
+    python_package:
+      - "pyproject.toml"
+      - "setup.py"
+      - "setup.cfg"
+    
+    src_layout:
+      - "src/*/__init__.py"
+    
+    flat_layout:
+      - "*/__init__.py"
+    
+    monorepo:
+      - "packages/*/pyproject.toml"
+      - "libs/*/setup.py"
+
+# Logging configuration for CI
+logging:
+  # Use simple format for CI environments
+  ci_format: "simple"
+  levels:
+    default: "INFO"
+    debug: "DEBUG"
+    quiet: "WARNING"

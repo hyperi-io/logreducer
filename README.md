@@ -1,8 +1,8 @@
 # LogReducer
 
-[![Python Version](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://python.org)
+[![Python Version](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://python.org)
 [![License: HyperSec EULA](https://img.shields.io/badge/License-HyperSec_EULA-red.svg)](https://hypersec.io/eula)
-[![Package Version](https://img.shields.io/badge/version-3.2.0-green.svg)](https://pypi.org/project/logreducer/)
+[![Package Version](https://img.shields.io/badge/version-3.2.1-green.svg)](https://pypi.org/project/logreducer/)
 
 A high-performance Python module for intelligently reducing large log files (GB+) to representative samples while preserving critical patterns. Features memory-safe processing, temporal awareness, and anomaly detection.
 
@@ -33,7 +33,7 @@ pip install --index-url https://your-company.jfrog.io/artifactory/api/pypi/pypi/
 ```bash
 git clone https://github.com/hypersec-io/logreducer.git
 cd logreducer
-pip install -e ".[dev]"
+make setup  # Sets up virtual environment and installs all dependencies
 ```
 
 ## Quick Start
@@ -202,14 +202,14 @@ except Exception as e:
 
 ## Development
 
-### Setup Development Environment
+For detailed development setup, testing, and contribution guidelines, see [docs/DEV.md](docs/DEV.md).
+
+### Quick Setup
 
 ```bash
 git clone https://github.com/hypersec-io/logreducer.git
 cd logreducer
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-pip install -e ".[dev]"
+make setup  # Creates .venv, installs dependencies, sets up pre-commit hooks
 ```
 
 ### Running Tests
@@ -231,7 +231,7 @@ mypy logreducer/               # Type check
 ## Requirements
 
 ### Core Dependencies
-- Python 3.8+
+- Python 3.12+
 - drain3 >= 0.9.0
 - psutil >= 5.9.0
 - loguru >= 0.7.0
@@ -257,6 +257,8 @@ For complete license terms, visit: https://hypersec.io/eula
 3. Commit your changes (`git commit -m 'Add amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
+
+See [docs/DEV.md](docs/DEV.md) for detailed development setup and [docs/BUILD_AND_CI.md](docs/BUILD_AND_CI.md) for build and CI information.
 
 ## Support
 

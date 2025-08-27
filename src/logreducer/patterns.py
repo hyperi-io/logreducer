@@ -2,13 +2,12 @@
 Pattern extraction and clustering utilities
 """
 
-import re
-from typing import List, Dict, Optional
+from collections import Counter
 from dataclasses import dataclass, field
-from collections import defaultdict, Counter
+from typing import Dict, List
+
 from drain3 import TemplateMiner
 from drain3.template_miner_config import TemplateMinerConfig
-from loguru import logger
 
 # Try optional imports
 try:
@@ -19,8 +18,8 @@ except ImportError:
     MINHASH_AVAILABLE = False
 
 try:
-    from scipy.stats import entropy
     import numpy as np
+    from scipy.stats import entropy
 
     SCIPY_AVAILABLE = True
 except ImportError:

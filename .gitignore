@@ -10,6 +10,7 @@
 # Project-specific private documentation
 CLAUDE.md
 
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -192,3 +193,4 @@ Pipfile.lock
 # Local CI artifacts  
 act-*
 .act/
+.secrets.act

@@ -18,8 +18,9 @@ __copyright__ = "Copyright (c) HyperSec 2025"
 __description__ = "High-performance log reduction with intelligent pattern extraction and anomaly detection"
 __url__ = "https://github.com/hypersec-io/logreducer"
 
+from .config import (BigDialConfig, OutputFormat, ProcessingLevel,
+                     ProcessingMode)
 from .core import LogReducer
-from .config import ProcessingLevel, ProcessingMode, BigDialConfig, OutputFormat
 from .logging_config import setup_logging
 
 __all__ = [

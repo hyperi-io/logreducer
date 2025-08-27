@@ -57,7 +57,7 @@ jobs:
     - name: Log workflow changes
       if: github.event_name == 'pull_request'
       run: |
-        echo "📝 Workflow changes detected in PR #${{ github.event.pull_request.number }}"
+        echo "Workflow changes detected in PR #${{ github.event.pull_request.number }}"
         echo "Changed files:"
         echo "${{ github.event.pull_request.changed_files }}"
         

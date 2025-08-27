@@ -311,7 +311,7 @@ if __name__ == "__main__":
     benchmark_performance()
 ```
 
-## 🔒 Security Considerations
+## Security Considerations
 
 ### Dependency Management
 

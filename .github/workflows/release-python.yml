@@ -1,0 +1,121 @@
+name: Semantic Release (Python)
+
+on:
+  workflow_dispatch:  # Manual trigger for testing
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.gitignore'
+      - 'LICENSE'
+
+env:
+  PYTHON_VERSION: "3.12"
+
+permissions:
+  contents: write
+  issues: write  
+  pull-requests: write
+  packages: write
+  id-token: write
+
+jobs:
+  release:
+    name: Python Semantic Release
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: Install uv for faster package management
+      run: |
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+        echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+    
+    - name: Install dependencies
+      run: |
+        uv pip install --system python-semantic-release build twine
+    
+    - name: Check current version
+      run: |
+        echo "Current VERSION file: $(cat VERSION)"
+        echo "Current pyproject.toml version: $(grep '^version' pyproject.toml | head -1)"
+        echo "Current __init__.py version: $(grep '__version__' src/logreducer/__init__.py)"
+    
+    - name: Run Semantic Release
+      id: release
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # Let semantic-release analyze and determine version bump
+        # It will update pyproject.toml and __init__.py automatically
+        semantic-release version --no-push
+        
+        # Get the new version if there was a bump
+        NEW_VERSION=$(semantic-release version --print)
+        echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+        
+        # If there's a new version, update VERSION file and build
+        if [ -n "$NEW_VERSION" ]; then
+          echo "New version: $NEW_VERSION"
+          
+          # Update VERSION file only (semantic-release already updated the others)
+          python scripts/ci-helper update-version "$NEW_VERSION"
+          
+          # Build the package
+          python -m build
+          
+          # Publish the release with semantic-release
+          semantic-release publish --no-vcs-release
+          
+          # Create GitHub release with artifacts
+          gh release create "v$NEW_VERSION" \
+            --title "v$NEW_VERSION" \
+            --generate-notes \
+            dist/*.whl dist/*.tar.gz
+        else
+          echo "No version bump needed"
+        fi
+    
+    - name: Verify VERSION file update
+      if: steps.release.outputs.new_version
+      run: |
+        python scripts/ci-helper verify-versions
+    
+    - name: Upload build artifacts
+      if: steps.release.outputs.new_version
+      uses: actions/upload-artifact@v4
+      with:
+        name: dist
+        path: dist/
+    
+    - name: Deploy to PyPI (if configured)
+      if: steps.release.outputs.new_version && vars.ENABLE_PYPI_DEPLOYMENT == 'true'
+      env:
+        TWINE_USERNAME: __token__
+        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+      run: |
+        echo "Deploying to PyPI..."
+        twine upload dist/*
+    
+    - name: Deploy to JFrog (if configured)
+      if: steps.release.outputs.new_version && vars.ENABLE_ARTIFACTORY_DEPLOYMENT == 'true'
+      env:
+        TWINE_USERNAME: ${{ secrets.ARTIFACTORY_USERNAME }}
+        TWINE_PASSWORD: ${{ secrets.ARTIFACTORY_PASSWORD }}
+        TWINE_REPOSITORY_URL: "https://hypersec.jfrog.io/artifactory/api/pypi/hypersec-pypi-local/"
+      run: |
+        echo "Deploying to JFrog Artifactory..."
+        twine upload --repository-url $TWINE_REPOSITORY_URL dist/*

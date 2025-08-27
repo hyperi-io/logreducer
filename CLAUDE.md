@@ -23,6 +23,7 @@ LogReducer is a high-performance log processing system designed for reducing lar
 - **Dependencies**: Core deps updated (numpy, scikit-learn moved to core from optional)
 - **Production Ready**: Full API testing passed, ready for PyPI deployment
 - **Version 3.2.0**: Manually bumped version due to CI issues, semantic-release temporarily disabled
+- **Generic Python Template**: Script structure designed for reuse as Python project template
 
 ### Verified Working ✓  
 - **API Import**: `import logreducer` successful, LogReducer instances create without errors
@@ -51,6 +52,14 @@ LogReducer is a high-performance log processing system designed for reducing lar
 - Memory usage capped at 500MB for streaming mode
 
 ## Development Guidelines
+
+### Script Architecture
+- **ALWAYS check `pdev` or `ci-helper` before creating new scripts**
+- Developer commands belong in `scripts/pdev`
+- CI/CD utilities belong in `scripts/ci-helper`
+- Common functions go in `scripts/common.py`
+- Only create standalone scripts for bootstrap operations (like setup)
+- Consolidation prevents duplication and maintains consistency
 
 ### File System Usage
 - **ALWAYS use `./.tmp` directory for temporary files and automation work**
@@ -184,6 +193,78 @@ Enables verbose logging and performance profiling.
 - Manual changelog edits are prohibited to maintain consistency with semantic versioning
 - Use conventional commit messages for semantic-release to work properly
 
+## Python Project Template Components
+
+This project structure is designed to be reusable as a **generic Python project template**. The following components can be extracted and reused:
+
+### ✅ **Generic Template Structure**
+- **`Makefile`** - Industry standard interface calling Python scripts
+- **`scripts/pdev`** - Generic Python development commands (replaces project-specific names)
+- **`scripts/setup`** - Environment setup with tool requirements checking
+- **`scripts/common.py`** - Centralized logging & configuration utilities
+- **`scripts/security_scan.py`** - Comprehensive security scanning
+- **`scripts/test_editable_install.py`** - PEP 660 editable install testing
+
+### ✅ **Professional Logging System**
+- **Tee Approach**: Scripts log to both console AND file by default  
+- **Module Approach**: Only logs to file if path provided, console if specified
+- **RFC 3339 Timestamps**: `2025-08-27T15:55:44.389+10:00` format
+- **Enterprise Configuration**: ConfigMap → ENV vars → CLI args precedence
+- **Dynaconf Integration**: YAML + environment variable + CLI argument precedence
+
+### ✅ **CI/CD Pipeline Template**
+- **Multi-stage workflow**: test → security → build → release → deploy
+- **Python version detection**: Dynamic from `.python-version-config.yaml`
+- **Security integration**: Uses unified security scan script
+- **Semantic release**: Automated versioning and changelog
+- **Professional output**: No emojis, clear status indicators
+
+### ✅ **Hybrid Development Workflow**
+**Industry Standard Make + Professional Python Scripts:**
+```bash
+# One-time setup
+make setup
+
+# Daily development (Make - Industry Standard)
+make test               # Run all tests
+make format             # Format code
+make lint              # Run linting
+make security          # Security scan
+make all               # Run everything
+
+# Alternative: Direct script usage
+scripts/setup           # Environment setup
+scripts/pdev test       # Python script with professional logging
+```
+
+**Best of Both Worlds:**
+- **Make**: Industry standard, simple commands, parallel execution
+- **Python Scripts**: Professional logging, configuration management, cross-platform
+- **Template Ready**: Both Makefile and scripts/ can be reused across projects
+
+### ✅ **Configuration Management**
+- **`common.py`**: Centralized config utilities with enterprise patterns
+- **`config.yaml`**: Auto-generated default configuration  
+- **Environment Variables**: `APP_` prefix with override precedence
+- **CLI Arguments**: Final override precedence
+- **Kubernetes Ready**: ConfigMap/Secret mounting patterns
+
+### ✅ **Template Extraction Guidelines**
+When creating the generic template:
+1. **Replace project-specific references** in help text and comments
+2. **Keep `scripts/pdev`** name for consistency across all Python projects  
+3. **Update `pyproject.toml`** with template project structure
+4. **Preserve logging/config patterns** - they work for any Python project
+5. **Keep professional emoji-free output** - suitable for enterprise use
+6. **Maintain tool requirement checking** - ensures consistent dev environments
+
+### ✅ **Template Benefits**
+- **Consistent Development**: Same commands across all Python projects
+- **Enterprise Ready**: Professional logging, configuration, CI/CD  
+- **Security Built-in**: Comprehensive scanning from day one
+- **Auto-Environment**: No manual venv activation needed
+- **Scale Ready**: Supports development to production deployment
+
 ## Future Enhancements
 
 ### High Priority
@@ -290,7 +371,10 @@ Run `python scripts/check_dev_tools.py` to verify all tools are installed and pr
 - CPU detection is container-aware for proper threading
 - Memory limits are enforced and tested
 - All text has been cleaned of unprofessional emojis
-- Current version: 3.2.0 (manually updated)
+- Current version: 3.2.1
+- Scripts consolidated: `pdev` for dev, `ci-helper` for CI/CD, `setup` for bootstrap
+- Common functions in `scripts/common.py`
+- Python floor version: 3.11 (this project uses 3.12 via .python-version)
 
 ### Known Issues
 - **Semantic-release CI**: GitHub Actions automation failing, currently disabled to prevent spam
