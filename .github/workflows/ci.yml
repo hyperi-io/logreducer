@@ -28,7 +28,7 @@ env:
 jobs:
   detect-python-version:
     name: Load Python Version Configuration
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     outputs:
       min-version: ${{ steps.config.outputs.min-version }}
       test-matrix: ${{ steps.config.outputs.test-matrix }}
@@ -64,7 +64,7 @@ jobs:
 
   test:
     name: Test Suite
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: detect-python-version
     strategy:
       matrix:
@@ -134,7 +134,7 @@ jobs:
 
   security:
     name: Security Checks
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: [test, detect-python-version]
     
     steps:
@@ -163,7 +163,7 @@ jobs:
 
   build:
     name: Build Package
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: [test, security]
     
     steps:
@@ -198,7 +198,7 @@ jobs:
 
   release:
     name: Release
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: [build, detect-python-version]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     permissions:
@@ -239,7 +239,7 @@ jobs:
 
   deploy-staging:
     name: Deploy to Staging
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: [build, detect-python-version]
     if: github.ref == 'refs/heads/develop'
     environment: staging
@@ -273,8 +273,8 @@ jobs:
         twine upload dist/* --verbose
 
   deploy-production:
-    name: Deploy to Production  
-    runs-on: ubuntu-latest
+    name: Deploy to Production (JFrog - GitHub Hosted)
+    runs-on: ubuntu-latest  # Keep GitHub-hosted for JFrog security
     needs: [release, detect-python-version]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment: production
