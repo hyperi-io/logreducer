@@ -208,8 +208,9 @@ def main():
     print("=" * 50)
     
     # Create samples directory if it doesn't exist
-    os.makedirs("samples", exist_ok=True)
-    os.chdir("samples")
+    samples_dir = Path(__file__).parent.parent / "data" / "samples"
+    samples_dir.mkdir(parents=True, exist_ok=True)
+    os.chdir(samples_dir)
     
     # Track download statistics
     successful_downloads = 0
