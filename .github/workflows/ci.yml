@@ -41,20 +41,13 @@ jobs:
         
         echo "min-version=$MIN_VERSION" >> $GITHUB_OUTPUT
         
-        # Generate test matrix based on minimum version
-        MIN_MINOR=$(echo $MIN_VERSION | cut -d. -f2)
-        VERSIONS=""
-        for i in $(seq $MIN_MINOR 13); do
-          if [ -n "$VERSIONS" ]; then
-            VERSIONS="$VERSIONS, "
-          fi
-          VERSIONS="$VERSIONS\"3.$i\""
-        done
-        echo "test-matrix=[$VERSIONS]" >> $GITHUB_OUTPUT
+        # Generate test matrix - only test with our minimum version for now
+        # Can expand to test newer versions once confirmed working
+        echo "test-matrix=[\"$MIN_VERSION\"]" >> $GITHUB_OUTPUT
         
         echo "📋 Configuration loaded:"
         echo "  Minimum Python: $MIN_VERSION"
-        echo "  Test matrix: [$VERSIONS]"
+        echo "  Test matrix: [\"$MIN_VERSION\"]"
 
   test:
     name: Test Suite

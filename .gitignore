@@ -5,6 +5,8 @@
 
 # Development tools
 
+# Project-specific private documentation
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
