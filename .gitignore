@@ -148,6 +148,7 @@ yarn.lock
 *.key
 *.pem
 .env.*
+!.env.example
 
 # Build artifacts
 *.whl
