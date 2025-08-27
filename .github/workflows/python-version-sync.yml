@@ -3,7 +3,7 @@ name: Python Version Sync
 on:
   push:
     paths:
-      - '.python-version-config.yaml'
+      - '.python-version'
   workflow_dispatch:
     inputs:
       force_update:
@@ -91,7 +91,7 @@ jobs:
     - name: Summary
       run: |
         echo "✅ Python version synchronization complete!"
-        echo "All project configuration files have been updated to match .python-version-config.yaml"
+        echo "All project configuration files have been updated to match .python-version"
         echo ""
         echo "Updated files may include:"
         echo "- pyproject.toml (requires-python, classifiers, mypy, black)"
@@ -99,4 +99,4 @@ jobs:
         echo "- .readthedocs.yaml (build Python version)"
         echo "- Generated tox.ini (if applicable)"
         echo ""
-        echo "Next time, just modify .python-version-config.yaml and this automation handles the rest!"
+        echo "Next time, just modify .python-version and this automation handles the rest!"

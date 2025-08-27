@@ -7,8 +7,20 @@ env:
 on:
   pull_request:
     types: [opened, synchronize, edited, reopened]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.gitignore'
+      - 'LICENSE'
+      - 'CHANGELOG.md'
   pull_request_target:
     types: [opened, synchronize, edited, reopened]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.gitignore'
+      - 'LICENSE'
+      - 'CHANGELOG.md'
 
 jobs:
   branch-name:
@@ -185,7 +197,8 @@ jobs:
   check-jira:
     name: Check for JIRA References
     runs-on: ubuntu-latest
-    if: contains(github.event.pull_request.head.ref, 'feature/') || contains(github.event.pull_request.head.ref, 'fix/') || contains(github.event.pull_request.head.ref, 'hotfix/')
+    # Only run on feature/fix branches and skip for documentation-only PRs
+    if: (contains(github.event.pull_request.head.ref, 'feature/') || contains(github.event.pull_request.head.ref, 'fix/') || contains(github.event.pull_request.head.ref, 'hotfix/')) && github.event.pull_request.changed_files > 0
     
     steps:
     - name: Check for JIRA reference
