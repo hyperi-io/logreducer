@@ -1,0 +1,347 @@
+#!/usr/bin/env python3
+"""
+LogReducer Developer Commands
+For daily development tasks - automatically handles venv activation
+"""
+
+import sys
+import subprocess
+import os
+import json
+from pathlib import Path
+
+# Import common utilities
+sys.path.insert(0, str(Path(__file__).parent))
+
+# Try to import from common, but handle when loguru isn't available
+try:
+    from common import (
+        PROJECT_ROOT, VENV_PATH, VENV_PYTHON,
+        get_project_version, get_package_name, get_python_version,
+        check_git_repo, get_git_tags, load_yaml_config
+    )
+except ImportError:
+    # Fallback when running without venv (e.g., showing help)
+    from pathlib import Path
+    PROJECT_ROOT = Path(__file__).parent.parent
+    VENV_PATH = PROJECT_ROOT / ".venv"
+    VENV_PYTHON = VENV_PATH / "bin" / "python"
+    
+    # Stub functions for when common isn't available
+    def get_project_version(): return None
+    def get_package_name(): return None
+    def get_python_version(): return "3.12"
+    def check_git_repo(): return True
+    def get_git_tags(): return []
+    def load_yaml_config(f): return {}
+
+def ensure_venv():
+    """Check if venv exists and is activated"""
+    if not VENV_PYTHON.exists():
+        print("[ERROR] No .venv found. Run: scripts/setup")
+        sys.exit(1)
+    
+    # Check if we're already in the venv
+    if os.environ.get("VIRTUAL_ENV") != str(VENV_PATH):
+        print("Auto-activating virtual environment...")
+        # Set environment variables for the venv
+        os.environ["VIRTUAL_ENV"] = str(VENV_PATH)
+        os.environ["PATH"] = f"{VENV_PATH}/bin:{os.environ.get('PATH', '')}"
+        # Add scripts to PATH so other tools are available
+        scripts_dir = PROJECT_ROOT / "scripts"
+        os.environ["PATH"] = f"{scripts_dir}:{os.environ.get('PATH', '')}"
+        
+    return True
+
+def run_cmd(cmd, **kwargs):
+    """Run command with proper environment"""
+    print(f"→ {' '.join(cmd)}")
+    return subprocess.run(cmd, **kwargs)
+
+
+def init_semantic_release():
+    """Initialize semantic-release with initial git tag if needed"""
+    print("=" * 60)
+    print("Semantic Release Initialization")
+    print("=" * 60)
+    print()
+    
+    # Check if in git repo
+    if not check_git_repo():
+        print("❌ Not a git repository!")
+        print("   Run 'git init' first")
+        return False
+    
+    # Check for existing tags
+    existing_tags = get_git_tags()
+    
+    if existing_tags:
+        print(f"✅ Git tags already exist: {', '.join(existing_tags[-3:])}")
+        print("   Semantic-release ready to use")
+        return True
+    
+    print("🔍 No git tags found. Creating initial tag for semantic-release...")
+    print()
+    
+    # Get current version from pyproject.toml
+    version = get_project_version()
+    
+    # Try VERSION file as fallback
+    if not version and (PROJECT_ROOT / "VERSION").exists():
+        version = (PROJECT_ROOT / "VERSION").read_text().strip()
+    
+    # Try __init__.py as last resort
+    if not version:
+        for init_file in PROJECT_ROOT.glob("src/*/__init__.py"):
+            content = init_file.read_text()
+            match = re.search(r'__version__\s*=\s*["\']([^"\']+)["\']', content)
+            if match:
+                version = match.group(1)
+                break
+    
+    if not version:
+        print("❌ Could not detect current version!")
+        print("   Set version in pyproject.toml first")
+        return False
+    
+    print(f"📦 Detected version: {version}")
+    
+    # Create tag
+    tag_name = f"v{version}" if not version.startswith("v") else version
+    try:
+        subprocess.run([
+            "git", "tag", "-a", tag_name, 
+            "-m", f"Initial version tag for semantic-release baseline"
+        ], check=True)
+        print(f"✅ Created tag: {tag_name}")
+        print()
+        print("Next steps:")
+        print(f"  1. Push tag: git push origin {tag_name}")
+        print("  2. Use conventional commits (feat:, fix:, etc.)")
+        print("  3. Semantic-release will handle versioning")
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Failed to create tag: {e}")
+        return False
+
+def check_version_consistency():
+    """Check version consistency across files"""
+    version_file = PROJECT_ROOT / "VERSION"
+    if not version_file.exists():
+        print("[ERROR] VERSION file not found")
+        return False
+    
+    version = version_file.read_text().strip()
+    pyproject = PROJECT_ROOT / "pyproject.toml"
+    if not pyproject.exists():
+        print("[ERROR] pyproject.toml not found") 
+        return False
+        
+    content = pyproject.read_text()
+    if f'version = "{version}"' not in content:
+        print("[ERROR] Version mismatch in pyproject.toml")
+        return False
+    
+    print(f"[OK] Version {version} is consistent")
+    return True
+
+def run_security_scan(fix=False, report_only=False):
+    """Run comprehensive security scans"""
+    print("=" * 60)
+    print("Security Scan")
+    print("=" * 60)
+    
+    reports_dir = PROJECT_ROOT / ".tmp" / "security-reports"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    
+    has_issues = False
+    results = {}
+    
+    # 1. Dependency vulnerability scan with pip-audit
+    print("\n1. Checking dependencies with pip-audit...")
+    try:
+        cmd = [str(VENV_PYTHON), "-m", "pip_audit"]
+        if fix:
+            cmd.append("--fix")
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        
+        if result.returncode != 0:
+            print("   ⚠️  Vulnerabilities found in dependencies")
+            if result.stdout:
+                print(result.stdout)
+            has_issues = True
+        else:
+            print("   ✅ No dependency vulnerabilities found")
+        
+        # Save report
+        report_file = reports_dir / "pip-audit.txt"
+        report_file.write_text(result.stdout + result.stderr)
+        
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        print("   ⏭️  pip-audit not available (install with: pip install pip-audit)")
+    
+    # 2. Static code analysis with Bandit
+    print("\n2. Running Bandit security linter...")
+    try:
+        cmd = [str(VENV_PYTHON), "-m", "bandit", "-r", "src/", "-f", "json"]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        
+        if result.returncode != 0:
+            # Parse JSON output
+            try:
+                bandit_results = json.loads(result.stdout)
+                issues = bandit_results.get("results", [])
+                if issues:
+                    print(f"   ⚠️  Found {len(issues)} security issues")
+                    for issue in issues[:5]:  # Show first 5
+                        print(f"      - {issue['issue_text']} ({issue['issue_severity']})")
+                    if len(issues) > 5:
+                        print(f"      ... and {len(issues) - 5} more")
+                    has_issues = True
+            except json.JSONDecodeError:
+                print("   ⚠️  Bandit found issues (check report)")
+                has_issues = True
+        else:
+            print("   ✅ No security issues found by Bandit")
+        
+        # Save report
+        report_file = reports_dir / "bandit.json"
+        report_file.write_text(result.stdout)
+        
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        print("   ⏭️  Bandit not available (install with: pip install bandit)")
+    
+    # 3. Semgrep scan (if available)
+    print("\n3. Running Semgrep security patterns...")
+    try:
+        cmd = ["semgrep", "--config=auto", "src/", "--json"]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        
+        if result.returncode == 0:
+            try:
+                semgrep_results = json.loads(result.stdout)
+                findings = semgrep_results.get("results", [])
+                if findings:
+                    print(f"   ⚠️  Found {len(findings)} security patterns")
+                    has_issues = True
+                else:
+                    print("   ✅ No security issues found by Semgrep")
+            except json.JSONDecodeError:
+                print("   ✅ Semgrep completed")
+        
+        # Save report
+        report_file = reports_dir / "semgrep.json"
+        report_file.write_text(result.stdout)
+        
+    except FileNotFoundError:
+        print("   ⏭️  Semgrep not available (install with: pip install semgrep)")
+    
+    # Summary
+    print("\n" + "=" * 60)
+    if has_issues:
+        print("⚠️  Security issues found - check reports in .tmp/security-reports/")
+        if not report_only:
+            return False
+    else:
+        print("✅ Security scan passed - no issues found")
+    
+    return True
+
+def main():
+    if len(sys.argv) < 2:
+        print("""
+Python Development Commands
+
+Usage: scripts/pdev <command>
+
+Commands:
+  test                 Run all tests
+  test-unit           Run unit tests only  
+  test-integration    Run integration tests only
+  format              Format code with black + isort
+  lint                Run flake8 + mypy
+  build               Build wheel/sdist
+  clean               Clean build artifacts
+  security            Run security scan
+  version-check       Check version consistency
+  init-release        Initialize semantic-release (first-time setup)
+  all                 Run format + lint + test + security
+
+Note: Virtual environment is automatically activated
+      Scripts directory is added to PATH
+        """)
+        sys.exit(1)
+    
+    # Import common utilities after venv activation
+    try:
+        from common import init_script
+        # Initialize script with logging and configuration
+        config, logger = init_script(
+            "dev",
+            log_level=os.environ.get("LOG_LEVEL", "INFO"),
+            command=sys.argv[1] if len(sys.argv) > 1 else None
+        )
+    except ImportError:
+        # Fallback if common module is not available
+        logger = None
+    
+    # Ensure venv is activated
+    ensure_venv()
+    
+    command = sys.argv[1]
+    
+    if command == "test":
+        if logger: logger.info("Running all tests")
+        run_cmd([str(VENV_PYTHON), "-m", "pytest", "tests/", "-v"])
+    elif command == "test-unit":  
+        if logger: logger.info("Running unit tests")
+        run_cmd([str(VENV_PYTHON), "-m", "pytest", "tests/unit/", "-v"])
+    elif command == "test-integration":
+        if logger: logger.info("Running integration tests")
+        run_cmd([str(VENV_PYTHON), "-m", "pytest", "tests/integration/", "-v"])
+    elif command == "format":
+        if logger: logger.info("Formatting code")
+        run_cmd([str(VENV_PYTHON), "-m", "black", "src/", "tests/"])
+        run_cmd([str(VENV_PYTHON), "-m", "isort", "src/", "tests/"])
+    elif command == "lint":
+        if logger: logger.info("Linting code")
+        run_cmd([str(VENV_PYTHON), "-m", "flake8", "src/"])
+        run_cmd([str(VENV_PYTHON), "-m", "mypy", "src/logreducer/"])
+    elif command == "build":
+        if logger: logger.info("Building package")
+        run_cmd([str(VENV_PYTHON), "-m", "build"])
+    elif command == "clean":
+        if logger: logger.info("Cleaning artifacts")
+        run_cmd(["rm", "-rf", "dist/", "build/"])
+        run_cmd(["find", ".", "-name", "*.egg-info", "-type", "d", "-exec", "rm", "-rf", "{}", "+"])
+        run_cmd(["find", ".", "-name", "__pycache__", "-type", "d", "-exec", "rm", "-rf", "{}", "+"])
+    elif command == "security":
+        if not run_security_scan():
+            if logger: logger.error("Security scan failed")
+            sys.exit(1)
+    elif command == "version-check":
+        if not check_version_consistency():
+            if logger: logger.error("Version consistency check failed")
+            sys.exit(1)
+    elif command == "init-release":
+        if not init_semantic_release():
+            if logger: logger.error("Semantic release initialization failed")
+            sys.exit(1)
+    elif command == "all":
+        if logger: logger.info("Running all checks")
+        run_cmd([str(VENV_PYTHON), "-m", "black", "src/", "tests/"])
+        run_cmd([str(VENV_PYTHON), "-m", "isort", "src/", "tests/"])
+        run_cmd([str(VENV_PYTHON), "-m", "flake8", "src/"])
+        run_cmd([str(VENV_PYTHON), "-m", "mypy", "src/logreducer/"])
+        run_cmd([str(VENV_PYTHON), "-m", "pytest", "tests/", "-v"])
+        if not run_security_scan():
+            if logger: logger.warning("Security scan failed but continuing")
+        if logger: logger.info("All checks completed")
+    else:
+        if logger: logger.error(f"Unknown command: {command}")
+        print(f"[ERROR] Unknown command: {command}")
+        print("Run 'scripts/pdev' to see available commands")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()

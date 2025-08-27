@@ -6,13 +6,11 @@ Provides a command-line interface for log reduction and analysis operations.
 """
 
 import argparse
-import sys
 import json
+import sys
 from pathlib import Path
-from typing import Optional
 
 from . import LogReducer, __version__, setup_logging
-from .config import ProcessingLevel, ProcessingMode, OutputFormat
 from .logging_config import get_logger
 
 

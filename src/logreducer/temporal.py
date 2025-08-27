@@ -3,12 +3,12 @@ Temporal processing and time-aware pattern extraction
 """
 
 import re
-from datetime import datetime, timedelta
-from typing import List, Dict, Optional
-from dataclasses import dataclass, field
 from collections import defaultdict
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Dict, List, Optional
+
 from drain3 import TemplateMiner
-from loguru import logger
 
 # Try to import polars
 try:
@@ -58,7 +58,8 @@ class TimestampParser:
                         timestamp_str.replace("T", " "), date_format
                     )
                     break
-                except:
+                except (ValueError, TypeError):
+                    # Timestamp parsing failed, try next pattern
                     pass
 
         # Extract level

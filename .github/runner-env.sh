@@ -2,7 +2,7 @@
 # GitHub Actions Runner Environment Auto-Detection
 # This file is sourced by the runner to set up the local dev environment
 
-echo "🔧 Auto-detecting local development environment..."
+echo "Auto-detecting local development environment..."
 
 # Function to find Python executable
 find_python() {
@@ -56,7 +56,7 @@ VENV_FOUND=false
 
 for venv in "${VENV_PATHS[@]}"; do
     if [ -d "$PROJECT_ROOT/$venv" ] && [ -f "$PROJECT_ROOT/$venv/bin/activate" ]; then
-        echo "🎯 Found virtual environment: $venv"
+        echo "Found virtual environment: $venv"
         source "$PROJECT_ROOT/$venv/bin/activate"
         VENV_FOUND=true
         break
@@ -103,7 +103,7 @@ fi
 
 # Check for uv (fast Python package manager)
 if command -v uv > /dev/null 2>&1; then
-    echo "⚡ uv is available for fast package management"
+    echo "uv is available for fast package management"
     export UV_LINK_MODE=copy  # Prevent hardlink issues in CI
 else
     # Try to install uv

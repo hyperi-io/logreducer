@@ -2,14 +2,14 @@
 Core LogReducer implementation
 """
 
-import os
 import json
+import os
 import time
-import sys
-from typing import List, Optional, Union
 from datetime import datetime
 from pathlib import Path
-from .logging_config import setup_logging, get_logger
+from typing import List, Optional, Union
+
+from .logging_config import get_logger, setup_logging
 
 # Optional import for progress bars
 try:
@@ -21,11 +21,11 @@ except ImportError:
     # Fallback - no-op tqdm
     tqdm = lambda x, **kwargs: x
 
-from .config import ProcessingLevel, ProcessingMode, BigDialConfig, get_preset_config
-from .memory import MemoryMonitor, StreamingProcessor, BoundedDeduplicator
-from .patterns import PatternExtractor, FuzzyDeduplicator
-from .temporal import TemporalProcessor
 from .anomaly import AnomalyDetector
+from .config import ProcessingLevel, ProcessingMode, get_preset_config
+from .memory import BoundedDeduplicator, MemoryMonitor, StreamingProcessor
+from .patterns import FuzzyDeduplicator, PatternExtractor
+from .temporal import TemporalProcessor
 
 
 class LogReducer:
@@ -258,9 +258,11 @@ class LogReducer:
         # Add some normal for context
         normal_sample_size = min(len(normal), self.config.max_patterns // 4)
         if normal_sample_size > 0:
-            import random
-
-            result.extend(random.sample(normal, normal_sample_size))
+            import secrets
+            
+            # Use cryptographically secure random sampling
+            secure_random = secrets.SystemRandom()
+            result.extend(secure_random.sample(normal, normal_sample_size))
 
         return result
 

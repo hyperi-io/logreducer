@@ -7,14 +7,14 @@ fi
 CICD_ENTITY=${CICD_ENTITY:-"HyperSec"}
 
 # Pre-commit hook
-echo "🔍 Running ${CICD_ENTITY} pre-commit checks..."
+echo "Running ${CICD_ENTITY} pre-commit checks..."
 
 # Run quick format check (don't modify, just check)
 if command -v black > /dev/null; then
-  echo "📝 Checking code formatting..."
+  echo "Checking code formatting..."
   black --check src/ tests/ scripts/ --quiet 2>/dev/null || {
-    echo "⚠️  Code formatting issues detected. Run 'black src/ tests/ scripts/' to fix"
+    echo "WARNING: Code formatting issues detected. Run 'black src/ tests/ scripts/' to fix"
   }
 fi
 
-echo "✅ ${CICD_ENTITY} pre-commit checks complete"
+echo "${CICD_ENTITY} pre-commit checks complete"

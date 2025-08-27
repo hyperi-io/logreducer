@@ -35,12 +35,12 @@ jobs:
           USE_CLOUD=$(grep "^USE_GITHUB_CLOUD_RUNNERS=" .env | cut -d= -f2 | tr -d '[:space:]' || echo "OFF")
           if [ "$USE_CLOUD" = "ON" ]; then
             RUNNER_TYPE="ubuntu-latest"
-            echo "☁️ Using GitHub cloud runners (as configured in .env)"
+            echo "Using GitHub cloud runners (as configured in .env)"
           else
-            echo "🏠 Using self-hosted runners (default for cost savings)"
+            echo "Using self-hosted runners (default for cost savings)"
           fi
         else
-          echo "🏠 No .env file found, using self-hosted runners by default"
+          echo "No .env file found, using self-hosted runners by default"
         fi
         
         echo "runner=$RUNNER_TYPE" >> $GITHUB_OUTPUT

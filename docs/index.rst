@@ -21,18 +21,18 @@ LogReducer is an enterprise-grade Python library designed to efficiently reduce 
 Key Features
 ------------
 
-🚀 **High Performance**
+**High Performance**
    - Memory-safe streaming for unbounded file sizes
    - Achieves 80-95% reduction while preserving critical events
    - Process 1GB logs in under 30 seconds
 
-🧠 **Intelligent Processing**
+**Intelligent Processing**
    - Drain3 algorithm for pattern extraction
    - Isolation Forest for anomaly detection
    - Temporal analysis for time-series patterns
    - Hybrid mode combining all techniques
 
-🔧 **Enterprise Ready**
+**Enterprise Ready**
    - Configurable processing levels (Standard, Enhanced, Maximum)
    - Multiple output formats (LINE, JSON, JSONL)
    - Optional logging with RFC 3339 timestamps

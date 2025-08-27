@@ -3,9 +3,9 @@ Logging configuration for LogReducer
 """
 
 import sys
-import os
 from pathlib import Path
 from typing import Optional
+
 from loguru import logger
 
 

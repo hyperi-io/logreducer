@@ -12,14 +12,14 @@ CICD_ENTITY=${CICD_ENTITY:-"HyperSec"}
 commit_msg_file="$1"
 commit_msg=$(cat "$commit_msg_file")
 
-echo "📝 Validating commit message format for ${CICD_ENTITY} semantic release..."
+echo "Validating commit message format for ${CICD_ENTITY} semantic release..."
 
 # Use commitlint for validation (more robust than regex)
 if command -v npx > /dev/null; then
     npx --no -- commitlint --edit ${commit_msg_file}
     if [ $? -ne 0 ]; then
         echo ""
-        echo "❌ Commit message validation failed!"
+        echo "ERROR: Commit message validation failed!"
         echo ""
         echo "Required format: type(scope): description"
         echo ""
@@ -55,19 +55,19 @@ else
     # Fallback to basic regex validation if commitlint not available
     # Skip validation for merge commits
     if echo "$commit_msg" | grep -q "^Merge "; then
-        echo "✅ Merge commit detected, skipping validation"
+        echo "Merge commit detected, skipping validation"
         exit 0
     fi
 
     # Skip validation for revert commits
     if echo "$commit_msg" | grep -q "^Revert "; then
-        echo "✅ Revert commit detected, skipping validation"
+        echo "Revert commit detected, skipping validation"
         exit 0
     fi
 
     # Check for conventional commit format
     if ! echo "$commit_msg" | grep -qE "^(feat|fix|docs|style|refactor|test|chore|perf|ci|build|revert)(\(.+\))?: .+"; then
-        echo "❌ Commit message doesn't follow conventional commit format"
+        echo "ERROR: Commit message doesn't follow conventional commit format"
         echo ""
         echo "Required format: type(scope): description"
         echo ""
@@ -97,14 +97,14 @@ else
 
     # Check for breaking changes indicator
     if echo "$commit_msg" | grep -q "BREAKING CHANGE"; then
-        echo "🚨 Breaking change detected - this will trigger a major version bump"
+        echo "WARNING: Breaking change detected - this will trigger a major version bump"
     fi
 
     # Check for ! indicator for breaking changes
     if echo "$commit_msg" | grep -qE "^(feat|fix|docs|style|refactor|test|chore|perf|ci|build|revert)(\(.+\))?!: .+"; then
-        echo "🚨 Breaking change detected (!) - this will trigger a major version bump"
+        echo "WARNING: Breaking change detected (!) - this will trigger a major version bump"
     fi
 fi
 
-echo "✅ Commit message follows conventional commit format"
+echo "Commit message follows conventional commit format"
 exit 0

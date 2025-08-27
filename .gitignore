@@ -7,6 +7,7 @@
 
 # Project-specific private documentation
 
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -189,3 +190,4 @@ Pipfile.lock
 # Local CI artifacts  
 act-*
 .act/
+.secrets.act
