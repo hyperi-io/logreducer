@@ -160,7 +160,8 @@ docs/_build/
 docs/build/
 
 # Test artifacts
-test_*.py
+# Test files in root only (not in scripts/)
+/test_*.py
 .coverage*
 coverage.xml
 htmlcov/
