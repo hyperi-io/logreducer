@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools>=64.0.0", "wheel", "pip>=22.1"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -11,7 +11,8 @@ authors = [
 description = "High-performance log reduction with intelligent pattern extraction and anomaly detection"
 readme = "README.md"
 license = {text = "HyperSec EULA"}
-requires-python = ">=3.8.1"
+requires-python = ">=3.12"
+# Rollback to >=3.10 if compatibility issues arise
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
@@ -21,46 +22,55 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
     "License :: Other/Proprietary License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
+    # Minimum supported version is Python 3.12
+    # "Programming Language :: Python :: 3.11",  # Rollback option if needed
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    # Future Python versions (uncomment when available):
+    # "Programming Language :: Python :: 3.14",     # October 2025
+    # "Programming Language :: Python :: 3.26",     # October 2026 (calendar versioning starts)
+    # "Programming Language :: Python :: 3.27",     # October 2027
+    # "Programming Language :: Python :: 3.28",     # October 2028
+    # Note: Python 3.15-3.25 will be skipped per PEP 2026
     "Operating System :: OS Independent",
 ]
 keywords = ["log", "logging", "reduction", "analysis", "pattern-extraction", "memory-efficient", "streaming", "anomaly-detection"]
 dependencies = [
     "drain3>=0.9.0",
     "tqdm>=4.65.0", 
-    "psutil>=5.9.0",
+    "psutil>=6.0.0",  # Python 3.12+ compatibility, modern psutil
     "python-dateutil>=2.8.0",
     "loguru>=0.7.0",
-    "numpy>=1.24.0",
-    "scikit-learn>=1.3.0",
+    "numpy>=2.0.0",  # Future-proof: Use NumPy 2.0+ (released June 2024)
+    "scikit-learn>=1.3.0",  # Correct package name (not deprecated 'sklearn')
 ]
 
 [project.optional-dependencies]
 enhanced = [
     "xxhash>=3.0.0",
-    "polars>=0.20.0",
-    "numpy>=1.24.0",
+    "polars>=0.20.0",  # Using polars not pandas (as requested)
+    "numpy>=2.0.0",    # Consistent with core dependencies
     "scipy>=1.10.0",
     "scikit-learn>=1.3.0",
     "datasketch>=1.5.0",
 ]
 dev = [
-    "pytest>=7.0.0",
-    "pytest-cov>=4.0.0",
-    "black>=23.0.0",
-    "flake8>=6.0.0",
-    "mypy>=1.0.0",
-    "build>=0.10.0",
-    "twine>=4.0.0",
+    "pytest>=8.0.0",      # Modern pytest, drops nose support, handles async fixtures
+    "pytest-cov>=5.0.0",  # Updated for modern pytest compatibility
+    "black>=24.0.0",      # Latest Black with stable feature set
+    "flake8>=7.0.0",      # Updated flake8
+    "mypy>=1.8.0",        # Modern mypy with better Python 3.11+ support
+    "build>=1.0.0",       # Modern Python build tool
+    "twine>=5.0.0",       # Latest twine for secure uploads
+    "vermin>=1.6.0",      # Python version detection
+    "python-dotenv>=1.0.0",  # Environment configuration
+    "pyyaml>=6.0.0",      # YAML configuration support
 ]
 docs = [
     "sphinx>=5.0.0",
     "sphinx-rtd-theme>=1.0.0",
     "myst-parser>=0.18.0",
+    "linkify-it-py>=2.0.0",  # Required for myst-parser linkify extension
 ]
 
 [project.urls]
@@ -87,7 +97,10 @@ logreducer = ["py.typed"]
 # Black code formatting
 [tool.black]
 line-length = 88
-target-version = ['py38', 'py39', 'py310', 'py311', 'py312']
+target-version = ['py312', 'py313']
+# Future target versions (uncomment when Black supports them):
+# target-version = ['py311', 'py312', 'py313', 'py314']  # Add py314 when available
+# Note: Black will add support for Python 3.26+ (calendar versioning) as py326, py327, py328
 include = '\.pyi?$'
 extend-exclude = '''
 /(
@@ -107,7 +120,7 @@ extend-exclude = '''
 
 # MyPy type checking
 [tool.mypy]
-python_version = "3.8"
+python_version = "3.12"  # Matches minimum supported version
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
@@ -176,8 +189,41 @@ skips = ["B101", "B603"]
 # Allow asserts in test files
 skips = ["*test*.py", "*tests*.py"]
 
-# Safety dependency vulnerability scanner configuration
-[tool.safety]
-# Add any vulnerability IDs to ignore (with justification)
-ignore = []
-full_report = true
+# pip-audit dependency vulnerability scanner
+# Configuration via command line arguments in CI/CD
+
+# Semantic Release Configuration
+[tool.semantic_release]
+version_toml = ["pyproject.toml:project.version"]
+version_variables = ["src/logreducer/__init__.py:__version__"]
+build_command = "python -m build"
+dist_path = "dist/"
+upload_to_repository = false
+upload_to_release = true
+remove_dist = false
+
+[tool.semantic_release.branches.main]
+match = "(main|master)"
+prerelease_token = "rc"
+prerelease = false
+
+[tool.semantic_release.changelog]
+changelog_file = "CHANGELOG.md"
+exclude_commit_patterns = [
+    "^chore:",
+    "^docs:",
+    "^style:",
+    "^refactor:",
+    "^test:",
+    "^build:",
+]
+
+[tool.semantic_release.commit_author]
+env = "GIT_COMMITTER_NAME"
+default = "semantic-release <semantic-release>"
+
+commit_message = "{version}"
+
+[tool.semantic_release.publish]
+dist_glob_patterns = ["dist/*"]
+upload_to_vcs_release = true

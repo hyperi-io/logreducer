@@ -1,8 +1,13 @@
 #!/bin/sh
-. "$(dirname "$0")/_/husky.sh"
 
-# Pre-commit hook for LogReducer
-echo "🔍 Running pre-commit checks..."
+# Load environment variables
+if [ -f .env ]; then
+    export $(grep -E '^CICD_ENTITY=' .env | xargs)
+fi
+CICD_ENTITY=${CICD_ENTITY:-"HyperSec"}
+
+# Pre-commit hook
+echo "🔍 Running ${CICD_ENTITY} pre-commit checks..."
 
 # Run quick format check (don't modify, just check)
 if command -v black > /dev/null; then
@@ -12,4 +17,4 @@ if command -v black > /dev/null; then
   }
 fi
 
-echo "✅ Pre-commit checks complete"
+echo "✅ ${CICD_ENTITY} pre-commit checks complete"

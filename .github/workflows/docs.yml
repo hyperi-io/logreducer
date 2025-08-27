@@ -9,6 +9,8 @@ on:
 
 env:
   PYTHON_VERSION: '3.11'
+  # Suppress uv hardlink warnings in CI
+  UV_LINK_MODE: copy
 
 jobs:
   build-docs:

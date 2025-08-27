@@ -1,5 +1,10 @@
 #!/bin/sh
-. "$(dirname "$0")/_/husky.sh"
+
+# Load environment variables
+if [ -f .env ]; then
+    export $(grep -E '^CICD_ENTITY=' .env | xargs)
+fi
+CICD_ENTITY=${CICD_ENTITY:-"HyperSec"}
 
 # Commit message hook for semantic release compliance
 # Validates commit messages follow conventional commit format
@@ -7,7 +12,7 @@
 commit_msg_file="$1"
 commit_msg=$(cat "$commit_msg_file")
 
-echo "📝 Validating commit message format for semantic release..."
+echo "📝 Validating commit message format for ${CICD_ENTITY} semantic release..."
 
 # Use commitlint for validation (more robust than regex)
 if command -v npx > /dev/null; then

@@ -3,7 +3,7 @@
 Security scanning script for LogReducer
 
 This script runs comprehensive security scans including:
-- Dependency vulnerability scanning with Safety and pip-audit
+- Dependency vulnerability scanning with pip-audit
 - Static code analysis with Bandit
 - Semantic security analysis with Semgrep
 - Secret detection with TruffleHog (if available)
@@ -26,7 +26,9 @@ class SecurityScanner:
     def __init__(self, project_root: Path):
         self.project_root = project_root
         self.src_dir = project_root / "src"
-        self.reports_dir = project_root / "security-reports"
+        self.tmp_dir = project_root / ".tmp"
+        self.tmp_dir.mkdir(exist_ok=True)
+        self.reports_dir = self.tmp_dir / "security-reports"
         self.reports_dir.mkdir(exist_ok=True)
         
     def run_command(self, cmd: List[str], capture_output: bool = True) -> Tuple[int, str, str]:
@@ -45,7 +47,6 @@ class SecurityScanner:
     def install_tools(self) -> bool:
         """Install required security tools"""
         tools = [
-            "safety",
             "pip-audit", 
             "bandit[toml]",
             "semgrep"
@@ -64,16 +65,16 @@ class SecurityScanner:
         print("✓ Security tools installed successfully")
         return True
     
-    def scan_dependencies_safety(self) -> Dict:
-        """Scan dependencies with Safety"""
-        print("\nSCANNING: Running Safety dependency scan...")
+    def scan_dependencies_pip_audit(self) -> Dict:
+        """Scan dependencies with pip-audit"""
+        print("\nSCANNING: Running pip-audit dependency scan...")
         
-        report_file = self.reports_dir / "safety-report.json"
+        report_file = self.reports_dir / "pip-audit-report.json"
         exit_code, stdout, stderr = self.run_command([
-            "safety", "check", "--json", "--output", str(report_file)
+            "pip-audit", "--format=json", "--output", str(report_file)
         ])
         
-        # Safety returns non-zero if vulnerabilities found, which is expected
+        # pip-audit returns non-zero if vulnerabilities found, which is expected
         if report_file.exists():
             with open(report_file) as f:
                 report = json.load(f)
@@ -82,22 +83,24 @@ class SecurityScanner:
             if vuln_count > 0:
                 print(f"  WARNING:  Found {vuln_count} dependency vulnerabilities")
                 for vuln in report["vulnerabilities"][:3]:  # Show first 3
-                    print(f"     - {vuln.get('package_name', 'Unknown')}: {vuln.get('advisory', 'No details')}")
+                    package = vuln.get('package', {}).get('name', 'Unknown')
+                    advisory = vuln.get('advisory', {}).get('summary', 'No details')
+                    print(f"     - {package}: {advisory}")
                 if vuln_count > 3:
                     print(f"     ... and {vuln_count - 3} more")
             else:
                 print("  ✓ No dependency vulnerabilities found")
             
             return {
-                "tool": "safety",
+                "tool": "pip-audit",
                 "status": "completed",
                 "vulnerabilities": vuln_count,
                 "report_file": str(report_file)
             }
         else:
-            print(f"  FAILED: Safety scan failed: {stderr}")
+            print(f"  FAILED: pip-audit scan failed: {stderr}")
             return {
-                "tool": "safety", 
+                "tool": "pip-audit", 
                 "status": "failed",
                 "error": stderr
             }
@@ -285,7 +288,7 @@ class SecurityScanner:
         scan_results = []
         
         try:
-            scan_results.append(self.scan_dependencies_safety())
+            scan_results.append(self.scan_dependencies_pip_audit())
             scan_results.append(self.scan_dependencies_pip_audit())
             scan_results.append(self.scan_static_bandit())
             scan_results.append(self.scan_semantic_semgrep())

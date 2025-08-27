@@ -53,10 +53,11 @@ LogReducer is a high-performance log processing system designed for reducing lar
 ## Development Guidelines
 
 ### File System Usage
-- **ALWAYS use `./.tmp` directory for temporary files and Claude Code work**
-- Never use `/tmp` or system temporary directories
-- All temporary processing, test outputs, and development artifacts go in `./.tmp`
+- **ALWAYS use `./.tmp` directory for temporary files and automation work**
+- Never use `/tmp`, `~/tmp`, or system temporary directories for project automation
+- All temporary processing, test outputs, development artifacts, and script work goes in `./.tmp`
 - The `./.tmp` directory is git-ignored and project-local
+- **Important:** This is for automation tooling only - the actual LogReducer application uses its own configured temp paths
 
 ### Code Style
 - Follow PEP 8 with 88-character line length (Black formatter)
@@ -192,13 +193,7 @@ Enables verbose logging and performance profiling.
   - Debug output added but automation still not triggering version bumps
   - Need to investigate GitHub token permissions and semantic-release configuration
   - Version manually updated to 3.2.0 until automation is fixed
-- **Prometheus Metrics Integration**: Replace current telemetry system with proper Prometheus metric telemetry
-  - Add prometheus-client dependency for metrics endpoint
-  - Implement Counter, Histogram, and Gauge metrics for processing stats
-  - Create /metrics endpoint for Prometheus scraping
-  - Metrics: processing_total, processing_duration, bytes_processed, reduction_ratio, memory_usage
-  - Support both pull (metrics endpoint) and push (pushgateway) patterns
-  - Replace JSON-based telemetry system with Prometheus metric telemetry that fits monitoring architecture
+- **Metrics Integration**: Metrics functionality has been moved to a separate module for better separation of concerns
 
 ### Medium Priority
 - Real-time streaming mode
