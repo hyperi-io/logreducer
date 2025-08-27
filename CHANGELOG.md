@@ -220,9 +220,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Enhanced error reporting with detailed stack traces
 
-### Fixed
-- Memory alignment issues on 32-bit systems
-
 ## [3.0.1] - 2025-06-19
 
 ### Fixed
