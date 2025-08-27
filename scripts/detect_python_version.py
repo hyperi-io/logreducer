@@ -231,6 +231,63 @@ class PythonVersionManager:
         rtd_path.write_text(content)
         print(f"Updated .readthedocs.yaml to Python {version}")
     
+    def check_dependencies_version(self) -> Optional[str]:
+        """Check dependency versions to determine minimum Python requirement."""
+        print("Checking dependency Python version requirements...")
+        
+        pyproject_path = self.project_root / 'pyproject.toml'
+        if not pyproject_path.exists():
+            return None
+            
+        try:
+            import tomllib
+        except ImportError:
+            # Fallback for Python < 3.11
+            try:
+                import tomli as tomllib
+            except ImportError:
+                print("Warning: Cannot parse pyproject.toml (install tomllib/tomli)")
+                return None
+                
+        try:
+            with open(pyproject_path, 'rb') as f:
+                data = tomllib.load(f)
+            
+            dependencies = data.get('project', {}).get('dependencies', [])
+            optional_deps = data.get('project', {}).get('optional-dependencies', {})
+            
+            # Collect all dependencies
+            all_deps = dependencies[:]
+            for dep_group in optional_deps.values():
+                all_deps.extend(dep_group)
+            
+            # Known minimum Python requirements for key packages
+            dep_requirements = {
+                'numpy>=2.0.0': '3.9',
+                'scikit-learn>=1.3.0': '3.8', 
+                'psutil>=6.0.0': '3.7',
+                'sphinx>=8.0.0': '3.9',
+                'black>=24.0.0': '3.8',
+                'mypy>=1.8.0': '3.8',
+                'pytest>=8.0.0': '3.8',
+            }
+            
+            required_version = '3.7'  # Default minimum
+            
+            for dep in all_deps:
+                dep_clean = dep.split(';')[0].strip()  # Remove environment markers
+                for pattern, min_version in dep_requirements.items():
+                    if dep_clean.startswith(pattern.split('>=')[0]):
+                        if self._version_compare(min_version, required_version) > 0:
+                            required_version = min_version
+                            print(f"Dependency {dep_clean} requires Python {min_version}+")
+                            
+            return required_version if required_version != '3.7' else None
+            
+        except Exception as e:
+            print(f"Error checking dependencies: {e}")
+            return None
+    
     def check_and_update(self):
         """Main workflow: detect requirements and update if needed."""
         print("=" * 60)
@@ -240,16 +297,29 @@ class PythonVersionManager:
         current_min = self.get_minimum_version()
         print(f"Current minimum version: {current_min}")
         
-        # Detect required version from code
-        detected = self.detect_required_version()
+        # Check both code analysis and dependency requirements
+        code_detected = self.detect_required_version()
+        deps_detected = self.check_dependencies_version()
         
-        if detected:
-            updated = self.update_minimum_version(detected, "Vermin analysis")
+        # Use the highest requirement
+        highest_requirement = current_min
+        update_reason = None
+        
+        if code_detected and self._version_compare(code_detected, highest_requirement) > 0:
+            highest_requirement = code_detected
+            update_reason = "Vermin code analysis"
+            
+        if deps_detected and self._version_compare(deps_detected, highest_requirement) > 0:
+            highest_requirement = deps_detected  
+            update_reason = "dependency requirements"
+            
+        if update_reason:
+            updated = self.update_minimum_version(highest_requirement, update_reason)
             if updated:
                 # Re-sync all configurations after update
                 self.sync_all_configurations()
         else:
-            # Even if detection failed, sync existing version to all files
+            # Even if no updates needed, sync existing version to all files
             print("Using current minimum version for synchronization")
             self.sync_all_configurations()
         
