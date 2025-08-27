@@ -150,17 +150,26 @@ class PythonVersionManager:
         
         # Update requires-python
         content = re.sub(
-            r'requires-python\s*=\s*">=[\d.]+', 
-            f'requires-python = ">={version}',
+            r'requires-python\s*=\s*">=[\d.]+["\']', 
+            f'requires-python = ">={version}"',
             content
         )
         
-        # Update classifiers
+        # Update Python version classifiers
+        # Match patterns like "Programming Language :: Python :: 3.11"
         content = re.sub(
-            r'"Programming Language :: Python :: [\d.]+', 
-            f'"Programming Language :: Python :: {version}',
+            r'"Programming Language :: Python :: \d+\.\d+"', 
+            f'"Programming Language :: Python :: {version}"',
             content
         )
+        
+        # Also update the generic Python 3 classifier if it exists
+        if '"Programming Language :: Python :: 3 :: Only"' not in content:
+            content = re.sub(
+                r'"Programming Language :: Python :: 3"',
+                f'"Programming Language :: Python :: 3",\n    "Programming Language :: Python :: {version}",\n    "Programming Language :: Python :: 3 :: Only"',
+                content
+            )
         
         pyproject_path.write_text(content)
         print(f"Updated pyproject.toml to Python {version}")
