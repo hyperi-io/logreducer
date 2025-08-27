@@ -221,6 +221,19 @@ python scripts/benchmark.py
 
 ## Development Setup
 
+### Quick Environment Check
+```bash
+# Check if all required development tools are installed
+python scripts/check_dev_tools.py
+
+# Show installation guide for missing tools
+python scripts/check_dev_tools.py --install
+
+# Show dfe-fedora-desktop VM setup information
+python scripts/check_dev_tools.py --vm-info
+```
+
+### Manual Setup
 ```bash
 # Create virtual environment with uv (REQUIRED)
 uv venv .venv
@@ -230,8 +243,9 @@ source .venv/bin/activate  # Linux/Mac
 # Install development dependencies
 uv pip install -e ".[dev,enhanced]"
 
-# Setup pre-commit hooks
-pre-commit install
+# Initialize Git LFS and commit hooks
+git lfs install
+npm install && npx husky install
 
 # Run code formatters
 black src/ tests/
@@ -246,6 +260,16 @@ python scripts/security_scan.py
 # Test API functionality
 python -c "import logreducer; print('Version:', logreducer.__version__)"
 ```
+
+### Required Development Tools
+The development environment requires:
+- **Python 3.12+**: Core language and interpreter
+- **uv**: Fast Python package installer and resolver
+- **Git 2.34+**: Version control with Git LFS support
+- **Node.js 18+**: For Husky commit hooks
+- **GitHub CLI**: Repository management and automation
+
+Run `python scripts/check_dev_tools.py` to verify all tools are installed and properly configured.
 
 ## Important Notes for Future Sessions
 
