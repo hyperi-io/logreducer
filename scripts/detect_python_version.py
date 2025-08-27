@@ -231,6 +231,63 @@ class PythonVersionManager:
         rtd_path.write_text(content)
         print(f"Updated .readthedocs.yaml to Python {version}")
     
+    def update_dependency_versions(self):
+        """Update dependency minimum versions in pyproject.toml based on security/compatibility requirements."""
+        print("Checking for dependency version updates...")
+        
+        pyproject_path = self.project_root / 'pyproject.toml'
+        if not pyproject_path.exists():
+            return
+        
+        # Security and compatibility updates that should be applied
+        dependency_updates = {
+            'numpy': '>=2.0.0',           # NumPy 2.0 for better compatibility and security
+            'requests': '>=2.32.0',       # Security fixes for request handling
+            'urllib3': '>=2.0.0',         # Security and compatibility updates
+            'certifi': '>=2023.7.22',     # Updated certificate bundle
+            'cryptography': '>=41.0.0',   # Critical security updates
+            'pyyaml': '>=6.0.1',          # Security fix for arbitrary code execution
+            'pillow': '>=10.0.0',         # If used - multiple security fixes
+            'sqlalchemy': '>=2.0.0',      # If used - modern async support
+            'django': '>=4.2.0',          # If used - LTS version with security fixes
+            'flask': '>=2.3.0',           # If used - security improvements
+        }
+        
+        content = pyproject_path.read_text()
+        updated = False
+        
+        for package, min_version in dependency_updates.items():
+            # Look for existing dependency declarations
+            patterns = [
+                f'"{package}[^"]*"',                    # "package>=1.0.0"
+                f"'{package}[^']*'",                    # 'package>=1.0.0'
+                f'{package}[^,\\n\\]]*',                # package>=1.0.0 (in list)
+            ]
+            
+            for pattern in patterns:
+                import re
+                matches = re.findall(pattern, content)
+                for match in matches:
+                    # Extract current version requirement
+                    if '>=' in match:
+                        current_req = match.split('>=')[1].strip('",\']')
+                        new_req = min_version.split('>=')[1]
+                        
+                        if self._version_compare(new_req, current_req) > 0:
+                            updated_match = match.replace(f'>={current_req}', min_version)
+                            content = content.replace(match, updated_match)
+                            print(f"UPDATING: {package} {current_req} -> {new_req}")
+                            updated = True
+                    elif match.strip('"\'') == package:
+                        # No version specified, add minimum
+                        content = content.replace(match, f'"{package}{min_version}"')
+                        print(f"ADDING VERSION: {package}{min_version}")
+                        updated = True
+        
+        if updated:
+            pyproject_path.write_text(content)
+            print("Updated dependency versions in pyproject.toml")
+        
     def check_dependencies_version(self) -> Optional[str]:
         """Check dependency versions to determine minimum Python requirement."""
         print("Checking dependency Python version requirements...")
@@ -296,6 +353,9 @@ class PythonVersionManager:
         
         current_min = self.get_minimum_version()
         print(f"Current minimum version: {current_min}")
+        
+        # Update dependency versions first
+        self.update_dependency_versions()
         
         # Check both code analysis and dependency requirements
         code_detected = self.detect_required_version()
