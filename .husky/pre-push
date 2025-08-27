@@ -102,7 +102,7 @@ if echo "$current_branch" | grep -qE "^($protected_branches)$"; then
     echo "🔢 Checking version consistency..."
     if [ -f "VERSION" ] && [ -f "pyproject.toml" ]; then
         version_file=$(cat VERSION)
-        toml_version=$(grep 'version = "' pyproject.toml | sed 's/version = "\([^"]*\)"/\1/')
+        toml_version=$(grep '^version = "' pyproject.toml | head -1 | sed 's/version = "\([^"]*\)"/\1/')
         if [ "$version_file" != "$toml_version" ]; then
             echo "❌ Version mismatch: VERSION file ($version_file) != pyproject.toml ($toml_version)"
             exit 1
