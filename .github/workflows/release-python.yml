@@ -51,11 +51,21 @@ jobs:
       run: |
         uv pip install --system python-semantic-release build twine pyyaml loguru dynaconf
     
-    - name: Check current version
+    - name: Check current version and git tags
       run: |
         echo "Current VERSION file: $(cat VERSION)"
         echo "Current pyproject.toml version: $(grep '^version' pyproject.toml | head -1)"
         echo "Current __init__.py version: $(grep '__version__' src/logreducer/__init__.py)"
+        echo ""
+        echo "Git tags available:"
+        git tag --list -n1
+        echo ""
+        echo "Git log (last 5 commits):"
+        git log --oneline -5
+        echo ""
+        echo "Semantic-release version detection:"
+        semantic-release version --print-last-released || echo "No last released version found"
+        semantic-release version --print || echo "Could not determine next version"
     
     - name: Run Semantic Release
       id: release
