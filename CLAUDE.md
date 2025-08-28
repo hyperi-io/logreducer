@@ -4,7 +4,7 @@
 
 LogReducer is a high-performance log processing system designed for reducing large log files while maintaining operational visibility. The system implements advanced pattern extraction, anomaly detection, and temporal analysis algorithms.
 
-## Current Project Status (August 26, 2025)
+## Current Project Status (August 28, 2025)
 
 ### Completed Implementation ✓
 - **Core LogReducer functionality**: Pattern extraction, anomaly detection, temporal analysis working
@@ -14,16 +14,17 @@ LogReducer is a high-performance log processing system designed for reducing lar
 - **Professional API Design**: Silent by default, proper logging, no print statements
 - **Memory Management**: Configurable limits with enforcement testing
 - **CPU Auto-detection**: Container-aware CPU core detection for threading
-- **Security Scanning**: Comprehensive vulnerability detection pipeline
-- **CI/CD Pipeline**: GitHub Actions with semantic-release automation
+- **Security Scanning**: Comprehensive vulnerability detection pipeline with configurable MIN_SECURITY_LEVEL
+- **CI/CD Pipeline**: GitHub Actions with fully functional semantic-release automation
 - **Documentation**: Sphinx docs, VS Code workspace, comprehensive README
 - **Directory Structure**: Moved to `/data/output` structure, samples organized
-- **Changelog**: Fixed dates working back from August 26, 2025 - LOCKED for semantic-release only
+- **Changelog**: Automated changelog generation via semantic-release
 - **Git Repository**: Initialized with semantic versioning and automated releases
 - **Dependencies**: Core deps updated (numpy, scikit-learn moved to core from optional)
-- **Production Ready**: Full API testing passed, ready for PyPI deployment
-- **Version 3.2.0**: Manually bumped version due to CI issues, semantic-release temporarily disabled
+- **Production Ready**: Full API testing passed, deployed to JFrog Artifactory
+- **Version 3.3.1**: Semantic-release automation fully working, automatic version bumps
 - **Generic Python Template**: Script structure designed for reuse as Python project template
+- **JFrog Deployment**: Successfully deploying packages to JFrog Artifactory PyPI repository
 
 ### Verified Working ✓  
 - **API Import**: `import logreducer` successful, LogReducer instances create without errors
