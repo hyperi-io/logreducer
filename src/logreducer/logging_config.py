@@ -30,7 +30,7 @@ def setup_logging(
     logger.remove()
 
     if not enable:
-        # Logging disabled - add null handler
+        # Logging disabled - add null handler to suppress all log output
         logger.disable("logreducer")
         return
 
