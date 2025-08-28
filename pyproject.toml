@@ -187,8 +187,7 @@ version_variables = [
 version_toml = [
     "pyproject.toml:project.version"
 ]
-# Use tag-based versioning to respect existing version history
-version_source = "tag"
+# Use tag-based versioning (default behavior - uses git tags as source of truth)
 tag_format = "v{version}"
 
 # Branch and commit settings
