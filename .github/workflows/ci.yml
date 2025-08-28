@@ -151,8 +151,7 @@ jobs:
     env:
       # Set minimum acceptable security level - NONE means zero tolerance (default)
       # Valid levels: NONE, LOW, MEDIUM, HIGH, CRITICAL
-      # Temporarily set to LOW to allow builds while we address security issues
-      MIN_SECURITY_LEVEL: LOW
+      MIN_SECURITY_LEVEL: NONE
     
     steps:
     - name: Checkout code
