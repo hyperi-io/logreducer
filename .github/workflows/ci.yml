@@ -146,7 +146,12 @@ jobs:
     name: Security Checks
     runs-on: ubuntu-latest
     needs: [test, detect-python-version]
-    continue-on-error: false  # Block deployment on security risks above LOW
+    continue-on-error: false  # Security scan must pass
+    
+    env:
+      # Set minimum acceptable security level - NONE means zero tolerance (default)
+      # Valid levels: NONE, LOW, MEDIUM, HIGH, CRITICAL
+      MIN_SECURITY_LEVEL: NONE
     
     steps:
     - name: Checkout code
@@ -164,9 +169,10 @@ jobs:
         python -m pip install --upgrade pip setuptools wheel
         pip install -e ".[dev,enhanced]"
     
-    - name: Run comprehensive security scan
+    - name: Run security scan with configurable threshold
       run: |
-        python scripts/pdev security  # Fail CI on security risks above LOW
+        echo "Running security scan with MIN_SECURITY_LEVEL=${MIN_SECURITY_LEVEL}"
+        python scripts/pdev security
 
   build:
     name: Build Package
