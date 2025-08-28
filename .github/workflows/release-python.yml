@@ -82,7 +82,7 @@ jobs:
           python -m build
           
           # Publish the release with semantic-release
-          semantic-release publish --no-vcs-release
+          semantic-release publish
           
           # Create GitHub release with artifacts
           gh release create "v$NEW_VERSION" \
