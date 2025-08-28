@@ -1,5 +1,7 @@
 """
 Configuration and tuning parameters for LogReducer
+
+This module provides configurable security levels and processing settings.
 """
 
 import multiprocessing as mp
