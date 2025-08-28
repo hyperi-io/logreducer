@@ -160,22 +160,38 @@ def run_security_scan(fix=False, report_only=False):
     # 1. Dependency vulnerability scan with pip-audit
     print("\n1. Checking dependencies with pip-audit...")
     try:
-        cmd = [str(VENV_PYTHON), "-m", "pip_audit"]
+        cmd = [str(VENV_PYTHON), "-m", "pip_audit", "--format=json"]
         if fix:
             cmd.append("--fix")
         result = subprocess.run(cmd, capture_output=True, text=True)
         
         if result.returncode != 0:
-            print("   ⚠️  Vulnerabilities found in dependencies")
-            if result.stdout:
-                print(result.stdout)
-            has_issues = True
+            # Parse JSON output to count actual vulnerabilities
+            try:
+                pip_audit_results = json.loads(result.stdout)
+                total_vulns = 0
+                for dep in pip_audit_results.get("dependencies", []):
+                    vulns = dep.get("vulns", [])
+                    if vulns:
+                        total_vulns += len(vulns)
+                        print(f"   ❌ {dep['name']} {dep['version']}: {len(vulns)} vulnerabilities")
+                
+                if total_vulns > 0:
+                    print(f"   ❌ Total vulnerabilities found: {total_vulns}")
+                    has_issues = True
+                else:
+                    print("   ✅ No dependency vulnerabilities found")
+            except json.JSONDecodeError:
+                print("   ⚠️  Vulnerabilities found in dependencies (check report)")
+                has_issues = True
         else:
             print("   ✅ No dependency vulnerabilities found")
         
-        # Save report
+        # Save reports
         report_file = reports_dir / "pip-audit.txt"
         report_file.write_text(result.stdout + result.stderr)
+        json_report_file = reports_dir / "pip-audit-report.json"
+        json_report_file.write_text(result.stdout)
         
     except (subprocess.CalledProcessError, FileNotFoundError):
         print("   ⏭️  pip-audit not available (install with: pip install pip-audit)")
@@ -192,9 +208,18 @@ def run_security_scan(fix=False, report_only=False):
                 bandit_results = json.loads(result.stdout)
                 issues = bandit_results.get("results", [])
                 if issues:
-                    # Filter issues above LOW severity (only MEDIUM, HIGH, CRITICAL cause failure)
-                    critical_issues = [i for i in issues if i.get('issue_severity', '').upper() in ['MEDIUM', 'HIGH', 'CRITICAL']]
-                    low_issues = [i for i in issues if i.get('issue_severity', '').upper() == 'LOW']
+                    # Filter issues above LOW severity using exact field matching
+                    # Only exact matches for MEDIUM, HIGH, CRITICAL cause failure
+                    critical_issues = []
+                    low_issues = []
+                    
+                    for issue in issues:
+                        severity = issue.get('issue_severity', '').strip().upper()
+                        # Use exact string matching to avoid false positives
+                        if severity in ['MEDIUM', 'HIGH', 'CRITICAL']:
+                            critical_issues.append(issue)
+                        elif severity == 'LOW':
+                            low_issues.append(issue)
                     
                     if critical_issues:
                         print(f"   ❌ Found {len(critical_issues)} security issues above LOW level")
