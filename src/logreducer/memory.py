@@ -200,7 +200,9 @@ class BoundedDeduplicator:
         else:
             import hashlib
 
-            self.hash_func = lambda x: hashlib.md5(x.encode(), usedforsecurity=False).hexdigest()
+            self.hash_func = lambda x: hashlib.md5(
+                x.encode(), usedforsecurity=False
+            ).hexdigest()
 
         self.seen_hashes = deque(maxlen=max_cache_size)
         self.seen_set = set()

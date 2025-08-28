@@ -146,7 +146,7 @@ jobs:
     name: Security Checks
     runs-on: ubuntu-latest
     needs: [test, detect-python-version]
-    continue-on-error: true  # Don't block deployment on security warnings
+    continue-on-error: false  # Block deployment on security risks above LOW
     
     steps:
     - name: Checkout code
@@ -166,7 +166,7 @@ jobs:
     
     - name: Run comprehensive security scan
       run: |
-        python scripts/pdev security || true  # Non-blocking
+        python scripts/pdev security  # Fail CI on security risks above LOW
 
   build:
     name: Build Package

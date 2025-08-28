@@ -259,7 +259,7 @@ class LogReducer:
         normal_sample_size = min(len(normal), self.config.max_patterns // 4)
         if normal_sample_size > 0:
             import secrets
-            
+
             # Use cryptographically secure random sampling
             secure_random = secrets.SystemRandom()
             result.extend(secure_random.sample(normal, normal_sample_size))
