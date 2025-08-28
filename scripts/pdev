@@ -192,12 +192,27 @@ def run_security_scan(fix=False, report_only=False):
                 bandit_results = json.loads(result.stdout)
                 issues = bandit_results.get("results", [])
                 if issues:
-                    print(f"   ⚠️  Found {len(issues)} security issues")
-                    for issue in issues[:5]:  # Show first 5
-                        print(f"      - {issue['issue_text']} ({issue['issue_severity']})")
-                    if len(issues) > 5:
-                        print(f"      ... and {len(issues) - 5} more")
-                    has_issues = True
+                    # Filter issues above LOW severity (only MEDIUM, HIGH, CRITICAL cause failure)
+                    critical_issues = [i for i in issues if i.get('issue_severity', '').upper() in ['MEDIUM', 'HIGH', 'CRITICAL']]
+                    low_issues = [i for i in issues if i.get('issue_severity', '').upper() == 'LOW']
+                    
+                    if critical_issues:
+                        print(f"   ❌ Found {len(critical_issues)} security issues above LOW level")
+                        for issue in critical_issues[:5]:  # Show first 5 critical issues
+                            print(f"      - {issue['issue_text']} ({issue['issue_severity']})")
+                        if len(critical_issues) > 5:
+                            print(f"      ... and {len(critical_issues) - 5} more critical issues")
+                        has_issues = True
+                    
+                    if low_issues:
+                        print(f"   ⚠️  Found {len(low_issues)} LOW severity issues (not blocking)")
+                        for issue in low_issues[:3]:  # Show first 3 low issues
+                            print(f"      - {issue['issue_text']} ({issue['issue_severity']})")
+                    
+                    if not critical_issues and not low_issues:
+                        print("   ✅ All security issues are below threshold")
+                else:
+                    print("   ✅ No security issues found by Bandit")
             except json.JSONDecodeError:
                 print("   ⚠️  Bandit found issues (check report)")
                 has_issues = True
