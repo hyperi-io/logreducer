@@ -73,34 +73,39 @@ jobs:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         PRE_COMMIT_ALLOW_NO_CONFIG: "1"
       run: |
-        # Let semantic-release analyze and determine version bump
-        # It will update pyproject.toml and __init__.py automatically
-        semantic-release version --no-push
+        # Check if there will be a new version
+        NEXT_VERSION=$(semantic-release version --print)
+        LAST_VERSION=$(semantic-release version --print-last-released)
         
-        # Get the new version if there was a bump
-        NEW_VERSION=$(semantic-release version --print)
-        echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
-        
-        # If there's a new version, update VERSION file and build
-        if [ -n "$NEW_VERSION" ]; then
-          echo "New version: $NEW_VERSION"
+        if [ "$NEXT_VERSION" != "$LAST_VERSION" ]; then
+          echo "Bumping version from $LAST_VERSION to $NEXT_VERSION"
+          echo "new_version=$NEXT_VERSION" >> $GITHUB_OUTPUT
           
-          # Update VERSION file only (semantic-release already updated the others)
-          python scripts/ci-helper update-version "$NEW_VERSION"
+          # Run semantic-release to handle version bump, tagging, and pushing
+          # This will update pyproject.toml, __init__.py, create tag, and push
+          semantic-release version
           
-          # Build the package
+          # Update VERSION file to match
+          python scripts/ci-helper update-version "$NEXT_VERSION"
+          
+          # Commit the VERSION file update
+          git config user.email "semantic-release@github.com"
+          git config user.name "GitHub Actions"
+          git add VERSION
+          git commit -m "chore: update VERSION file to $NEXT_VERSION [skip ci]" || true
+          git push || true
+          
+          # Build the package with the new version
           python -m build
           
-          # Publish the release with semantic-release
-          semantic-release publish
-          
           # Create GitHub release with artifacts
-          gh release create "v$NEW_VERSION" \
-            --title "v$NEW_VERSION" \
+          gh release create "v$NEXT_VERSION" \
+            --title "v$NEXT_VERSION" \
             --generate-notes \
-            dist/*.whl dist/*.tar.gz
+            dist/*.whl dist/*.tar.gz || echo "Release might already exist"
         else
           echo "No version bump needed"
+          echo "new_version=" >> $GITHUB_OUTPUT
         fi
     
     - name: Verify VERSION file update
