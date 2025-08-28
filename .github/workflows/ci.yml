@@ -172,6 +172,10 @@ jobs:
     - name: Run security scan with configurable threshold
       run: |
         echo "Running security scan with MIN_SECURITY_LEVEL=${MIN_SECURITY_LEVEL}"
+        # Create a dummy .venv directory to satisfy the script check
+        mkdir -p .venv/bin
+        ln -s $(which python) .venv/bin/python
+        # Run security scan
         python scripts/pdev security
 
   build:
