@@ -49,7 +49,7 @@ jobs:
     
     - name: Install dependencies
       run: |
-        uv pip install --system python-semantic-release build twine pyyaml
+        uv pip install --system python-semantic-release build twine pyyaml loguru dynaconf
     
     - name: Check current version
       run: |
