@@ -268,12 +268,6 @@ When creating the generic template:
 ## Future Enhancements
 
 ### High Priority
-- **Fix Semantic-Release CI**: Troubleshoot and fix GitHub Actions semantic-release automation
-  - Currently disabled due to failing builds causing CI spam
-  - Workflow has permissions and environment loading issues
-  - Debug output added but automation still not triggering version bumps
-  - Need to investigate GitHub token permissions and semantic-release configuration
-  - Version manually updated to 3.2.0 until automation is fixed
 - **Metrics Integration**: Metrics functionality has been moved to a separate module for better separation of concerns
 
 ### Medium Priority
@@ -365,6 +359,33 @@ Run `python scripts/check_dev_tools.py` to verify all tools are installed and pr
 - All commits should use conventional commit format for proper automation
 - Push changes to trigger CI/CD pipeline and version bumps
 
+#### Semantic Release Commit Types
+The project uses standard conventional commit types for automated version bumping:
+
+**Version Bumping:**
+- `feat:` - New features (triggers **minor** version bump)
+- `fix:` - Bug fixes (triggers **patch** version bump)
+- `perf:` - Performance improvements (triggers **patch** version bump)
+- `refactor:` - Code refactoring (triggers **patch** version bump)
+
+**Non-versioning (allowed but no version bump):**
+- `docs:` - Documentation changes
+- `style:` - Code style/formatting changes  
+- `test:` - Test additions/modifications
+- `chore:` - Maintenance tasks
+- `ci:` - CI/CD configuration changes
+- `build:` - Build system changes
+
+**Breaking Changes:**
+- Any commit with `BREAKING CHANGE:` in the footer triggers **major** version bump
+- Use `!` after type for breaking changes: `feat!:` or `fix!:`
+
+**Examples:**
+- `feat: add anomaly detection mode` → 3.2.0 → 3.3.0
+- `fix: resolve memory leak in pattern extractor` → 3.2.0 → 3.2.1  
+- `refactor: consolidate scripts architecture` → 3.2.0 → 3.2.1
+- `docs: update API documentation` → No version bump
+
 ### Key Configuration
 - Logging is OFF by default (`enable_logging: bool = False`)
 - Output directory is `/data/output` (moved from `/output`)
@@ -377,6 +398,4 @@ Run `python scripts/check_dev_tools.py` to verify all tools are installed and pr
 - Python floor version: 3.11 (this project uses 3.12 via .python-version)
 
 ### Known Issues
-- **Semantic-release CI**: GitHub Actions automation failing, currently disabled to prevent spam
-- Need to debug semantic-release configuration and GitHub token permissions
-- Manual version management in use until CI is fixed
+- None currently - all core features are working properly

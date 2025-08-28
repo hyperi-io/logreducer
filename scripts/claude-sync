@@ -1,0 +1,368 @@
+#!/usr/bin/env python3
+"""
+Sync Claude-specific documentation to a central Claude state repository.
+
+This script is COMPLETELY STANDALONE:
+- Uses system Python (no venv required)
+- No external dependencies (only Python stdlib)
+- Independent of any project setup
+- Works across any project without modification
+"""
+
+import os
+import sys
+import shutil
+import subprocess
+import tempfile
+from pathlib import Path
+from typing import List, Optional, Dict
+import argparse
+import json
+from datetime import datetime
+import time
+import hashlib
+
+# Files and directories to sync to Claude state repo
+CLAUDE_FILES = [
+    "CLAUDE.md",
+    ".claude/",
+    "scripts/claude-sync",  # Include this script itself
+    "scripts/README.md", 
+    ".vscode/settings.json",  # VS Code Claude integration settings
+    "docs/DEVELOPER_ANTIPATTERNS.md",
+    "docs/DEVELOPER_CHANGES.md",
+    "docs/SCRIPT_ARCHITECTURE.md",
+    "docs/CLAUDE_SYNC_WORKFLOW.md",
+]
+
+# Files to exclude from sync (patterns)
+EXCLUDE_PATTERNS = [
+    "*.pyc",
+    "__pycache__",
+    "*.log", 
+    ".DS_Store",
+    ".git",
+    ".gitignore",
+]
+
+def load_env_config() -> Dict[str, str]:
+    """Load configuration from .env file (manual parsing, no dependencies)."""
+    # Get project directory name from current path
+    project_dir = Path.cwd().name
+    
+    # Default configuration
+    config = {
+        'repo_url': 'https://github.com/hsderek/claude-sync',
+        'subdir': project_dir,
+        'local_path': str(Path.home() / 'claude-sync')
+    }
+    
+    # Try to read .env file if it exists
+    env_file = Path.cwd() / '.env'
+    if env_file.exists():
+        try:
+            with open(env_file, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith('#') and '=' in line:
+                        key, value = line.split('=', 1)
+                        key = key.strip()
+                        value = value.strip().strip('"').strip("'")
+                        
+                        if key == 'CLAUDE_STATE_REPO':
+                            config['repo_url'] = value
+                        elif key == 'CLAUDE_STATE_SUBDIR':
+                            config['subdir'] = value
+                        elif key == 'CLAUDE_STATE_LOCAL_PATH':
+                            config['local_path'] = value
+        except Exception as e:
+            print(f"Warning: Could not read .env file: {e}")
+    
+    # Also check environment variables (they override .env)
+    if 'CLAUDE_STATE_REPO' in os.environ:
+        config['repo_url'] = os.environ['CLAUDE_STATE_REPO']
+    if 'CLAUDE_STATE_SUBDIR' in os.environ:
+        config['subdir'] = os.environ['CLAUDE_STATE_SUBDIR']
+    if 'CLAUDE_STATE_LOCAL_PATH' in os.environ:
+        config['local_path'] = os.environ['CLAUDE_STATE_LOCAL_PATH']
+    
+    return config
+
+def run_git_command(cmd: List[str], cwd: Path, check: bool = True) -> subprocess.CompletedProcess:
+    """Run a git command in specified directory."""
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            check=check,
+            timeout=30  # 30 second timeout for git operations
+        )
+        return result
+    except subprocess.TimeoutExpired:
+        print(f"Warning: Command timed out: {' '.join(cmd)}")
+        return subprocess.CompletedProcess(cmd, 1, "", "Command timed out")
+    except subprocess.CalledProcessError as e:
+        if check:
+            print(f"Error running command: {' '.join(cmd)}")
+            print(f"stderr: {e.stderr}")
+        return subprocess.CompletedProcess(e.cmd, e.returncode, e.stdout, e.stderr)
+
+def sync_with_temp_clone(repo_url: str, project_subdir: str, source_dir: Path, files: List[str], message: str) -> bool:
+    """
+    Sync files using a temporary clone to avoid interfering with local git.
+    This ensures complete independence from the local project's git state.
+    """
+    
+    # Create a unique temporary directory for this sync operation
+    temp_id = hashlib.md5(f"{project_subdir}{datetime.now().isoformat()}".encode()).hexdigest()[:8]
+    temp_base = Path(tempfile.gettempdir()) / f"claude-sync-{temp_id}"
+    
+    try:
+        print(f"Creating temporary workspace for sync...")
+        temp_base.mkdir(parents=True, exist_ok=True)
+        
+        # Clone the Claude state repository to temp location
+        temp_repo = temp_base / "repo"
+        print(f"Cloning Claude state repository...")
+        result = run_git_command(["git", "clone", "--quiet", repo_url, str(temp_repo)], cwd=temp_base)
+        
+        if result.returncode != 0:
+            print(f"Error: Could not clone repository: {repo_url}")
+            print(f"Make sure the repository exists and you have access to it.")
+            return False
+        
+        # Create project subdirectory
+        project_path = temp_repo / project_subdir
+        project_path.mkdir(parents=True, exist_ok=True)
+        
+        # Create or update project README
+        readme_path = project_path / "README.md"
+        if not readme_path.exists():
+            readme_content = f"""# Claude State for {project_subdir}
+
+This directory contains Claude Code specific documentation and state for the {project_subdir} project.
+
+## Files
+
+- `CLAUDE.md` - Main Claude development documentation
+- `.claude/` - Claude Code settings
+- `scripts/` - Development scripts including claude-sync
+- `docs/` - Additional development documentation  
+- `.vscode/` - VS Code settings for Claude integration
+
+## Last Updated
+
+See `.claude-sync.json` for sync metadata.
+"""
+            with open(readme_path, 'w') as f:
+                f.write(readme_content)
+        
+        # Sync files from source to project directory
+        synced_count = 0
+        for file_pattern in files:
+            source_path = source_dir / file_pattern
+            
+            if source_path.exists():
+                # Calculate target path within project subdirectory
+                target_path = project_path / file_pattern
+                
+                # Ensure target directory exists
+                target_path.parent.mkdir(parents=True, exist_ok=True)
+                
+                if source_path.is_dir():
+                    # Sync directory
+                    print(f"  Syncing directory: {file_pattern}")
+                    if target_path.exists():
+                        shutil.rmtree(target_path)
+                    
+                    # Manual copy with exclusions
+                    def ignore_patterns(dir, files):
+                        ignored = []
+                        for f in files:
+                            for pattern in EXCLUDE_PATTERNS:
+                                if pattern.startswith('*'):
+                                    if f.endswith(pattern[1:]):
+                                        ignored.append(f)
+                                elif f == pattern:
+                                    ignored.append(f)
+                        return ignored
+                    
+                    shutil.copytree(
+                        source_path, 
+                        target_path,
+                        ignore=ignore_patterns
+                    )
+                    synced_count += 1
+                else:
+                    # Sync file
+                    print(f"  Syncing file: {file_pattern}")
+                    shutil.copy2(source_path, target_path)
+                    synced_count += 1
+            else:
+                print(f"  Warning: {file_pattern} not found in source")
+        
+        # Create sync metadata
+        metadata = {
+            "last_sync": datetime.now().isoformat(),
+            "project": project_subdir,
+            "source_path": str(source_dir),
+            "synced_files": files,
+            "sync_tool_version": "2.0.0"
+        }
+        
+        metadata_path = project_path / ".claude-sync.json"
+        with open(metadata_path, 'w') as f:
+            json.dump(metadata, f, indent=2)
+        
+        print(f"\nSynced {synced_count} items to {project_subdir}/")
+        
+        # Check if there are changes to commit
+        result = run_git_command(["git", "status", "--porcelain"], cwd=temp_repo)
+        
+        if not result.stdout.strip():
+            print("No changes to commit")
+            return True
+        
+        # Configure git for this operation (minimal config, no global changes)
+        run_git_command(["git", "config", "user.email", "claude-sync@local"], cwd=temp_repo)
+        run_git_command(["git", "config", "user.name", "Claude Sync"], cwd=temp_repo)
+        
+        # Add and commit changes
+        run_git_command(["git", "add", "-A"], cwd=temp_repo)
+        
+        commit_msg = f"[{project_subdir}] {message}\n\nSynced from local project\nTimestamp: {datetime.now().isoformat()}"
+        result = run_git_command(["git", "commit", "-m", commit_msg], cwd=temp_repo)
+        
+        if result.returncode == 0:
+            print(f"Committed changes: {message}")
+            
+            # Push changes with retry logic for concurrent access
+            max_retries = 3
+            for attempt in range(max_retries):
+                # Check if remote has any commits first
+                remote_check = run_git_command(["git", "ls-remote", "--heads", "origin"], cwd=temp_repo)
+                
+                if remote_check.stdout.strip():
+                    # Remote has commits, pull first to handle concurrent updates
+                    pull_result = run_git_command(["git", "pull", "--rebase", "--quiet"], cwd=temp_repo)
+                    
+                    if pull_result.returncode != 0:
+                        print(f"Warning: Could not pull latest changes (attempt {attempt + 1}/{max_retries})")
+                        time.sleep(2)
+                        continue
+                
+                # Try to push (use -u for first push to set upstream)
+                push_cmd = ["git", "push", "--quiet"]
+                if not remote_check.stdout.strip():
+                    # First push to empty repo - detect branch name
+                    branch_result = run_git_command(["git", "branch", "--show-current"], cwd=temp_repo)
+                    branch_name = branch_result.stdout.strip() if branch_result.stdout else "main"
+                    push_cmd = ["git", "push", "-u", "origin", branch_name, "--quiet"]
+                
+                push_result = run_git_command(push_cmd, cwd=temp_repo)
+                
+                if push_result.returncode == 0:
+                    print("Successfully pushed to remote")
+                    return True
+                else:
+                    print(f"Push failed (attempt {attempt + 1}/{max_retries})")
+                    if attempt < max_retries - 1:
+                        time.sleep(2)
+            
+            print("Warning: Could not push after retries. Changes committed locally in temp repo.")
+            print(f"You may need to manually push from: {temp_repo}")
+            return False
+        
+    except Exception as e:
+        print(f"Error during sync: {e}")
+        return False
+    
+    finally:
+        # Clean up temp directory
+        if temp_base.exists():
+            try:
+                shutil.rmtree(temp_base)
+            except:
+                print(f"Warning: Could not clean up temp directory: {temp_base}")
+    
+    return False
+
+def main():
+    """Main entry point for Claude state sync script."""
+    # Load configuration from .env
+    env_config = load_env_config()
+    
+    parser = argparse.ArgumentParser(
+        description="Sync Claude-specific files to a central Claude state repository (standalone, no dependencies)"
+    )
+    parser.add_argument(
+        "--repo-url",
+        default=env_config['repo_url'],
+        help=f"URL of the Claude state repository (default from .env: {env_config['repo_url']})"
+    )
+    parser.add_argument(
+        "--subdir",
+        default=env_config['subdir'],
+        help=f"Subdirectory in Claude state repo for this project (default: {env_config['subdir']})"
+    )
+    parser.add_argument(
+        "--message",
+        default="sync: Update Claude documentation and settings",
+        help="Commit message for the sync"
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be synced without making changes"
+    )
+    
+    args = parser.parse_args()
+    
+    # Get source directory (current project root)
+    source_dir = Path.cwd()
+    
+    print(f"Claude State Sync v2.0.0 (Standalone)")
+    print(f"Project: {args.subdir}")
+    print(f"Repository: {args.repo_url}")
+    print(f"Source: {source_dir}")
+    print()
+    
+    if args.dry_run:
+        print("DRY RUN MODE - No changes will be made")
+        print("\nFiles to sync:")
+        for file in CLAUDE_FILES:
+            source_path = source_dir / file
+            if source_path.exists():
+                print(f"  ✓ {file}")
+            else:
+                print(f"  ✗ {file} (not found)")
+        return 0
+    
+    # Check for git command availability
+    try:
+        subprocess.run(["git", "--version"], capture_output=True, check=True)
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        print("Error: git command not found. Please install git.")
+        return 1
+    
+    # Perform the sync using temporary clone
+    success = sync_with_temp_clone(
+        args.repo_url,
+        args.subdir,
+        source_dir,
+        CLAUDE_FILES,
+        args.message
+    )
+    
+    if success:
+        print(f"\n✅ Successfully synced to {args.repo_url}/{args.subdir}")
+    else:
+        print(f"\n⚠️ Sync completed with warnings")
+        return 1
+    
+    return 0
+
+if __name__ == "__main__":
+    sys.exit(main())
