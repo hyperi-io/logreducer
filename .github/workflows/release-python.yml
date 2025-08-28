@@ -13,6 +13,8 @@ on:
 
 env:
   PYTHON_VERSION: "3.12"
+  # Set minimum acceptable security level for release builds
+  MIN_SECURITY_LEVEL: NONE
 
 permissions:
   contents: write

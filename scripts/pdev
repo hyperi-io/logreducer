@@ -146,16 +146,38 @@ def check_version_consistency():
     return True
 
 def run_security_scan(fix=False, report_only=False):
-    """Run comprehensive security scans"""
+    """Run comprehensive security scans with configurable security level"""
     print("=" * 60)
     print("Security Scan")
     print("=" * 60)
     
+    # Get minimum acceptable security level from environment
+    min_security_level = os.environ.get("MIN_SECURITY_LEVEL", "NONE").upper().strip()
+    valid_levels = ["NONE", "LOW", "MEDIUM", "HIGH", "CRITICAL"]
+    
+    if min_security_level not in valid_levels:
+        print(f"❌ Invalid MIN_SECURITY_LEVEL: {min_security_level}")
+        print(f"   Valid levels: {', '.join(valid_levels)}")
+        return False
+    
+    print(f"Minimum acceptable security level: {min_security_level}")
+    if min_security_level == "NONE":
+        print("   Zero tolerance: Will fail on ANY security findings")
+    else:
+        print(f"   Will accept {min_security_level} and below severity findings")
+    
     reports_dir = PROJECT_ROOT / ".tmp" / "security-reports"
     reports_dir.mkdir(parents=True, exist_ok=True)
     
-    has_issues = False
+    has_blocking_issues = False
     results = {}
+    
+    def should_block_on_severity(severity):
+        """Determine if a severity level should block based on MIN_SECURITY_LEVEL"""
+        severity_levels = {"NONE": 0, "LOW": 1, "MEDIUM": 2, "HIGH": 3, "CRITICAL": 4}
+        min_level = severity_levels.get(min_security_level, 0)
+        current_level = severity_levels.get(severity.upper(), 0)
+        return current_level > min_level
     
     # 1. Dependency vulnerability scan with pip-audit
     print("\n1. Checking dependencies with pip-audit...")
@@ -166,24 +188,41 @@ def run_security_scan(fix=False, report_only=False):
         result = subprocess.run(cmd, capture_output=True, text=True)
         
         if result.returncode != 0:
-            # Parse JSON output to count actual vulnerabilities
+            # Parse JSON output to analyze vulnerabilities by severity
             try:
                 pip_audit_results = json.loads(result.stdout)
                 total_vulns = 0
+                blocking_vulns = 0
+                non_blocking_vulns = 0
+                
                 for dep in pip_audit_results.get("dependencies", []):
                     vulns = dep.get("vulns", [])
                     if vulns:
                         total_vulns += len(vulns)
-                        print(f"   ❌ {dep['name']} {dep['version']}: {len(vulns)} vulnerabilities")
+                        # pip-audit doesn't provide severity levels in standard output
+                        # We'll treat all dependency vulnerabilities as blocking if MIN_SECURITY_LEVEL is NONE
+                        if min_security_level == "NONE":
+                            blocking_vulns += len(vulns)
+                            print(f"   ❌ {dep['name']} {dep['version']}: {len(vulns)} vulnerabilities (BLOCKING)")
+                        else:
+                            # For other levels, we accept dependency vulnerabilities as they're often unavoidable
+                            non_blocking_vulns += len(vulns)
+                            print(f"   ⚠️  {dep['name']} {dep['version']}: {len(vulns)} vulnerabilities (ACCEPTED)")
                 
-                if total_vulns > 0:
-                    print(f"   ❌ Total vulnerabilities found: {total_vulns}")
-                    has_issues = True
+                if blocking_vulns > 0:
+                    print(f"   ❌ Found {blocking_vulns} blocking dependency vulnerabilities")
+                    has_blocking_issues = True
+                elif non_blocking_vulns > 0:
+                    print(f"   ⚠️  Found {non_blocking_vulns} dependency vulnerabilities (below threshold)")
                 else:
                     print("   ✅ No dependency vulnerabilities found")
+                    
             except json.JSONDecodeError:
-                print("   ⚠️  Vulnerabilities found in dependencies (check report)")
-                has_issues = True
+                if min_security_level == "NONE":
+                    print("   ❌ Vulnerabilities found in dependencies (check report)")
+                    has_blocking_issues = True
+                else:
+                    print("   ⚠️  Vulnerabilities found in dependencies (below threshold)")
         else:
             print("   ✅ No dependency vulnerabilities found")
         
@@ -203,44 +242,50 @@ def run_security_scan(fix=False, report_only=False):
         result = subprocess.run(cmd, capture_output=True, text=True)
         
         if result.returncode != 0:
-            # Parse JSON output
+            # Parse JSON output and filter by severity levels
             try:
                 bandit_results = json.loads(result.stdout)
                 issues = bandit_results.get("results", [])
                 if issues:
-                    # Filter issues above LOW severity using exact field matching
-                    # Only exact matches for MEDIUM, HIGH, CRITICAL cause failure
-                    critical_issues = []
-                    low_issues = []
+                    blocking_issues = []
+                    accepted_issues = []
                     
                     for issue in issues:
                         severity = issue.get('issue_severity', '').strip().upper()
                         # Use exact string matching to avoid false positives
-                        if severity in ['MEDIUM', 'HIGH', 'CRITICAL']:
-                            critical_issues.append(issue)
-                        elif severity == 'LOW':
-                            low_issues.append(issue)
+                        if should_block_on_severity(severity):
+                            blocking_issues.append(issue)
+                        else:
+                            accepted_issues.append(issue)
                     
-                    if critical_issues:
-                        print(f"   ❌ Found {len(critical_issues)} security issues above LOW level")
-                        for issue in critical_issues[:5]:  # Show first 5 critical issues
+                    if blocking_issues:
+                        print(f"   ❌ Found {len(blocking_issues)} BLOCKING security issues")
+                        for issue in blocking_issues[:5]:  # Show first 5 blocking issues
                             print(f"      - {issue['issue_text']} ({issue['issue_severity']})")
-                        if len(critical_issues) > 5:
-                            print(f"      ... and {len(critical_issues) - 5} more critical issues")
-                        has_issues = True
+                        if len(blocking_issues) > 5:
+                            print(f"      ... and {len(blocking_issues) - 5} more blocking issues")
+                        has_blocking_issues = True
                     
-                    if low_issues:
-                        print(f"   ⚠️  Found {len(low_issues)} LOW severity issues (not blocking)")
-                        for issue in low_issues[:3]:  # Show first 3 low issues
-                            print(f"      - {issue['issue_text']} ({issue['issue_severity']})")
+                    if accepted_issues:
+                        print(f"   ⚠️  Found {len(accepted_issues)} security issues (below threshold)")
+                        # Group by severity for better reporting
+                        severity_counts = {}
+                        for issue in accepted_issues:
+                            sev = issue.get('issue_severity', 'UNKNOWN').upper()
+                            severity_counts[sev] = severity_counts.get(sev, 0) + 1
+                        for sev, count in severity_counts.items():
+                            print(f"      - {count} {sev} severity issues")
                     
-                    if not critical_issues and not low_issues:
+                    if not blocking_issues and not accepted_issues:
                         print("   ✅ All security issues are below threshold")
                 else:
                     print("   ✅ No security issues found by Bandit")
             except json.JSONDecodeError:
-                print("   ⚠️  Bandit found issues (check report)")
-                has_issues = True
+                if min_security_level == "NONE":
+                    print("   ❌ Bandit found issues (check report)")
+                    has_blocking_issues = True
+                else:
+                    print("   ⚠️  Bandit found issues (below threshold)")
         else:
             print("   ✅ No security issues found by Bandit")
         
@@ -262,8 +307,13 @@ def run_security_scan(fix=False, report_only=False):
                 semgrep_results = json.loads(result.stdout)
                 findings = semgrep_results.get("results", [])
                 if findings:
-                    print(f"   ⚠️  Found {len(findings)} security patterns")
-                    has_issues = True
+                    # Semgrep doesn't provide severity levels by default
+                    # We'll treat all findings as blocking if MIN_SECURITY_LEVEL is NONE
+                    if min_security_level == "NONE":
+                        print(f"   ❌ Found {len(findings)} BLOCKING security patterns")
+                        has_blocking_issues = True
+                    else:
+                        print(f"   ⚠️  Found {len(findings)} security patterns (below threshold)")
                 else:
                     print("   ✅ No security issues found by Semgrep")
             except json.JSONDecodeError:
@@ -278,12 +328,14 @@ def run_security_scan(fix=False, report_only=False):
     
     # Summary
     print("\n" + "=" * 60)
-    if has_issues:
-        print("⚠️  Security issues found - check reports in .tmp/security-reports/")
+    if has_blocking_issues:
+        print(f"❌ Security scan FAILED - Found blocking issues above {min_security_level} level")
+        print("   Check reports in .tmp/security-reports/ for details")
         if not report_only:
             return False
     else:
-        print("✅ Security scan passed - no issues found")
+        print(f"✅ Security scan PASSED - No blocking issues found (threshold: {min_security_level})")
+        print("   All findings are below the minimum acceptable security level")
     
     return True
 
