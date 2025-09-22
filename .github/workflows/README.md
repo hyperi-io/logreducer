@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-## ⚠️ IMPORTANT: This Project Uses LOCAL CI/CD
+## [WARN] IMPORTANT: This Project Uses LOCAL CI/CD
 
 **99% of CI/CD runs locally on your machine, NOT in GitHub Actions!**
 
@@ -39,7 +39,7 @@ The ONLY exception is JFrog Artifactory deployment which uses GitHub Actions for
 
 ## Required Secrets
 
-Set these in Settings → Secrets and variables → Actions → Secrets:
+Set these in Settings -> Secrets and variables -> Actions -> Secrets:
 
 | Secret | Description |
 |--------|-------------|

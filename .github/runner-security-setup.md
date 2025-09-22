@@ -1,9 +1,9 @@
 # Self-Hosted Runner Security Guide
 
-## 🔒 Critical Security Measures
+## [SECURE] Critical Security Measures
 
 ### 1. **NEVER Use on Public Repositories**
-⚠️ **CRITICAL**: Self-hosted runners on public repos can be used by ANYONE who forks and opens a PR!
+[WARN] **CRITICAL**: Self-hosted runners on public repos can be used by ANYONE who forks and opens a PR!
 
 ### 2. **Repository-Specific Runner (Recommended)**
 Instead of organization-wide, tie the runner to ONLY this specific repository:
@@ -15,7 +15,7 @@ Instead of organization-wide, tie the runner to ONLY this specific repository:
 ### 3. **Restrict Who Can Trigger Workflows**
 
 #### Option A: Require Approval for External Contributors
-Go to: **Settings → Actions → General**
+Go to: **Settings -> Actions -> General**
 - Set "Fork pull request workflows from outside collaborators" to:
   **"Require approval for all outside collaborators"**
 
@@ -57,7 +57,7 @@ docker run -d \
 Run the runner in a VM that can be easily reset/destroyed if compromised.
 
 ### 6. **Implement Branch Protection Rules**
-Go to: **Settings → Branches → Add rule**
+Go to: **Settings -> Branches -> Add rule**
 - Require pull request reviews before merging
 - Dismiss stale PR approvals when new commits are pushed
 - Require review from CODEOWNERS
@@ -95,13 +95,13 @@ jobs:
       - name: Alert on suspicious activity
         if: github.actor != 'YOUR_USERNAME' && github.actor != 'dependabot[bot]'
         run: |
-          echo "⚠️ ALERT: Non-owner triggered self-hosted runner!"
+          echo "[WARN] ALERT: Non-owner triggered self-hosted runner!"
           # Send alert to your email/Slack
 ```
 
 ### 9. **Restrict Secrets Access**
 Create separate environments for self-hosted vs GitHub-hosted:
-1. Go to: **Settings → Environments**
+1. Go to: **Settings -> Environments**
 2. Create "self-hosted" environment
 3. Add protection rules:
    - Required reviewers: YOU
@@ -113,7 +113,7 @@ Create separate environments for self-hosted vs GitHub-hosted:
 - Check runner logs: `journalctl -u github-runner -f`
 - Update runner software regularly
 
-## 🛡️ Maximum Security Setup (Paranoid Mode)
+## ?? Maximum Security Setup (Paranoid Mode)
 
 ### Create a Restricted Runner Script
 ```bash
@@ -142,7 +142,7 @@ ProtectControlGroups=yes
 RestrictSUIDSGID=yes
 ```
 
-## 🚨 Emergency Kill Switch
+## ? Emergency Kill Switch
 
 ### Create Quick Disable Script
 ```bash
@@ -162,7 +162,7 @@ sudo systemctl disable github-runner
 echo "Runner emergency stopped and removed!"
 ```
 
-## 📊 Audit Script
+## ? Audit Script
 ```bash
 #!/bin/bash
 # Check who's been using your runner
@@ -173,7 +173,7 @@ gh api /repos/hypersec-io/logreducer/actions/runs \
     {actor: .actor.login, workflow: .name, created: .created_at}'
 ```
 
-## ⚙️ Recommended Configuration
+## ?? Recommended Configuration
 
 1. **Use separate GitHub account** for runner if possible
 2. **Enable 2FA** on your GitHub account
@@ -181,7 +181,7 @@ gh api /repos/hypersec-io/logreducer/actions/runs \
 4. **Run on dedicated user account** not your main user
 5. **Set up log monitoring** to detect unusual activity
 
-## 🔴 Signs of Compromise
+## ? Signs of Compromise
 Watch for:
 - Unexpected CPU/memory usage
 - Unknown processes running

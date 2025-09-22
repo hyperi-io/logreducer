@@ -38,7 +38,7 @@ Key Features
    - Optional logging with RFC 3339 timestamps
    - Comprehensive security scanning
 
-🐳 **Cloud Native**
+? **Cloud Native**
    - Auto-detects CPU cores for optimal threading
    - Memory usage controls and monitoring
    - Docker and Kubernetes deployment ready

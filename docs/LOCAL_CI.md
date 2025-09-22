@@ -97,7 +97,7 @@ The local CI pipeline runs these stages in order:
 ## CI Pipeline Output
 
 ```
-🚀 Starting Local CI Pipeline
+[START] Starting Local CI Pipeline
 Project: logreducer
 Version: 3.2.1
 Python: 3.12
@@ -105,29 +105,29 @@ Python: 3.12
 ============================================================
 STAGE: Version Verification
 ============================================================
-✅ Version Consistency Check passed (2.3s)
+[PASS] Version Consistency Check passed (2.3s)
 
 ============================================================
 STAGE: Testing
 ============================================================
-✅ Unit Tests passed (15.2s)
-✅ Integration Tests (Fast) passed (23.5s)
+[PASS] Unit Tests passed (15.2s)
+[PASS] Integration Tests (Fast) passed (23.5s)
 
 ============================================================
 CI PIPELINE SUMMARY
 ============================================================
-✅ PASSED    Version Consistency Check    (2.3s)
-✅ PASSED    Editable Install Test         (1.5s)
-✅ PASSED    Black Format Check            (0.8s)
-✅ PASSED    Flake8 (Critical)             (0.5s)
-✅ PASSED    Unit Tests                    (15.2s)
-✅ PASSED    Integration Tests (Fast)      (23.5s)
-✅ PASSED    Security Scan                 (45.3s)
-✅ PASSED    Build Packages                (3.2s)
+[PASS]    Version Consistency Check    (2.3s)
+[PASS]    Editable Install Test         (1.5s)
+[PASS]    Black Format Check            (0.8s)
+[PASS]    Flake8 (Critical)             (0.5s)
+[PASS]    Unit Tests                    (15.2s)
+[PASS]    Integration Tests (Fast)      (23.5s)
+[PASS]    Security Scan                 (45.3s)
+[PASS]    Build Packages                (3.2s)
 ------------------------------------------------------------
 Total: 8 passed, 0 failed
 Duration: 92.3 seconds
-CI PIPELINE PASSED
+[PASS] CI PIPELINE PASSED
 ```
 
 ## GitHub Actions Integration
@@ -181,12 +181,12 @@ To use GitHub Actions instead of local CI:
 
 | Feature | Local CI | GitHub Actions |
 |---------|----------|----------------|
-| Speed | ⚡ Instant | 🐢 2-5 min queue |
-| Cost | ✅ Free | 💰 Minutes/runners |
-| Privacy | 🔒 Local only | ☁️ Cloud |
-| Debugging | 🔍 Direct | 📦 Via artifacts |
-| Scalability | 💻 Single machine | 🚀 Unlimited |
-| JFrog Deploy | ⚠️ Manual creds | ✅ Secure secrets |
+| Speed | [FAST] Instant | [SLOW] 2-5 min queue |
+| Cost | [FREE] Free | [COST] Minutes/runners |
+| Privacy | [LOCAL] Local only | [CLOUD] Cloud |
+| Debugging | [DIRECT] Direct | [REMOTE] Via artifacts |
+| Scalability | [LIMITED] Single machine | [SCALE] Unlimited |
+| JFrog Deploy | [MANUAL] Manual creds | [SECURE] Secure secrets |
 
 ## Best Practices
 

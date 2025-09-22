@@ -11,15 +11,15 @@ git checkout -b my-new-feature
 
 **What happens:**
 ```
-✓ Branch created locally
-✗ Pre-push hook FAILS with:
+[OK] Branch created locally
+[NO] Pre-push hook FAILS with:
   Branch name lint fail! Branch "my-new-feature" must contain a separator "/"
 ```
 
 **Framework guides them:**
 ```bash
 ./scripts/dev-helper.sh
-# Menu appears → Select "Create a new feature branch"
+# Menu appears -> Select "Create a new feature branch"
 # Prompts for JIRA ticket (optional)
 # Creates: feature/PROJ-123-my-feature
 ```
@@ -33,15 +33,15 @@ git commit -m "fixed bug"
 
 **What happens:**
 ```
-✗ Pre-commit hook FAILS with:
-  ✖ subject may not be empty [subject-empty]
-  ✖ type may not be empty [type-empty]
+[NO] Pre-commit hook FAILS with:
+  ? subject may not be empty [subject-empty]
+  ? type may not be empty [type-empty]
 ```
 
 **Framework guides them:**
 ```bash
 ./scripts/dev-helper.sh
-# Menu → "Create a commit (interactive)"
+# Menu -> "Create a commit (interactive)"
 # Shows examples of valid commits
 # Preview shows: "This will trigger a PATCH version bump"
 ```
@@ -56,11 +56,11 @@ version = "3.3.0"  # Manual bump
 
 **What happens:**
 ```
-✗ Pre-commit hook WARNING:
-  ⚠️ Manual version change detected!
+[NO] Pre-commit hook WARNING:
+  [WARN] Manual version change detected!
   Versions are automatically managed by semantic-release
-✗ CI/CD will override with correct version
-✗ Creates version conflicts
+[NO] CI/CD will override with correct version
+[NO] Creates version conflicts
 ```
 
 **Framework guides them:**
@@ -78,8 +78,8 @@ git push origin main
 
 **What happens:**
 ```
-✗ Branch protection prevents direct push
-✗ Error: protected branch hook declined
+[NO] Branch protection prevents direct push
+[NO] Error: protected branch hook declined
 ```
 
 **Framework guides them:**
@@ -97,9 +97,9 @@ git merge feature-branch
 
 **What happens:**
 ```
-✗ Creates messy history
-✗ Multiple commits pollute changelog
-✗ Semantic-release gets confused
+[NO] Creates messy history
+[NO] Multiple commits pollute changelog
+[NO] Semantic-release gets confused
 ```
 
 **Framework guides them:**
@@ -112,27 +112,27 @@ git merge feature-branch
 ## Manual Actions That Break Automation
 
 ### Critical Antipatterns:
-• **Manually editing VERSION or version fields**
-• **Bypassing hooks with --no-verify**  
-• **Direct pushes to main/develop branches**
-• **Cherry-picking between branches**
-• **Manually creating tags**
-• **Editing CHANGELOG.md directly**
-• **Force pushing to shared branches**
-• **Merging without squash on PR**
-• **Creating releases on GitHub manually**
-• **Modifying .releaserc.json or semantic config**
+? **Manually editing VERSION or version fields**
+? **Bypassing hooks with --no-verify**  
+? **Direct pushes to main/develop branches**
+? **Cherry-picking between branches**
+? **Manually creating tags**
+? **Editing CHANGELOG.md directly**
+? **Force pushing to shared branches**
+? **Merging without squash on PR**
+? **Creating releases on GitHub manually**
+? **Modifying .releaserc.json or semantic config**
 
 ### How We Prevent Them:
 
-• **Version edits** → Pre-commit hook detects and warns
-• **--no-verify** → CI/CD validation catches it  
-• **Direct main push** → Branch protection rules
-• **Manual tags** → CI overwrites with correct tags
-• **Changelog edits** → File is marked as managed by semantic-release
-• **Force push** → Branch protection prevents it
-• **Manual releases** → Only CI has release permissions
-• **Config changes** → Require PR review
+? **Version edits** -> Pre-commit hook detects and warns
+? **--no-verify** -> CI/CD validation catches it  
+? **Direct main push** -> Branch protection rules
+? **Manual tags** -> CI overwrites with correct tags
+? **Changelog edits** -> File is marked as managed by semantic-release
+? **Force push** -> Branch protection prevents it
+? **Manual releases** -> Only CI has release permissions
+? **Config changes** -> Require PR review
 
 ## Developer Onboarding Checklist
 
@@ -164,7 +164,7 @@ git commit -m "docs: fix typo in README"
 # Old way: git commit -m "added login"  
 # New way:
 git commit -m "feat: add user login functionality"
-# Result: Minor version bump (3.2.0 → 3.3.0)
+# Result: Minor version bump (3.2.0 -> 3.3.0)
 ```
 
 ### "I broke production!"
@@ -188,11 +188,11 @@ git commit -m "test: fix flaky integration tests"
 ## Visual Workflow
 
 ```
-Developer Action → Git Hook → Helper Script → CI/CD
-       ↓              ↓            ↓            ↓
-   git commit   → Validates  → Suggests   → Releases
-   git push     → Enforces   → Guides     → Deploys
-   Manual edit  → Warns      → Corrects   → Overwrites
+Developer Action -> Git Hook -> Helper Script -> CI/CD
+       v              v            v            v
+   git commit   -> Validates  -> Suggests   -> Releases
+   git push     -> Enforces   -> Guides     -> Deploys
+   Manual edit  -> Warns      -> Corrects   -> Overwrites
 ```
 
 ## Quick Reference Card

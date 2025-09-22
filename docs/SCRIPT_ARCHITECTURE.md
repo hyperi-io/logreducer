@@ -137,9 +137,9 @@ Used in `.github/workflows/release-python.yml`:
 ## Migration from Old Scripts
 
 ### Deprecated Scripts (Removed)
-- `scripts/init_semantic_release.py` → `pdev init-release`
-- `scripts/update_version_file.py` → `ci-helper update-version`
-- `scripts/version.py` → `pdev version-check`
+- `scripts/init_semantic_release.py` -> `pdev init-release`
+- `scripts/update_version_file.py` -> `ci-helper update-version`
+- `scripts/version.py` -> `pdev version-check`
 
 ### Command Mapping
 

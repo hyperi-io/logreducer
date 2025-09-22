@@ -61,13 +61,13 @@ jobs:
       if: ${{ github.event.inputs.use_existing_artifacts == 'use_existing' }}
       run: |
         if [ ! -d "dist" ] || [ -z "$(ls -A dist)" ]; then
-          echo "❌ No artifacts found in dist/"
+          echo "[FAIL] No artifacts found in dist/"
           echo "Please either:"
           echo "1. Run 'make ci' locally and commit the dist/ folder, OR"
           echo "2. Choose 'rebuild' option to build fresh artifacts"
           exit 1
         fi
-        echo "✅ Found existing artifacts:"
+        echo "[PASS] Found existing artifacts:"
         ls -la dist/
     
     - name: Build packages
@@ -76,7 +76,7 @@ jobs:
         echo "Building fresh packages..."
         rm -rf dist/
         python -m build
-        echo "✅ Built packages:"
+        echo "[PASS] Built packages:"
         ls -la dist/
     
     - name: Validate packages
@@ -86,17 +86,17 @@ jobs:
         
         # Check for wheel
         if ! ls dist/*.whl 1> /dev/null 2>&1; then
-          echo "❌ No wheel file found in dist/"
+          echo "[FAIL] No wheel file found in dist/"
           exit 1
         fi
         
         # Check for source distribution
         if ! ls dist/*.tar.gz 1> /dev/null 2>&1; then
-          echo "❌ No source distribution found in dist/"
+          echo "[FAIL] No source distribution found in dist/"
           exit 1
         fi
         
-        echo "✅ Package validation passed"
+        echo "[PASS] Package validation passed"
         echo "Files to deploy:"
         ls -lh dist/
     
@@ -132,5 +132,5 @@ jobs:
         python -m twine upload dist/* --verbose
         
         echo "========================================="
-        echo "✅ Deployment completed successfully"
+        echo "[PASS] Deployment completed successfully"
         echo "========================================="

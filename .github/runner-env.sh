@@ -32,19 +32,19 @@ else
     PROJECT_ROOT=$(pwd)
 fi
 
-echo "📁 Project root: $PROJECT_ROOT"
+echo "? Project root: $PROJECT_ROOT"
 cd "$PROJECT_ROOT"
 
 # Check for .python-version file
 if [ -f ".python-version" ]; then
     REQUIRED_PYTHON=$(cat .python-version | tr -d '[:space:]')
-    echo "🐍 Required Python version: $REQUIRED_PYTHON"
+    echo "? Required Python version: $REQUIRED_PYTHON"
     
     # Check for pyenv
     if command -v pyenv > /dev/null 2>&1; then
-        echo "📦 Using pyenv to set Python version"
+        echo "[PKG] Using pyenv to set Python version"
         pyenv local "$REQUIRED_PYTHON" 2>/dev/null || {
-            echo "⚠️  Python $REQUIRED_PYTHON not installed in pyenv"
+            echo "[WARN]  Python $REQUIRED_PYTHON not installed in pyenv"
             echo "   Run: pyenv install $REQUIRED_PYTHON"
         }
     fi
@@ -65,13 +65,13 @@ done
 
 # ALWAYS create .venv if it doesn't exist
 if [ ! -d "$PROJECT_ROOT/.venv" ]; then
-    echo "⚠️  No .venv found - Creating it now!"
+    echo "[WARN]  No .venv found - Creating it now!"
     VENV_FOUND=false
 fi
 
 # If no venv found but .python-version exists, try to create one
 if [ "$VENV_FOUND" = false ] && [ -f ".python-version" ]; then
-    echo "📦 Creating virtual environment..."
+    echo "[PKG] Creating virtual environment..."
     
     PYTHON_CMD=$(find_python "$REQUIRED_PYTHON")
     if [ -n "$PYTHON_CMD" ]; then
@@ -86,11 +86,11 @@ if [ "$VENV_FOUND" = false ] && [ -f ".python-version" ]; then
         
         if [ -f ".venv/bin/activate" ]; then
             source .venv/bin/activate
-            echo "✅ Created and activated virtual environment"
+            echo "[PASS] Created and activated virtual environment"
             
             # Install dependencies if pyproject.toml exists
             if [ -f "pyproject.toml" ]; then
-                echo "📦 Installing project dependencies..."
+                echo "[PKG] Installing project dependencies..."
                 if command -v uv > /dev/null 2>&1; then
                     uv pip install -e ".[dev]"
                 else
@@ -108,7 +108,7 @@ if command -v uv > /dev/null 2>&1; then
 else
     # Try to install uv
     if command -v curl > /dev/null 2>&1; then
-        echo "📦 Installing uv for faster builds..."
+        echo "[PKG] Installing uv for faster builds..."
         curl -LsSf https://astral.sh/uv/install.sh | sh 2>/dev/null || true
         if [ -d "$HOME/.cargo/bin" ]; then
             export PATH="$HOME/.cargo/bin:$PATH"
@@ -118,7 +118,7 @@ fi
 
 # Check for Node.js (needed for semantic-release)
 if ! command -v node > /dev/null 2>&1; then
-    echo "⚠️  Node.js not found (needed for semantic-release)"
+    echo "[WARN]  Node.js not found (needed for semantic-release)"
     
     # Check for nvm
     if [ -f "$HOME/.nvm/nvm.sh" ]; then
@@ -129,18 +129,18 @@ if ! command -v node > /dev/null 2>&1; then
     fi
 else
     NODE_VERSION=$(node --version | grep -oP '\d+' | head -1)
-    echo "📦 Node.js version: $(node --version)"
+    echo "[PKG] Node.js version: $(node --version)"
 fi
 
 # Check for other required tools
 echo ""
-echo "🔍 Checking required tools:"
-command -v git > /dev/null && echo "   ✅ git: $(git --version | head -1)" || echo "   ❌ git: not found"
-command -v python > /dev/null && echo "   ✅ python: $(python --version 2>&1)" || echo "   ❌ python: not found"
-command -v pip > /dev/null && echo "   ✅ pip: $(pip --version | cut -d' ' -f1,2)" || echo "   ❌ pip: not found"
-command -v node > /dev/null && echo "   ✅ node: $(node --version)" || echo "   ❌ node: not found"
-command -v npm > /dev/null && echo "   ✅ npm: $(npm --version)" || echo "   ❌ npm: not found"
-command -v uv > /dev/null && echo "   ✅ uv: installed" || echo "   ⚠️  uv: not found (optional, speeds up builds)"
+echo "[SEARCH] Checking required tools:"
+command -v git > /dev/null && echo "   [PASS] git: $(git --version | head -1)" || echo "   [FAIL] git: not found"
+command -v python > /dev/null && echo "   [PASS] python: $(python --version 2>&1)" || echo "   [FAIL] python: not found"
+command -v pip > /dev/null && echo "   [PASS] pip: $(pip --version | cut -d' ' -f1,2)" || echo "   [FAIL] pip: not found"
+command -v node > /dev/null && echo "   [PASS] node: $(node --version)" || echo "   [FAIL] node: not found"
+command -v npm > /dev/null && echo "   [PASS] npm: $(npm --version)" || echo "   [FAIL] npm: not found"
+command -v uv > /dev/null && echo "   [PASS] uv: installed" || echo "   [WARN]  uv: not found (optional, speeds up builds)"
 
 # Set environment variables
 export PYTHONPATH="$PROJECT_ROOT/src:$PYTHONPATH"
@@ -156,7 +156,7 @@ export PY_COLORS=1
 export TERM=xterm-256color
 
 echo ""
-echo "✅ Environment setup complete!"
+echo "[PASS] Environment setup complete!"
 echo "   Python: $(which python)"
 echo "   Working directory: $(pwd)"
 echo "   Temp directory: $TMPDIR"

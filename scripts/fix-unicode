@@ -1,0 +1,162 @@
+#!/usr/bin/env python3
+"""
+Fix Unicode Characters in Project Files
+Enforces ASCII-only character policy across the entire project
+"""
+
+import os
+import sys
+import re
+from pathlib import Path
+
+# Character replacements for common Unicode symbols
+UNICODE_REPLACEMENTS = {
+    # Status symbols
+    '✅': '[PASS]',
+    '❌': '[FAIL]',
+    '⚠️': '[WARN]',
+    '⚠': '[WARN]',
+    'ℹ️': '[INFO]',
+    'ℹ': '[INFO]',
+    '🚀': '[START]',
+    '📦': '[PKG]',
+    '💰': '[COST]',
+    '⚡': '[FAST]',
+    '🔒': '[SECURE]',
+    '🎯': '[TARGET]',
+    '🏗️': '[BUILD]',
+    '💡': '[IDEA]',
+    '🔍': '[SEARCH]',
+    '💻': '[LOCAL]',
+    '☁️': '[CLOUD]',
+    '🐢': '[SLOW]',
+    
+    # Arrows and symbols
+    '→': '->',
+    '←': '<-',
+    '↑': '^',
+    '↓': 'v',
+    '⇒': '=>',
+    '⇐': '<=',
+    
+    # Checkmarks and crosses
+    '✓': '[OK]',
+    '✗': '[NO]',
+    '×': 'x',
+    
+    # Tree drawing characters
+    '├──': '|--',
+    '└──': '`--',
+    '│': '|',
+    '─': '-',
+    
+    # Other symbols
+    '…': '...',
+    '–': '-',
+    '—': '--',
+    ''': "'",
+    ''': "'",
+    '"': '"',
+    '"': '"',
+}
+
+def fix_unicode_in_file(file_path: Path) -> bool:
+    """Fix Unicode characters in a single file"""
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        original_content = content
+        
+        # Apply replacements
+        for unicode_char, ascii_replacement in UNICODE_REPLACEMENTS.items():
+            content = content.replace(unicode_char, ascii_replacement)
+        
+        # Check for any remaining non-ASCII characters
+        non_ascii_chars = set()
+        for char in content:
+            if ord(char) > 127:
+                non_ascii_chars.add(char)
+        
+        if non_ascii_chars:
+            print(f"[WARN] {file_path}: Found non-ASCII characters: {sorted(non_ascii_chars)}")
+            # Remove any remaining non-ASCII characters
+            content = ''.join(char if ord(char) <= 127 else '?' for char in content)
+        
+        # Write back if changed
+        if content != original_content:
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+            print(f"[FIXED] {file_path}")
+            return True
+        else:
+            print(f"[OK] {file_path}")
+            return False
+            
+    except Exception as e:
+        print(f"[ERROR] {file_path}: {e}")
+        return False
+
+def main():
+    """Main function to fix Unicode across project"""
+    project_root = Path(__file__).parent.parent
+    os.chdir(project_root)
+    
+    print("Character Policy Enforcement")
+    print("=" * 60)
+    print("Scanning for Unicode characters...")
+    
+    # File patterns to check
+    patterns = [
+        "*.py", "*.md", "*.yaml", "*.yml", "*.json", "*.txt", "*.sh",
+        "*.rst", "*.cfg", "*.ini", "*.toml"
+    ]
+    
+    files_to_check = []
+    for pattern in patterns:
+        files_to_check.extend(project_root.rglob(pattern))
+    
+    # Exclude certain directories
+    exclude_dirs = {'.venv', '.venv-ci', 'node_modules', '.git', '__pycache__', 
+                   '.pytest_cache', '.mypy_cache', 'dist', 'build', '.tmp'}
+    
+    files_to_check = [
+        f for f in files_to_check 
+        if not any(part in exclude_dirs for part in f.parts)
+    ]
+    
+    print(f"Checking {len(files_to_check)} files...")
+    print()
+    
+    fixed_count = 0
+    for file_path in sorted(files_to_check):
+        if fix_unicode_in_file(file_path):
+            fixed_count += 1
+    
+    print()
+    print("=" * 60)
+    print(f"[DONE] Fixed {fixed_count} files")
+    
+    # Final scan for any remaining Unicode
+    print("\nFinal Unicode scan...")
+    remaining_files = []
+    for file_path in files_to_check:
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            if any(ord(char) > 127 for char in content):
+                remaining_files.append(file_path)
+        except:
+            pass
+    
+    if remaining_files:
+        print(f"[WARN] {len(remaining_files)} files still have Unicode characters:")
+        for f in remaining_files:
+            print(f"  {f}")
+    else:
+        print("[PASS] All files are ASCII-only")
+    
+    return 0 if not remaining_files else 1
+
+if __name__ == "__main__":
+    sys.exit(main())

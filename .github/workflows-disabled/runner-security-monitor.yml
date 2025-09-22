@@ -16,7 +16,7 @@ jobs:
     steps:
     - name: Check actor authorization
       run: |
-        echo "🔍 Checking runner usage by: ${{ github.actor }}"
+        echo "[SEARCH] Checking runner usage by: ${{ github.actor }}"
         echo "Workflow: ${{ github.event.workflow.name || 'Direct trigger' }}"
         echo "Event: ${{ github.event_name }}"
         
@@ -33,13 +33,13 @@ jobs:
         done
         
         if [ "$AUTHORIZED" = false ]; then
-          echo "⚠️ WARNING: Unauthorized user attempting to use runners!"
+          echo "[WARN] WARNING: Unauthorized user attempting to use runners!"
           echo "User: ${{ github.actor }}"
           echo "This requires immediate review!"
           
           # Create issue for unauthorized access
           gh issue create \
-            --title "⚠️ Security Alert: Unauthorized Runner Access Attempt" \
+            --title "[WARN] Security Alert: Unauthorized Runner Access Attempt" \
             --body "User **${{ github.actor }}** attempted to trigger workflows.
             
             Workflow: ${{ github.event.workflow.name }}
@@ -51,7 +51,7 @@ jobs:
           
           exit 1
         else
-          echo "✅ Authorized user confirmed"
+          echo "[PASS] Authorized user confirmed"
         fi
     
     - name: Log workflow changes
@@ -63,7 +63,7 @@ jobs:
         
         # Alert on workflow modifications
         if [[ "${{ github.event.pull_request.user.login }}" != "derek" ]]; then
-          echo "⚠️ Non-owner modifying workflows - requires careful review!"
+          echo "[WARN] Non-owner modifying workflows - requires careful review!"
         fi
 
   validate-workflow-safety:
@@ -79,7 +79,7 @@ jobs:
     
     - name: Check for dangerous patterns
       run: |
-        echo "🔍 Scanning workflows for dangerous patterns..."
+        echo "[SEARCH] Scanning workflows for dangerous patterns..."
         
         # Check for dangerous commands in workflows
         DANGEROUS_PATTERNS=(
@@ -98,15 +98,15 @@ jobs:
         FOUND_ISSUES=false
         for pattern in "${DANGEROUS_PATTERNS[@]}"; do
           if grep -r "$pattern" .github/workflows/ 2>/dev/null; then
-            echo "⚠️ Found potentially dangerous pattern: $pattern"
+            echo "[WARN] Found potentially dangerous pattern: $pattern"
             FOUND_ISSUES=true
           fi
         done
         
         if [ "$FOUND_ISSUES" = true ]; then
-          echo "❌ Dangerous patterns detected in workflows!"
+          echo "[FAIL] Dangerous patterns detected in workflows!"
           echo "Please review carefully before merging."
           exit 1
         else
-          echo "✅ No obvious dangerous patterns found"
+          echo "[PASS] No obvious dangerous patterns found"
         fi

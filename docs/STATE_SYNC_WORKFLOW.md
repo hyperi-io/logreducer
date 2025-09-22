@@ -115,22 +115,22 @@ The development state repository will have this structure:
 
 ```
 logreducer-state/
-├── README.md                 # Auto-generated readme
-├── STATE.md                  # Main development state documentation
-├── .claude/                  # Claude Code settings (if using Claude)
-│   └── settings.local.json
-├── .cursorrules              # Cursor AI configuration (if using Cursor)
-├── scripts/                  # Synced scripts
-│   ├── state-sync
-│   └── README.md
-├── docs/                     # Development documentation
-│   ├── DEVELOPER_ANTIPATTERNS.md
-│   ├── DEVELOPER_CHANGES.md
-│   └── SCRIPT_ARCHITECTURE.md
-├── .vscode/                  # VS Code settings
-│   └── settings.json
-├── END_OF_DAY.md            # End of day workflow
-└── .state-sync.json         # Sync metadata
+|-- README.md                 # Auto-generated readme
+|-- STATE.md                  # Main development state documentation
+|-- .claude/                  # Claude Code settings (if using Claude)
+|   `-- settings.local.json
+|-- .cursorrules              # Cursor AI configuration (if using Cursor)
+|-- scripts/                  # Synced scripts
+|   |-- state-sync
+|   `-- README.md
+|-- docs/                     # Development documentation
+|   |-- DEVELOPER_ANTIPATTERNS.md
+|   |-- DEVELOPER_CHANGES.md
+|   `-- SCRIPT_ARCHITECTURE.md
+|-- .vscode/                  # VS Code settings
+|   `-- settings.json
+|-- END_OF_DAY.md            # End of day workflow
+`-- .state-sync.json         # Sync metadata
 ```
 
 ## Metadata
@@ -216,9 +216,9 @@ If you have old Claude-specific files:
 scripts/state-sync --check-legacy
 
 # They will be automatically migrated during sync:
-# CLAUDE.md → STATE.md
-# CLAUDE_END_OF_DAY.md → END_OF_DAY.md
-# scripts/claude-sync → scripts/state-sync
+# CLAUDE.md -> STATE.md
+# CLAUDE_END_OF_DAY.md -> END_OF_DAY.md
+# scripts/claude-sync -> scripts/state-sync
 ```
 
 ## Integration with CI/CD

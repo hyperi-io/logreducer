@@ -112,13 +112,13 @@ def example_with_output_file():
         # Process and save to file
         reduced_lines = reducer.process_file(log_file, str(output_file))
         
-        print(f"✅ Processed and saved to: {output_file}")
+        print(f"[PASS] Processed and saved to: {output_file}")
         logger.info(f"Reduced to {len(reduced_lines)} lines")
         
         # Verify file was created
         if output_file.exists():
             file_size = output_file.stat().st_size
-            print(f"📁 Output file size: {file_size} bytes")
+            print(f"? Output file size: {file_size} bytes")
             
             # Show file contents
             print(f"\nOutput file contents:")
@@ -191,7 +191,7 @@ def example_different_processing_modes():
         results = {}
         
         for mode in modes:
-            print(f"\n🔄 Testing mode: {mode}")
+            print(f"\n? Testing mode: {mode}")
             
             reducer = LogReducer(mode=mode)
             start_time = time.time()
@@ -242,7 +242,7 @@ def example_memory_limited_processing():
         memory_limits = [0.1, 0.5, 1.0]  # GB
         
         for limit in memory_limits:
-            print(f"\n🧠 Testing with {limit} GB memory limit:")
+            print(f"\n? Testing with {limit} GB memory limit:")
             
             reducer = LogReducer(
                 max_memory_gb=limit,
@@ -276,7 +276,7 @@ def main():
     example_memory_limited_processing()
     
     print("\n" + "=" * 60)
-    print("✅ All examples completed successfully!")
+    print("[PASS] All examples completed successfully!")
     print("=" * 60)
     print("\nNext steps:")
     print("- Try with your own log files")

@@ -81,7 +81,7 @@ jobs:
         Automatically updated all configuration files to match the Python
         version requirements defined in .python-version-config.yaml.
         
-        🤖 Generated with [Claude Code](https://claude.ai/code)
+        ? Generated with [Claude Code](https://claude.ai/code)
         
         Co-Authored-By: Claude <noreply@anthropic.com>" || exit 0
         
@@ -90,7 +90,7 @@ jobs:
     
     - name: Summary
       run: |
-        echo "✅ Python version synchronization complete!"
+        echo "[PASS] Python version synchronization complete!"
         echo "All project configuration files have been updated to match .python-version"
         echo ""
         echo "Updated files may include:"

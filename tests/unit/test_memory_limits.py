@@ -223,7 +223,7 @@ class TestMemoryLimits:
             ), f"Memory increased by {memory_increase:.2f}GB (too much)"
 
             print(
-                f"✅ Processed {len(huge_content)} lines using {memory_increase:.3f}GB additional memory"
+                f"[PASS] Processed {len(huge_content)} lines using {memory_increase:.3f}GB additional memory"
             )
 
         finally:
@@ -274,7 +274,7 @@ class TestMemoryLimits:
                 ), f"Mode {mode} used {memory_used:.2f}GB (exceeds {memory_limit}GB limit)"
 
                 print(
-                    f"✅ Mode {mode}: processed to {len(result)} lines, used {memory_used:.3f}GB"
+                    f"[PASS] Mode {mode}: processed to {len(result)} lines, used {memory_used:.3f}GB"
                 )
 
         finally:
