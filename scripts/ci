@@ -121,7 +121,7 @@ class CI:
                 }
             }
     
-    def run_command(self, cmd: List[str], name: str, timeout: Optional[int] = None) -> bool:
+    def run_command(self, cmd: List[str], name: str, timeout: Optional[int] = None, non_blocking: bool = False) -> bool:
         """Run a command and track results"""
         timeout = timeout or self.config['ci']['timeouts'].get(name.lower(), self.config['ci']['timeouts']['default'])
         
@@ -152,9 +152,14 @@ class CI:
             if success:
                 logger.success(f"✅ {name} passed ({duration:.1f}s)")
             else:
-                logger.error(f"❌ {name} failed (exit code: {result.returncode})")
-                if result.stderr:
-                    logger.error(f"Error: {result.stderr[:500]}")  # First 500 chars
+                if non_blocking:
+                    logger.warning(f"⚠️ {name} has issues (non-blocking) ({duration:.1f}s)")
+                    if result.stderr:
+                        logger.warning(f"Issues: {result.stderr[:500]}")  # First 500 chars
+                else:
+                    logger.error(f"❌ {name} failed (exit code: {result.returncode})")
+                    if result.stderr:
+                        logger.error(f"Error: {result.stderr[:500]}")  # First 500 chars
                     
             return success
             
@@ -258,11 +263,11 @@ class CI:
         # MyPy (non-blocking for now)
         result = self.run_command(
             [str(self.venv_python), "-m", "mypy", "src/logreducer/"],
-            "MyPy Type Check"
+            "MyPy Type Check",
+            non_blocking=True
         )
         
         if not result:
-            logger.warning("MyPy found type issues (non-blocking)")
             # Count the errors for information
             mypy_result = self.results.get("MyPy Type Check", {})
             stdout = mypy_result.get("stdout", "")
