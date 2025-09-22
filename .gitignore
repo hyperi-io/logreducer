@@ -3,12 +3,13 @@
 .env.local
 .env.*.local
 
-# Development tools
+# Development tools and AI assistant configurations
 .claude/
-.claude
-
-# Project-specific private documentation
-CLAUDE.md
+.cursor/
+.cursorrules
+STATE.md
+END_OF_DAY.md
+scripts/state-sync
 
 
 # Byte-compiled / optimized / DLL files
@@ -194,3 +195,5 @@ Pipfile.lock
 act-*
 .act/
 .secrets.act
+# CI virtual environment
+.venv-ci/

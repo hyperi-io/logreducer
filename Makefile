@@ -78,7 +78,20 @@ check: lint ## Alias for lint
 audit: security ## Alias for security
 
 # CI/CD targets
-ci: all ## Run full CI workflow locally
+ci-setup: ## Set up CI environment (.venv-ci)
+	@python3 scripts/bootstrap
+
+ci: ## Run full CI pipeline in .venv-ci
+	@python3 scripts/ci
+
+ci-fast: ## Run CI pipeline without slow tests
+	@python3 scripts/ci --skip-slow
+
+ci-deploy: ## Run CI pipeline and deploy to JFrog
+	@python3 scripts/ci --deploy
+
+deploy: ## Deploy to JFrog Artifactory (requires credentials)
+	@python3 scripts/ci --stage deploy
 
 # Template targets for reuse
 template-help: ## Show template extraction help

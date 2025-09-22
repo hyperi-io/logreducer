@@ -1,0 +1,562 @@
+#!/usr/bin/env python3
+"""
+Consolidated CI/CD Pipeline Script
+Runs entirely in .venv-ci virtual environment
+All CI functionality in one place
+"""
+
+import sys
+import os
+import subprocess
+import json
+import argparse
+import time
+import yaml
+from pathlib import Path
+from datetime import datetime
+from typing import Dict, List, Optional, Tuple
+
+# Ensure we're using the CI virtual environment
+PROJECT_ROOT = Path(__file__).parent.parent
+VENV_CI = PROJECT_ROOT / ".venv-ci"
+VENV_PYTHON = VENV_CI / "bin" / "python"
+
+# Check if CI venv exists
+if not VENV_PYTHON.exists():
+    print("❌ CI environment not found. Please run: scripts/bootstrap")
+    sys.exit(1)
+
+# If not already in CI venv, re-execute with CI Python
+if sys.executable != str(VENV_PYTHON):
+    os.execv(str(VENV_PYTHON), [str(VENV_PYTHON)] + sys.argv)
+
+# Now we're running in CI venv, import dependencies
+try:
+    from loguru import logger
+    import click
+except ImportError as e:
+    print(f"❌ Missing dependency: {e}")
+    print("Please run: scripts/bootstrap")
+    sys.exit(1)
+
+# Configure logging
+logger.remove()  # Remove default handler
+logger.add(
+    sys.stdout,
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+    level="INFO"
+)
+logger.add(
+    PROJECT_ROOT / ".tmp" / "logs" / "ci.log",
+    format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {message}",
+    level="DEBUG",
+    rotation="10 MB"
+)
+
+class CI:
+    """Consolidated CI/CD Pipeline"""
+    
+    def __init__(self, config_path: Optional[Path] = None):
+        self.project_root = PROJECT_ROOT
+        self.venv_python = VENV_PYTHON
+        self.start_time = time.time()
+        self.results = {}
+        
+        # Load configuration
+        config_path = config_path or self.project_root / ".ci-config.yaml"
+        self.config = self._load_config(config_path)
+        
+        # Load .env file if it exists
+        self._load_env()
+        
+        # Ensure temp directories exist
+        (self.project_root / ".tmp" / "logs").mkdir(parents=True, exist_ok=True)
+        (self.project_root / ".tmp" / "reports").mkdir(parents=True, exist_ok=True)
+        
+    def _load_env(self) -> None:
+        """Load environment variables from .env file"""
+        env_file = self.project_root / ".env"
+        if env_file.exists():
+            with open(env_file) as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith('#'):
+                        if '=' in line:
+                            key, value = line.split('=', 1)
+                            key = key.strip()
+                            value = value.strip()
+                            # Remove comments from value
+                            if '#' in value:
+                                value = value.split('#')[0].strip()
+                            # Set in environment
+                            os.environ[key] = value
+                            logger.debug(f"Loaded env var: {key}")
+    
+    def _load_config(self, config_path: Path) -> dict:
+        """Load CI configuration"""
+        if config_path.exists():
+            with open(config_path) as f:
+                return yaml.safe_load(f)
+        else:
+            # Default configuration
+            return {
+                'ci': {
+                    'stages': ['version_check', 'lint', 'format_check', 'test', 'security', 'build'],
+                    'skip_slow_tests': False,
+                    'parallel_jobs': 4,
+                    'timeouts': {
+                        'default': 120,
+                        'test': 300,
+                        'security': 600,
+                        'build': 180
+                    }
+                },
+                'security': {
+                    'min_level': 'NONE',
+                    'tools': ['pip-audit', 'bandit']
+                },
+                'build': {
+                    'clean_first': True,
+                    'formats': ['wheel', 'sdist']
+                }
+            }
+    
+    def run_command(self, cmd: List[str], name: str, timeout: Optional[int] = None) -> bool:
+        """Run a command and track results"""
+        timeout = timeout or self.config['ci']['timeouts'].get(name.lower(), self.config['ci']['timeouts']['default'])
+        
+        logger.info(f"Running: {name}")
+        logger.debug(f"Command: {' '.join(cmd)}")
+        
+        start = time.time()
+        try:
+            result = subprocess.run(
+                cmd,
+                cwd=self.project_root,
+                capture_output=True,
+                text=True,
+                timeout=timeout
+            )
+            
+            duration = time.time() - start
+            success = result.returncode == 0
+            
+            self.results[name] = {
+                'success': success,
+                'duration': duration,
+                'stdout': result.stdout,
+                'stderr': result.stderr,
+                'returncode': result.returncode
+            }
+            
+            if success:
+                logger.success(f"✅ {name} passed ({duration:.1f}s)")
+            else:
+                logger.error(f"❌ {name} failed (exit code: {result.returncode})")
+                if result.stderr:
+                    logger.error(f"Error: {result.stderr[:500]}")  # First 500 chars
+                    
+            return success
+            
+        except subprocess.TimeoutExpired:
+            duration = time.time() - start
+            logger.error(f"⏱️ {name} timed out after {timeout}s")
+            self.results[name] = {
+                'success': False,
+                'duration': duration,
+                'error': f'Timeout after {timeout}s'
+            }
+            return False
+            
+        except Exception as e:
+            logger.error(f"💥 {name} crashed: {e}")
+            self.results[name] = {
+                'success': False,
+                'error': str(e)
+            }
+            return False
+    
+    def stage_version_check(self) -> bool:
+        """Check version consistency across files"""
+        logger.info("=" * 60)
+        logger.info("STAGE: Version Check")
+        
+        version_file = self.project_root / "VERSION"
+        pyproject = self.project_root / "pyproject.toml"
+        init_file = self.project_root / "src" / "logreducer" / "__init__.py"
+        
+        versions = {}
+        
+        # Read VERSION file
+        if version_file.exists():
+            versions['VERSION'] = version_file.read_text().strip()
+        
+        # Read pyproject.toml
+        if pyproject.exists():
+            content = pyproject.read_text()
+            import re
+            match = re.search(r'version = "([^"]+)"', content)
+            if match:
+                versions['pyproject.toml'] = match.group(1)
+        
+        # Read __init__.py
+        if init_file.exists():
+            content = init_file.read_text()
+            import re
+            match = re.search(r'__version__ = ["\']([^"\']+)["\']', content)
+            if match:
+                versions['__init__.py'] = match.group(1)
+        
+        # Check consistency
+        unique_versions = set(versions.values())
+        if len(unique_versions) == 1:
+            version = unique_versions.pop()
+            logger.success(f"Version {version} is consistent across all files")
+            return True
+        else:
+            logger.error("Version mismatch detected:")
+            for file, version in versions.items():
+                logger.error(f"  {file}: {version}")
+            return False
+    
+    def stage_lint(self) -> bool:
+        """Run linting checks"""
+        logger.info("=" * 60)
+        logger.info("STAGE: Linting")
+        
+        # Flake8
+        success = self.run_command(
+            [str(self.venv_python), "-m", "flake8", "src/logreducer/", 
+             "--count", "--select=E9,F63,F7,F82", "--show-source", "--statistics"],
+            "Flake8 (Critical Errors)"
+        )
+        
+        # Full flake8 (non-blocking)
+        self.run_command(
+            [str(self.venv_python), "-m", "flake8", "src/logreducer/", 
+             "--count", "--exit-zero", "--max-complexity=10", "--max-line-length=88", "--statistics"],
+            "Flake8 (All Issues)"
+        )
+        
+        return success
+    
+    def stage_format_check(self) -> bool:
+        """Check code formatting"""
+        logger.info("=" * 60)
+        logger.info("STAGE: Format Check")
+        
+        return self.run_command(
+            [str(self.venv_python), "-m", "black", "--check", "src/logreducer/"],
+            "Black Format Check"
+        )
+    
+    def stage_type_check(self) -> bool:
+        """Run type checking"""
+        logger.info("=" * 60)
+        logger.info("STAGE: Type Check")
+        
+        # MyPy (non-blocking for now)
+        result = self.run_command(
+            [str(self.venv_python), "-m", "mypy", "src/logreducer/"],
+            "MyPy Type Check"
+        )
+        
+        if not result:
+            logger.warning("MyPy found type issues (non-blocking)")
+            # Count the errors for information
+            mypy_result = self.results.get("MyPy Type Check", {})
+            stdout = mypy_result.get("stdout", "")
+            if stdout:
+                lines = stdout.strip().split('\n')
+                error_line = [l for l in lines if 'Found' in l and 'error' in l]
+                if error_line:
+                    logger.info(f"Type checking: {error_line[0]}")
+            
+            # Mark as passed since it's non-blocking
+            self.results["MyPy Type Check"]["success"] = True
+            self.results["MyPy Type Check"]["non_blocking"] = True
+        
+        return True  # Non-blocking - always return True
+    
+    def stage_test(self, skip_slow: bool = False) -> bool:
+        """Run test suite"""
+        logger.info("=" * 60)
+        logger.info("STAGE: Testing")
+        
+        # Unit tests
+        if not self.run_command(
+            [str(self.venv_python), "-m", "pytest", "tests/unit/", "-v", 
+             "--cov=logreducer", "--cov-report=xml", "--cov-report=term-missing"],
+            "Unit Tests",
+            timeout=self.config['ci']['timeouts']['test']
+        ):
+            return False
+        
+        # Integration tests (fast)
+        if not self.run_command(
+            [str(self.venv_python), "-m", "pytest", "tests/integration/", "-v", "-m", "not slow"],
+            "Integration Tests (Fast)",
+            timeout=self.config['ci']['timeouts']['test']
+        ):
+            return False
+        
+        # Integration tests (slow)
+        if not skip_slow and not self.config['ci'].get('skip_slow_tests', False):
+            self.run_command(
+                [str(self.venv_python), "-m", "pytest", "tests/integration/", "-v", "-m", "slow"],
+                "Integration Tests (Slow)",
+                timeout=self.config['ci']['timeouts']['test'] * 2
+            )
+        
+        return True
+    
+    def stage_security(self) -> bool:
+        """Run security scanning"""
+        logger.info("=" * 60)
+        logger.info("STAGE: Security Scanning")
+        
+        min_level = os.environ.get('MIN_SECURITY_LEVEL', self.config['security']['min_level'])
+        logger.info(f"Security threshold: {min_level}")
+        
+        success = True
+        
+        # pip-audit
+        if 'pip-audit' in self.config['security']['tools']:
+            if not self.run_command(
+                [str(self.venv_python), "-m", "pip_audit", "--desc", "--format", "json", 
+                 "--output", ".tmp/reports/pip-audit.json"],
+                "pip-audit",
+                timeout=self.config['ci']['timeouts']['security']
+            ):
+                if min_level == 'NONE':
+                    success = False
+        
+        # Bandit
+        if 'bandit' in self.config['security']['tools']:
+            if not self.run_command(
+                [str(self.venv_python), "-m", "bandit", "-r", "src/logreducer/", 
+                 "-f", "json", "-o", ".tmp/reports/bandit.json"],
+                "Bandit",
+                timeout=self.config['ci']['timeouts']['security']
+            ):
+                if min_level == 'NONE':
+                    success = False
+        
+        return success
+    
+    def stage_build(self) -> bool:
+        """Build distribution packages"""
+        logger.info("=" * 60)
+        logger.info("STAGE: Build")
+        
+        # Clean previous builds
+        dist_dir = self.project_root / "dist"
+        if self.config['build']['clean_first']:
+            if dist_dir.exists():
+                import shutil
+                shutil.rmtree(dist_dir)
+                logger.info("Cleaned previous build artifacts")
+        
+        # Build packages
+        if not self.run_command(
+            [str(self.venv_python), "-m", "build"],
+            "Build Packages",
+            timeout=self.config['ci']['timeouts']['build']
+        ):
+            return False
+        
+        # Validate with twine
+        if not self.run_command(
+            [str(self.venv_python), "-m", "twine", "check", "dist/*"],
+            "Validate Packages"
+        ):
+            return False
+        
+        # Report what was built
+        if dist_dir.exists():
+            import glob
+            wheels = glob.glob(str(dist_dir / "*.whl"))
+            tarballs = glob.glob(str(dist_dir / "*.tar.gz"))
+            
+            logger.success("📦 Build artifacts created:")
+            for wheel in wheels:
+                size = Path(wheel).stat().st_size / 1024  # KB
+                logger.info(f"  Wheel: {Path(wheel).name} ({size:.1f} KB)")
+            for tarball in tarballs:
+                size = Path(tarball).stat().st_size / 1024  # KB
+                logger.info(f"  Source: {Path(tarball).name} ({size:.1f} KB)")
+            
+            logger.info(f"  Location: {dist_dir}")
+            logger.info("  Ready for deployment to JFrog Artifactory")
+        
+        return True
+    
+    def stage_deploy(self) -> bool:
+        """Deploy to JFrog Artifactory"""
+        logger.info("=" * 60)
+        logger.info("STAGE: Deploy to JFrog")
+        
+        # Check if deployment is enabled
+        deploy_enabled = os.environ.get('DEPLOY_TO_ARTIFACTORY', 'FALSE').upper()
+        if deploy_enabled != 'TRUE':
+            logger.info("JFrog deployment disabled (DEPLOY_TO_ARTIFACTORY != TRUE)")
+            logger.info("To enable: Set DEPLOY_TO_ARTIFACTORY=TRUE in .env")
+            return True  # Not an error, just skipped
+        
+        logger.info("JFrog deployment enabled (DEPLOY_TO_ARTIFACTORY=TRUE)")
+        
+        # Since we have DEPLOY_TO_ARTIFACTORY=TRUE, trigger GitHub Actions
+        logger.info("Triggering GitHub Actions for secure JFrog deployment...")
+        
+        # Get environment setting
+        environment = os.environ.get('ARTIFACTORY_ENVIRONMENT', 'production')
+        
+        # Trigger the GitHub Actions workflow
+        cmd = [
+            "gh", "workflow", "run", "deploy-jfrog.yml",
+            "-f", f"deploy_environment={environment}",
+            "-f", "use_existing_artifacts=use_existing"
+        ]
+        
+        logger.info(f"Running: gh workflow run deploy-jfrog.yml -f deploy_environment={environment}")
+        
+        result = subprocess.run(
+            cmd,
+            cwd=self.project_root,
+            capture_output=True,
+            text=True
+        )
+        
+        if result.returncode == 0:
+            logger.success("✅ GitHub Actions workflow triggered successfully")
+            logger.info("Deployment will proceed in GitHub Actions with secure credentials")
+            logger.info("Check status with: gh run list --workflow=deploy-jfrog.yml")
+            return True
+        else:
+            logger.error("Failed to trigger GitHub Actions workflow")
+            if result.stderr:
+                logger.error(f"Error: {result.stderr}")
+            logger.info("You can manually trigger with:")
+            logger.info(f"  gh workflow run deploy-jfrog.yml -f deploy_environment={environment}")
+            return False
+    
+    def run_pipeline(self, stages: Optional[List[str]] = None, skip_slow: bool = False) -> bool:
+        """Run the CI pipeline"""
+        logger.info("🚀 Starting CI Pipeline")
+        logger.info(f"Project: {self.project_root.name}")
+        logger.info(f"CI Python: {self.venv_python}")
+        
+        # Get stages to run
+        if stages:
+            stages_to_run = stages
+        else:
+            stages_to_run = self.config['ci']['stages']
+        
+        # Map stage names to methods
+        stage_methods = {
+            'version_check': self.stage_version_check,
+            'lint': self.stage_lint,
+            'format_check': self.stage_format_check,
+            'type_check': self.stage_type_check,
+            'test': lambda: self.stage_test(skip_slow),
+            'security': self.stage_security,
+            'build': self.stage_build,
+            'deploy': self.stage_deploy,
+        }
+        
+        # Run stages
+        for stage in stages_to_run:
+            if stage in stage_methods:
+                if not stage_methods[stage]():
+                    logger.error(f"Stage '{stage}' failed - stopping pipeline")
+                    break
+            else:
+                logger.warning(f"Unknown stage: {stage}")
+        
+        # Print summary
+        self.print_summary()
+        
+        # Return overall success
+        failed = sum(1 for r in self.results.values() if not r.get('success', False))
+        return failed == 0
+    
+    def print_summary(self):
+        """Print CI pipeline summary"""
+        duration = time.time() - self.start_time
+        
+        logger.info("=" * 60)
+        logger.info("CI PIPELINE SUMMARY")
+        logger.info("=" * 60)
+        
+        passed = 0
+        failed = 0
+        
+        for stage, result in self.results.items():
+            if result.get('success'):
+                if result.get('non_blocking'):
+                    status = "⚠️  WARNED"
+                else:
+                    status = "✅ PASSED"
+                passed += 1
+            else:
+                status = "❌ FAILED"
+                failed += 1
+            
+            stage_duration = result.get('duration', 0)
+            logger.info(f"{status:<12} {stage:<30} ({stage_duration:.1f}s)")
+        
+        logger.info("-" * 60)
+        logger.info(f"Total: {passed} passed, {failed} failed")
+        logger.info(f"Duration: {duration:.1f} seconds")
+        
+        if failed > 0:
+            logger.error("❌ CI PIPELINE FAILED")
+        else:
+            logger.success("✅ CI PIPELINE PASSED")
+
+
+@click.command()
+@click.option('--stage', '-s', multiple=True, help='Run specific stage(s)')
+@click.option('--skip-slow', is_flag=True, help='Skip slow tests')
+@click.option('--deploy', is_flag=True, help='Include deployment stage')
+@click.option('--config', '-c', type=click.Path(exists=True), help='Config file path')
+@click.option('--list-stages', is_flag=True, help='List available stages')
+def main(stage, skip_slow, deploy, config, list_stages):
+    """Consolidated CI/CD Pipeline
+    
+    All CI operations run in isolated .venv-ci environment.
+    
+    Examples:
+        scripts/ci                    # Run full CI
+        scripts/ci --skip-slow        # Skip slow tests
+        scripts/ci --stage test       # Run tests only
+        scripts/ci --stage lint test  # Run specific stages
+        scripts/ci --deploy           # Include deployment
+    """
+    
+    if list_stages:
+        print("Available stages:")
+        for s in ['version_check', 'lint', 'format_check', 'type_check', 'test', 'security', 'build', 'deploy']:
+            print(f"  - {s}")
+        return
+    
+    # Create CI instance
+    config_path = Path(config) if config else None
+    ci = CI(config_path)
+    
+    # Prepare stages
+    stages_to_run = list(stage) if stage else None
+    if deploy and stages_to_run:
+        stages_to_run.append('deploy')
+    elif deploy and not stages_to_run:
+        stages_to_run = ci.config['ci']['stages'] + ['deploy']
+    
+    # Run pipeline
+    success = ci.run_pipeline(stages_to_run, skip_slow)
+    
+    # Exit with appropriate code
+    sys.exit(0 if success else 1)
+
+
+if __name__ == "__main__":
+    main()

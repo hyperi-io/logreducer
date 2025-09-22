@@ -77,7 +77,7 @@ class BigDialConfig:
     output_format: OutputFormat = OutputFormat.LINE  # Default line-by-line
     pretty_json: bool = False  # Pretty print JSON output
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.n_workers is None:
             # Auto-detect CPU cores, especially important in containers
             cpu_count = mp.cpu_count()

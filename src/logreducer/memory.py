@@ -72,7 +72,7 @@ class MemoryMonitor:
         current = self.process.memory_info().rss
         return current > self.effective_limit
 
-    def reset(self):
+    def reset(self) -> None:
         """Reset peak memory tracking"""
         current_usage = self.process.memory_info().rss
         self.peak_usage_bytes = current_usage

@@ -262,7 +262,7 @@ jobs:
     name: Deploy to Production (JFrog - GitHub Hosted)
     runs-on: ubuntu-latest  # Always GitHub-hosted for JFrog security
     needs: [build, detect-python-version]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.AUTO_DEPLOY_TO_JFROG == 'true'
     environment: production
     
     steps:
