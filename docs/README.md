@@ -65,4 +65,5 @@ sphinx-build -b html . _build/html
 
 - **Markdown (.md)**: Internal development documentation
 - **reStructuredText (.rst)**: User-facing API documentation  
+- **Root level files**: Keep only README.md, CHANGELOG.md, LICENSE, STATE.md in project root
 - **Development docs**: All other .md files belong in `/docs`

@@ -1,0 +1,41 @@
+# CI Configuration
+# This file is used by scripts/ci
+
+python:
+  version: "3.12"
+  venv: ".venv-ci"
+
+ci:
+  stages:
+    - version_check
+    - lint
+    - format_check
+    - type_check
+    - test
+    - security
+    - build
+  
+  skip_slow_tests: false
+  parallel_jobs: 4
+  
+  timeouts:
+    test: 300
+    security: 600
+    build: 180
+    default: 120
+
+security:
+  min_level: NONE  # NONE, LOW, MEDIUM, HIGH, CRITICAL
+  tools:
+    - pip-audit
+    - bandit
+  
+build:
+  clean_first: true
+  formats:
+    - wheel
+    - sdist
+
+jfrog:
+  repository_url: "https://hypersec.jfrog.io/artifactory/api/pypi/hypersec-pypi-local/"
+  # Credentials should be in environment or GitHub Secrets

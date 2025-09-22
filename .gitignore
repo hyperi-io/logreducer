@@ -3,9 +3,9 @@
 .env.local
 .env.*.local
 
-# Development tools
-
-# Project-specific private documentation
+# Development tools and AI assistant configurations
+STATE.md
+END_OF_DAY.md
 
 
 # Byte-compiled / optimized / DLL files
@@ -191,3 +191,5 @@ Pipfile.lock
 act-*
 .act/
 .secrets.act
+# CI virtual environment
+.venv-ci/

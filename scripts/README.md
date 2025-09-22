@@ -6,9 +6,11 @@ After consolidation, we have a clean, minimal script structure:
 
 ```
 scripts/
-├── setup           # Bootstrap script (runs standalone)
-├── pdev            # Developer commands (all dev tasks)
-├── ci-helper       # CI/CD utilities (GitHub Actions)
+├── bootstrap       # Bootstrap CI environment (.venv-ci)
+├── ci              # Consolidated CI pipeline (uses .venv-ci)
+├── setup           # Bootstrap dev environment (.venv)
+├── pdev            # Developer commands (uses .venv)
+├── ci-helper       # CI/CD utilities (minimal, for GitHub Actions)
 ├── common.py       # Shared utilities
 ├── pdev.yaml       # Developer tool configuration
 └── ci-helper.yaml  # CI/CD configuration
@@ -16,32 +18,51 @@ scripts/
 
 ## Script Purposes
 
-### 1. `setup` - Bootstrap Script
-**Must remain standalone** - Creates venv and initial environment
+### 1. `bootstrap` - CI Environment Setup
+**Standalone** - Creates isolated CI environment (.venv-ci)
+- Creates separate .venv-ci for CI operations
+- Installs CI-specific dependencies
+- Creates .ci-config.yaml configuration
+- **Run once**: `scripts/bootstrap`
+
+### 2. `ci` - Consolidated CI Pipeline
+**All CI in one place** - Runs in .venv-ci environment
+- Automatic environment switching to .venv-ci
+- All stages: version, lint, test, security, build, deploy
+- Configurable via .ci-config.yaml
+- **Usage**: `scripts/ci` or `make ci`
+
+### 3. `setup` - Development Environment Setup
+**Standalone** - Creates development environment (.venv)
 - Creates virtual environment with uv
 - Installs all dependencies
 - Sets up pre-commit hooks
 - Initializes git tags for semantic-release
 - **Run once**: `scripts/setup`
 
-### 2. `pdev` - Developer Swiss Army Knife
-All daily development commands in one place:
+### 4. `pdev` - Developer Swiss Army Knife
+All daily development commands in one place (uses .venv):
 - `test` - Run tests
 - `format` - Format code
 - `lint` - Run linters
-- `security` - Security scans (integrated from security_scan.py)
+- `security` - Security scans
 - `build` - Build packages
 - `clean` - Clean artifacts
 - `version-check` - Verify version consistency
 - `init-release` - Initialize semantic-release
 - `all` - Run everything
 
-### 3. `ci-helper` - CI/CD Utilities
+### 5. `ci-helper` - CI/CD Utilities
 Used by GitHub Actions and CI/CD pipelines:
 - `update-version` - Update VERSION file only
 - `verify-versions` - Check all versions match
 - `prepare-release` - Pre-release checks
 - `test-editable` - Test PEP 660 editable install (from test_editable_install.py)
+
+Synchronizes development state across AI assistants:
+- Syncs STATE.md and configuration files
+- Separate repository for development documentation
+- Legacy file migration support
 
 ## Removed Scripts (Now Integrated)
 

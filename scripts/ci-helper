@@ -11,11 +11,35 @@ from pathlib import Path
 
 # Import common utilities
 sys.path.insert(0, str(Path(__file__).parent))
-from common import (
-    PROJECT_ROOT, SCRIPT_DIR,
-    get_project_version, get_package_name,
-    load_yaml_config
-)
+
+# Try importing with fallback for when venv isn't active
+try:
+    from common import (
+        PROJECT_ROOT, SCRIPT_DIR,
+        get_project_version, get_package_name,
+        load_yaml_config
+    )
+except ImportError:
+    # Fallback when dependencies aren't available
+    PROJECT_ROOT = Path(__file__).parent.parent
+    SCRIPT_DIR = Path(__file__).parent
+    
+    def get_project_version():
+        version_file = PROJECT_ROOT / "VERSION"
+        if version_file.exists():
+            return version_file.read_text().strip()
+        return "unknown"
+    
+    def get_package_name():
+        return "logreducer"
+    
+    def load_yaml_config(path):
+        try:
+            import yaml
+            with open(path) as f:
+                return yaml.safe_load(f)
+        except:
+            return {}
 
 # Configuration file
 CONFIG_FILE = SCRIPT_DIR / "ci-helper.yaml"
