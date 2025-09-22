@@ -51,15 +51,15 @@ jobs:
     - name: Check JFrog credentials
       run: |
         if [ -z "${{ secrets.ARTIFACTORY_USERNAME }}" ] || [ -z "${{ secrets.ARTIFACTORY_PASSWORD }}" ]; then
-          echo "❌ ERROR: Missing JFrog credentials!"
+          echo "[FAIL] ERROR: Missing JFrog credentials!"
           echo ""
           echo "Please add these secrets to your repository:"
-          echo "1. Go to: Settings → Secrets and variables → Actions"
+          echo "1. Go to: Settings -> Secrets and variables -> Actions"
           echo "2. Add ARTIFACTORY_USERNAME"
           echo "3. Add ARTIFACTORY_PASSWORD"
           exit 1
         fi
-        echo "✅ JFrog credentials configured"
+        echo "[PASS] JFrog credentials configured"
     
     - name: Deploy to JFrog Artifactory
       env:
@@ -67,7 +67,7 @@ jobs:
         TWINE_PASSWORD: ${{ secrets.ARTIFACTORY_PASSWORD }}
         TWINE_REPOSITORY_URL: "https://hypersec.jfrog.io/artifactory/api/pypi/hypersec-pypi-local/"
       run: |
-        echo "📦 Deploying to JFrog Artifactory..."
+        echo "[PKG] Deploying to JFrog Artifactory..."
         echo "Repository: $TWINE_REPOSITORY_URL"
         echo "Version: ${{ steps.version.outputs.version }}"
         echo ""
@@ -76,7 +76,7 @@ jobs:
         twine upload --verbose dist/*
         
         echo ""
-        echo "✅ SUCCESS: Packages deployed to JFrog Artifactory!"
+        echo "[PASS] SUCCESS: Packages deployed to JFrog Artifactory!"
         echo ""
         echo "To install:"
         echo "  pip install logreducer==${{ steps.version.outputs.version }} --index-url $TWINE_REPOSITORY_URL"

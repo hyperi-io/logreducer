@@ -6,14 +6,14 @@ After consolidation, we have a clean, minimal script structure:
 
 ```
 scripts/
-├── bootstrap       # Bootstrap CI environment (.venv-ci)
-├── ci              # Consolidated CI pipeline (uses .venv-ci)
-├── setup           # Bootstrap dev environment (.venv)
-├── pdev            # Developer commands (uses .venv)
-├── ci-helper       # CI/CD utilities (minimal, for GitHub Actions)
-├── common.py       # Shared utilities
-├── pdev.yaml       # Developer tool configuration
-└── ci-helper.yaml  # CI/CD configuration
+|-- bootstrap       # Bootstrap CI environment (.venv-ci)
+|-- ci              # Consolidated CI pipeline (uses .venv-ci)
+|-- setup           # Bootstrap dev environment (.venv)
+|-- pdev            # Developer commands (uses .venv)
+|-- ci-helper       # CI/CD utilities (minimal, for GitHub Actions)
+|-- common.py       # Shared utilities
+|-- pdev.yaml       # Developer tool configuration
+`-- ci-helper.yaml  # CI/CD configuration
 ```
 
 ## Script Purposes
@@ -67,11 +67,11 @@ Synchronizes development state across AI assistants:
 ## Removed Scripts (Now Integrated)
 
 The following scripts were merged and removed:
-- ❌ `security_scan.py` → Integrated into `pdev security`
-- ❌ `test_editable_install.py` → Moved to `ci-helper test-editable`
-- ❌ `version.py` → Split between `pdev version-check` and `ci-helper verify-versions`
-- ❌ `init_semantic_release.py` → Integrated into `pdev init-release`
-- ❌ `update_version_file.py` → Moved to `ci-helper update-version`
+- [REMOVED] `security_scan.py` - Integrated into `pdev security`
+- [REMOVED] `test_editable_install.py` - Moved to `ci-helper test-editable`
+- [REMOVED] `version.py` - Split between `pdev version-check` and `ci-helper verify-versions`
+- [REMOVED] `init_semantic_release.py` - Integrated into `pdev init-release`
+- [REMOVED] `update_version_file.py` - Moved to `ci-helper update-version`
 
 ## Configuration Files
 

@@ -92,12 +92,12 @@ scripts/pdev all  # Run all checks
 
 ```
 logreducer/
-├── src/logreducer/    # Main package source
-├── tests/             # Test suite
-├── scripts/           # Development tools
-├── docs/              # Documentation
-├── data/samples/      # Sample log files
-└── examples/          # Usage examples
+|-- src/logreducer/    # Main package source
+|-- tests/             # Test suite
+|-- scripts/           # Development tools
+|-- docs/              # Documentation
+|-- data/samples/      # Sample log files
+`-- examples/          # Usage examples
 ```
 
 ## Configuration

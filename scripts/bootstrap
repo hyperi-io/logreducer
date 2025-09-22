@@ -22,16 +22,16 @@ def print_header(msg):
     print(f"{BLUE}{'='*60}{NC}")
 
 def print_success(msg):
-    print(f"{GREEN}✓{NC} {msg}")
+    print(f"{GREEN}[OK]{NC} {msg}")
 
 def print_error(msg):
-    print(f"{RED}✗{NC} {msg}")
+    print(f"{RED}[ERROR]{NC} {msg}")
 
 def print_info(msg):
-    print(f"{YELLOW}→{NC} {msg}")
+    print(f"{YELLOW}[INFO]{NC} {msg}")
 
 def print_warning(msg):
-    print(f"{YELLOW}⚠{NC} {msg}")
+    print(f"{YELLOW}[WARN]{NC} {msg}")
 
 def run_command(cmd, description, check=True):
     """Run a command and return success status"""

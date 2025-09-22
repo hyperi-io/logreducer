@@ -54,7 +54,7 @@ export TWINE_REPOSITORY_URL="https://hypersec.jfrog.io/artifactory/api/pypi/hype
 twine upload dist/*
 ```
 
-## 🔄 Automated CI/CD Pipeline
+## ? Automated CI/CD Pipeline
 
 ### GitHub Actions Setup
 
@@ -92,7 +92,7 @@ act -j local-test
 ./scripts/local_ci.sh --coverage --verbose
 ```
 
-## 📦 Package Configuration
+## [PKG] Package Configuration
 
 ### Version Management (Semantic Release)
 
@@ -153,7 +153,7 @@ curl -X POST "https://hypersec.jfrog.io/artifactory/api/security/users/pypi-depl
   }'
 ```
 
-## 📁 Installation for End Users
+## ? Installation for End Users
 
 ### From Corporate PyPI
 
@@ -193,7 +193,7 @@ username = your-username
 password = your-token
 ```
 
-## 🧪 Testing Deployment
+## ? Testing Deployment
 
 ### Validation Script
 
@@ -209,7 +209,7 @@ def test_installation():
     """Test LogReducer installation and basic functionality"""
     try:
         from logreducer import LogReducer
-        print("✅ LogReducer imported successfully")
+        print("[PASS] LogReducer imported successfully")
         
         # Test basic functionality  
         with tempfile.NamedTemporaryFile(mode='w', suffix='.log', delete=False) as f:
@@ -223,18 +223,18 @@ def test_installation():
         os.unlink(temp_file)
         
         if len(result) > 0:
-            print(f"✅ LogReducer processed test file: {len(result)} lines")
+            print(f"[PASS] LogReducer processed test file: {len(result)} lines")
             print("Deployment validation successful!")
             return True
         else:
-            print("❌ LogReducer returned empty result")
+            print("[FAIL] LogReducer returned empty result")
             return False
             
     except ImportError as e:
-        print(f"❌ Import failed: {e}")
+        print(f"[FAIL] Import failed: {e}")
         return False
     except Exception as e:
-        print(f"❌ Functionality test failed: {e}")
+        print(f"[FAIL] Functionality test failed: {e}")
         return False
 
 if __name__ == "__main__":
@@ -345,10 +345,10 @@ env:
 #!/bin/bash
 set -e
 
-echo "🏥 LogReducer Health Check"
+echo "? LogReducer Health Check"
 
 # Test import
-python -c "from logreducer import LogReducer; print('✅ Import OK')"
+python -c "from logreducer import LogReducer; print('[PASS] Import OK')"
 
 # Test basic functionality
 python -c "
@@ -360,7 +360,7 @@ with tempfile.NamedTemporaryFile(mode='w', suffix='.log') as f:
     f.flush()
     result = LogReducer().process_file(f.name)
     assert len(result) >= 0
-print('✅ Basic functionality OK')
+print('[PASS] Basic functionality OK')
 "
 
 echo "All health checks passed!"

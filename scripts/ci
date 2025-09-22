@@ -150,14 +150,14 @@ class CI:
             }
             
             if success:
-                logger.success(f"✅ {name} passed ({duration:.1f}s)")
+                logger.success(f"[PASS] {name} passed ({duration:.1f}s)")
             else:
                 if non_blocking:
-                    logger.warning(f"⚠️ {name} has issues (non-blocking) ({duration:.1f}s)")
+                    logger.warning(f"[WARN] {name} has issues (non-blocking) ({duration:.1f}s)")
                     if result.stderr:
                         logger.warning(f"Issues: {result.stderr[:500]}")  # First 500 chars
                 else:
-                    logger.error(f"❌ {name} failed (exit code: {result.returncode})")
+                    logger.error(f"[FAIL] {name} failed (exit code: {result.returncode})")
                     if result.stderr:
                         logger.error(f"Error: {result.stderr[:500]}")  # First 500 chars
                     
@@ -165,7 +165,7 @@ class CI:
             
         except subprocess.TimeoutExpired:
             duration = time.time() - start
-            logger.error(f"⏱️ {name} timed out after {timeout}s")
+            logger.error(f"[TIMEOUT] {name} timed out after {timeout}s")
             self.results[name] = {
                 'success': False,
                 'duration': duration,
@@ -174,7 +174,7 @@ class CI:
             return False
             
         except Exception as e:
-            logger.error(f"💥 {name} crashed: {e}")
+            logger.error(f"[CRASH] {name} crashed: {e}")
             self.results[name] = {
                 'success': False,
                 'error': str(e)
@@ -216,7 +216,7 @@ class CI:
         unique_versions = set(versions.values())
         if len(unique_versions) == 1:
             version = unique_versions.pop()
-            logger.success(f"Version {version} is consistent across all files")
+            logger.success(f"[PASS] Version {version} is consistent across all files")
             return True
         else:
             logger.error("Version mismatch detected:")
@@ -383,7 +383,7 @@ class CI:
             wheels = glob.glob(str(dist_dir / "*.whl"))
             tarballs = glob.glob(str(dist_dir / "*.tar.gz"))
             
-            logger.success("📦 Build artifacts created:")
+            logger.success("[PKG] Build artifacts created:")
             for wheel in wheels:
                 size = Path(wheel).stat().st_size / 1024  # KB
                 logger.info(f"  Wheel: {Path(wheel).name} ({size:.1f} KB)")
@@ -433,7 +433,7 @@ class CI:
         )
         
         if result.returncode == 0:
-            logger.success("✅ GitHub Actions workflow triggered successfully")
+            logger.success("[PASS] GitHub Actions workflow triggered successfully")
             logger.info("Deployment will proceed in GitHub Actions with secure credentials")
             logger.info("Check status with: gh run list --workflow=deploy-jfrog.yml")
             return True
@@ -447,7 +447,7 @@ class CI:
     
     def run_pipeline(self, stages: Optional[List[str]] = None, skip_slow: bool = False) -> bool:
         """Run the CI pipeline"""
-        logger.info("🚀 Starting CI Pipeline")
+        logger.info("[START] Starting CI Pipeline")
         logger.info(f"Project: {self.project_root.name}")
         logger.info(f"CI Python: {self.venv_python}")
         
@@ -499,12 +499,12 @@ class CI:
         for stage, result in self.results.items():
             if result.get('success'):
                 if result.get('non_blocking'):
-                    status = "⚠️  WARNED"
+                    status = "[WARN]"
                 else:
-                    status = "✅ PASSED"
+                    status = "[PASS]"
                 passed += 1
             else:
-                status = "❌ FAILED"
+                status = "[FAIL]"
                 failed += 1
             
             stage_duration = result.get('duration', 0)
@@ -515,9 +515,9 @@ class CI:
         logger.info(f"Duration: {duration:.1f} seconds")
         
         if failed > 0:
-            logger.error("❌ CI PIPELINE FAILED")
+            logger.error("[FAIL] CI PIPELINE FAILED")
         else:
-            logger.success("✅ CI PIPELINE PASSED")
+            logger.success("[PASS] CI PIPELINE PASSED")
 
 
 @click.command()

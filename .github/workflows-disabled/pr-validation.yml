@@ -42,11 +42,11 @@ jobs:
     
     - name: Validate branch name
       run: |
-        echo "🔍 Validating ${{ env.CICD_ENTITY }} branch name: ${{ github.head_ref }}"
+        echo "[SEARCH] Validating ${{ env.CICD_ENTITY }} branch name: ${{ github.head_ref }}"
         
         # Protected branches are allowed
         if echo "${{ github.head_ref }}" | grep -qE "^(main|master|develop|development|staging|production)$"; then
-          echo "✅ Protected branch, skipping validation"
+          echo "[PASS] Protected branch, skipping validation"
           exit 0
         fi
         
@@ -59,7 +59,7 @@ jobs:
         npx branch-name-lint ../.branchlintrc.json
         
         if [ $? -ne 0 ]; then
-          echo "❌ ${{ env.CICD_ENTITY }} branch name validation failed!"
+          echo "[FAIL] ${{ env.CICD_ENTITY }} branch name validation failed!"
           echo ""
           echo "${{ env.CICD_ENTITY }} valid patterns:"
           echo "  feature/description or feature/JIRA-123-description"
@@ -73,7 +73,7 @@ jobs:
           exit 1
         fi
         
-        echo "✅ Branch name is valid"
+        echo "[PASS] Branch name is valid"
 
   commit-messages:
     name: Validate Commit Messages
@@ -97,7 +97,7 @@ jobs:
     
     - name: Validate commits
       run: |
-        echo "🔍 Validating ${{ env.CICD_ENTITY }} commit messages..."
+        echo "[SEARCH] Validating ${{ env.CICD_ENTITY }} commit messages..."
         
         # Get all commits in the PR
         COMMITS=$(git log --format=%H origin/${{ github.base_ref }}..${{ github.head_ref }} 2>/dev/null || git log --format=%H HEAD~10..HEAD)
@@ -108,7 +108,7 @@ jobs:
           
           # Skip merge commits
           if echo "$MESSAGE" | grep -q "^Merge "; then
-            echo "✅ Skipping merge commit: $COMMIT"
+            echo "[PASS] Skipping merge commit: $COMMIT"
             continue
           fi
           
@@ -116,18 +116,18 @@ jobs:
           echo "$MESSAGE" | npx commitlint
           
           if [ $? -ne 0 ]; then
-            echo "❌ Invalid commit message for $COMMIT:"
+            echo "[FAIL] Invalid commit message for $COMMIT:"
             echo "$MESSAGE"
             echo ""
             FAILED=1
           else
-            echo "✅ Valid: $(echo "$MESSAGE" | head -1)"
+            echo "[PASS] Valid: $(echo "$MESSAGE" | head -1)"
           fi
         done
         
         if [ $FAILED -eq 1 ]; then
           echo ""
-          echo "❌ Some commit messages don't follow ${{ env.CICD_ENTITY }} conventional format"
+          echo "[FAIL] Some commit messages don't follow ${{ env.CICD_ENTITY }} conventional format"
           echo ""
           echo "${{ env.CICD_ENTITY }} expected format: type(scope): description"
           echo ""
@@ -150,7 +150,7 @@ jobs:
           exit 1
         fi
         
-        echo "✅ All commit messages are valid"
+        echo "[PASS] All commit messages are valid"
 
   pr-title:
     name: Validate PR Title
@@ -171,12 +171,12 @@ jobs:
     
     - name: Validate PR title
       run: |
-        echo "🔍 Validating ${{ env.CICD_ENTITY }} PR title..."
+        echo "[SEARCH] Validating ${{ env.CICD_ENTITY }} PR title..."
         echo "${{ github.event.pull_request.title }}" | npx commitlint
         
         if [ $? -ne 0 ]; then
           echo ""
-          echo "❌ PR title must follow ${{ env.CICD_ENTITY }} conventional commit format"
+          echo "[FAIL] PR title must follow ${{ env.CICD_ENTITY }} conventional commit format"
           echo ""
           echo "Current title: ${{ github.event.pull_request.title }}"
           echo ""
@@ -192,7 +192,7 @@ jobs:
           exit 1
         fi
         
-        echo "✅ PR title is valid"
+        echo "[PASS] PR title is valid"
 
   check-jira:
     name: Check for JIRA References
@@ -203,7 +203,7 @@ jobs:
     steps:
     - name: Check for JIRA reference
       run: |
-        echo "🔍 Checking for ${{ env.CICD_ENTITY }} JIRA references..."
+        echo "[SEARCH] Checking for ${{ env.CICD_ENTITY }} JIRA references..."
         
         PR_BODY="${{ github.event.pull_request.body }}"
         PR_TITLE="${{ github.event.pull_request.title }}"
@@ -212,9 +212,9 @@ jobs:
         # Check if JIRA key exists in branch, title, or body
         if echo "$BRANCH $PR_TITLE $PR_BODY" | grep -qE "[A-Z]+-[0-9]+"; then
           JIRA_KEYS=$(echo "$BRANCH $PR_TITLE $PR_BODY" | grep -oE "[A-Z]+-[0-9]+" | sort -u)
-          echo "✅ Found JIRA references: $JIRA_KEYS"
+          echo "[PASS] Found JIRA references: $JIRA_KEYS"
         else
-          echo "⚠️  Warning: No JIRA reference found"
+          echo "[WARN]  Warning: No JIRA reference found"
           echo ""
           echo "Consider adding a JIRA ticket reference in:"
           echo "  - Branch name: feature/PROJ-123-description"
@@ -237,21 +237,21 @@ jobs:
         echo ""
         
         if [ "${{ needs.branch-name.result }}" == "success" ]; then
-          echo "✅ Branch name validation: Passed"
+          echo "[PASS] Branch name validation: Passed"
         else
-          echo "❌ Branch name validation: Failed"
+          echo "[FAIL] Branch name validation: Failed"
         fi
         
         if [ "${{ needs.commit-messages.result }}" == "success" ]; then
-          echo "✅ Commit message validation: Passed"
+          echo "[PASS] Commit message validation: Passed"
         else
-          echo "❌ Commit message validation: Failed"
+          echo "[FAIL] Commit message validation: Failed"
         fi
         
         if [ "${{ needs.pr-title.result }}" == "success" ]; then
-          echo "✅ PR title validation: Passed"
+          echo "[PASS] PR title validation: Passed"
         else
-          echo "❌ PR title validation: Failed"
+          echo "[FAIL] PR title validation: Failed"
         fi
         
         echo ""
@@ -259,8 +259,8 @@ jobs:
         if [ "${{ needs.branch-name.result }}" != "success" ] || \
            [ "${{ needs.commit-messages.result }}" != "success" ] || \
            [ "${{ needs.pr-title.result }}" != "success" ]; then
-          echo "❌ PR validation failed. Please fix the issues above."
+          echo "[FAIL] PR validation failed. Please fix the issues above."
           exit 1
         fi
         
-        echo "✅ All validations passed!"
+        echo "[PASS] All validations passed!"

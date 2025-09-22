@@ -12,12 +12,12 @@ Traditional manual versioning is error-prone and time-consuming:
 - **Zero manual work** - versions update automatically
 - **Self-documenting** - commits become your changelog
 - **Consistent** - follows industry-standard semver rules
-- 🔄 **Predictable** - team knows what triggers releases
-- 📦 **Professional** - generates releases, tags, and notes automatically
+- ? **Predictable** - team knows what triggers releases
+- [PKG] **Professional** - generates releases, tags, and notes automatically
 
 ## How It Works
 
-### The Magic: Conventional Commits → Automatic Versions
+### The Magic: Conventional Commits -> Automatic Versions
 
 When you write commits using a specific format, our CI/CD pipeline automatically:
 1. **Reads** your commit messages
@@ -41,21 +41,21 @@ When you write commits using a specific format, our CI/CD pipeline automatically
 
 | Commit Type | When to Use | Version Impact | Example Version Change |
 |------------|-------------|----------------|----------------------|
-| `fix:` | Bug fixes | **Patch** (+0.0.1) | 1.2.3 → 1.2.4 |
-| `feat:` | New features | **Minor** (+0.1.0) | 1.2.3 → 1.3.0 |
-| `feat!:` or `BREAKING CHANGE:` | Breaking changes | **Major** (+1.0.0) | 1.2.3 → 2.0.0 |
-| `docs:` | Documentation only | No bump | 1.2.3 → 1.2.3 |
-| `chore:` | Maintenance tasks | No bump | 1.2.3 → 1.2.3 |
-| `style:` | Code formatting | No bump | 1.2.3 → 1.2.3 |
-| `refactor:` | Code restructuring | No bump | 1.2.3 → 1.2.3 |
-| `test:` | Adding tests | No bump | 1.2.3 → 1.2.3 |
-| `perf:` | Performance improvements | **Patch** (+0.0.1) | 1.2.3 → 1.2.4 |
-| `ci:` | CI/CD changes | No bump | 1.2.3 → 1.2.3 |
-| `build:` | Build system changes | No bump | 1.2.3 → 1.2.3 |
+| `fix:` | Bug fixes | **Patch** (+0.0.1) | 1.2.3 -> 1.2.4 |
+| `feat:` | New features | **Minor** (+0.1.0) | 1.2.3 -> 1.3.0 |
+| `feat!:` or `BREAKING CHANGE:` | Breaking changes | **Major** (+1.0.0) | 1.2.3 -> 2.0.0 |
+| `docs:` | Documentation only | No bump | 1.2.3 -> 1.2.3 |
+| `chore:` | Maintenance tasks | No bump | 1.2.3 -> 1.2.3 |
+| `style:` | Code formatting | No bump | 1.2.3 -> 1.2.3 |
+| `refactor:` | Code restructuring | No bump | 1.2.3 -> 1.2.3 |
+| `test:` | Adding tests | No bump | 1.2.3 -> 1.2.3 |
+| `perf:` | Performance improvements | **Patch** (+0.0.1) | 1.2.3 -> 1.2.4 |
+| `ci:` | CI/CD changes | No bump | 1.2.3 -> 1.2.3 |
+| `build:` | Build system changes | No bump | 1.2.3 -> 1.2.3 |
 
 ## Real-World Examples
 
-### Bug Fix (Patch Bump: 1.0.0 → 1.0.1)
+### Bug Fix (Patch Bump: 1.0.0 -> 1.0.1)
 ```bash
 git commit -m "fix: resolve memory leak in log processing
 
@@ -63,7 +63,7 @@ The streaming processor was not releasing buffers correctly,
 causing memory to grow unbounded on large files."
 ```
 
-### ✨ New Feature (Minor Bump: 1.0.1 → 1.1.0)
+### ? New Feature (Minor Bump: 1.0.1 -> 1.1.0)
 ```bash
 git commit -m "feat: add JSON export format for processed logs
 
@@ -71,7 +71,7 @@ Users can now export results as JSON using --format json flag.
 This enables integration with external tools and APIs."
 ```
 
-### 💥 Breaking Change (Major Bump: 1.1.0 → 2.0.0)
+### ? Breaking Change (Major Bump: 1.1.0 -> 2.0.0)
 
 **Method 1: Using exclamation mark**
 ```bash
@@ -86,12 +86,12 @@ BREAKING CHANGE: Config files now use YAML instead of JSON.
 Users must migrate existing config files to the new format."
 ```
 
-### 📚 Documentation (No Version Bump)
+### ? Documentation (No Version Bump)
 ```bash
 git commit -m "docs: add examples for enterprise deployment"
 ```
 
-### 🧹 Maintenance (No Version Bump)
+### ? Maintenance (No Version Bump)
 ```bash
 git commit -m "chore: update dependencies to latest versions"
 ```
@@ -141,7 +141,7 @@ When a version bump occurs, these files are automatically updated:
 
 ## Best Practices
 
-### ✅ DO
+### [PASS] DO
 
 - **Write clear, descriptive commit messages**
   ```bash
@@ -178,7 +178,7 @@ When a version bump occurs, these files are automatically updated:
   Users on Python 3.7 must upgrade to continue receiving updates."
   ```
 
-### ❌ DON'T
+### [FAIL] DON'T
 
 - **Don't mix unrelated changes in one commit**
   ```bash
@@ -231,7 +231,7 @@ When a version bump occurs, these files are automatically updated:
 
 ### Branch Naming Rules
 
-✅ **Good Branch Names:**
+[PASS] **Good Branch Names:**
 - `feature/add-json-export`
 - `fix/unicode-parsing-error`
 - `hotfix/security-vulnerability`
@@ -239,7 +239,7 @@ When a version bump occurs, these files are automatically updated:
 - `chore/update-pytest`
 - `docs/deployment-guide`
 
-❌ **Avoid:**
+[FAIL] **Avoid:**
 - `feature_new_thing` (use hyphens, not underscores)
 - `myfeature` (no prefix)
 - `FEATURE/LOUD` (lowercase only)
@@ -273,7 +273,7 @@ fi
 ```
 
 ### 2. **GitHub Branch Protection Rules**
-In GitHub repository settings → Branches:
+In GitHub repository settings -> Branches:
 - Require pull request reviews
 - Require status checks to pass
 - Enforce branch naming with GitHub Apps like "Branch Naming Convention"
@@ -294,7 +294,7 @@ jobs:
         run: |
           branch=${GITHUB_HEAD_REF}
           if ! echo "$branch" | grep -qE '^(feature|fix|hotfix|release|chore|docs)/[a-z0-9-]+$'; then
-            echo "❌ Invalid branch name: $branch"
+            echo "[FAIL] Invalid branch name: $branch"
             echo "Expected format: {type}/{description}"
             echo "Types: feature, fix, hotfix, release, chore, docs"
             exit 1
@@ -348,7 +348,7 @@ Yes, semantic-release generates the changelog during dry-run, showing exactly wh
 - **Fast** - No manual version management
 - **Documented** - Changelog writes itself
 - **Traceable** - Every release linked to commits
-- 💪 **Professional** - Industry-standard practices
+- ? **Professional** - Industry-standard practices
 
 **Your Job is Simple:**
 1. Write descriptive commits with the correct type

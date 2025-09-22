@@ -18,19 +18,19 @@ This directory contains comprehensive documentation for LogReducer development a
 
 ```
 logreducer/
-├── .github/              # GitHub Actions CI/CD workflows
-├── data/
-│   ├── output/          # Processed log outputs (git-ignored)
-│   └── samples/         # Sample log files for testing
-├── docs/                # Project documentation (this directory)
-├── examples/            # Usage examples and demos
-├── scripts/             # Development and utility scripts
-├── src/logreducer/      # Main package source code
-├── tests/               # Test suite (unit + integration)
-├── QUICKSTART.md        # Quick start guide for new users
-├── README.md            # Main project documentation
-├── CHANGELOG.md         # Version history (automated)
-└── pyproject.toml       # Python package configuration
+|-- .github/              # GitHub Actions CI/CD workflows
+|-- data/
+|   |-- output/          # Processed log outputs (git-ignored)
+|   `-- samples/         # Sample log files for testing
+|-- docs/                # Project documentation (this directory)
+|-- examples/            # Usage examples and demos
+|-- scripts/             # Development and utility scripts
+|-- src/logreducer/      # Main package source code
+|-- tests/               # Test suite (unit + integration)
+|-- QUICKSTART.md        # Quick start guide for new users
+|-- README.md            # Main project documentation
+|-- CHANGELOG.md         # Version history (automated)
+`-- pyproject.toml       # Python package configuration
 ```
 
 ### Key Directories
