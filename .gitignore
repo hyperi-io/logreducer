@@ -20,7 +20,7 @@ __pycache__/
 .Python
 build/
 develop-eggs/
-dist/
+# dist/ - Keep dist/ for JFrog deployment artifacts
 downloads/
 eggs/
 .eggs/
