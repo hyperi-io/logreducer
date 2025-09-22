@@ -129,7 +129,7 @@ jobs:
         echo "========================================="
         
         # Deploy with verbose output
-        python -m twine upload dist/* --verbose --skip-existing
+        python -m twine upload dist/* --verbose
         
         echo "========================================="
         echo "✅ Deployment completed successfully"
