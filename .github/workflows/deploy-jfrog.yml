@@ -36,8 +36,7 @@ env:
 jobs:
   deploy-jfrog:
     name: Deploy to JFrog Artifactory
-    runs-on: ubuntu-latest
-    environment: ${{ github.event.inputs.deploy_environment }}
+    runs-on: ${{ vars.GH_RUNNER_DEFAULT || 'ubuntu-latest' }}    environment: ${{ github.event.inputs.deploy_environment }}
     
     steps:
     - name: Checkout code
