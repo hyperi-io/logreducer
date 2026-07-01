@@ -97,3 +97,45 @@ def test_cli_sqlite_dsn_end_to_end(monkeypatch, capsys, tmp_path):
 
     assert _run_cli(monkeypatch, ["--dsn", url, "--query", "SELECT line FROM logs"]) == 0
     assert capsys.readouterr().out.strip()
+
+
+def _sqlite_url_with_logs(tmp_path):
+    from sqlalchemy import create_engine, text
+
+    url = f"sqlite:///{tmp_path / 'logs.db'}"
+    engine = create_engine(url)
+    with engine.begin() as conn:
+        conn.execute(text("CREATE TABLE logs (line TEXT)"))
+        conn.execute(
+            text("INSERT INTO logs (line) VALUES (:l)"),
+            [{"l": f"ERROR request failed shard={i % 4}"} for i in range(200)],
+        )
+    engine.dispose()
+    return url
+
+
+def test_cli_sample_over_sqlite(monkeypatch, capsys, tmp_path):
+    pytest.importorskip("sqlalchemy")
+    url = _sqlite_url_with_logs(tmp_path)
+    assert _run_cli(monkeypatch, ["--dsn", url, "--query", "SELECT line FROM logs", "--sample", "0.5"]) == 0
+    assert capsys.readouterr().out.strip()
+
+
+def test_cli_target_rows_over_sqlite(monkeypatch, capsys, tmp_path):
+    pytest.importorskip("sqlalchemy")
+    url = _sqlite_url_with_logs(tmp_path)
+    rc = _run_cli(
+        monkeypatch,
+        ["--dsn", url, "--query", "SELECT line FROM logs", "--target-rows", "2", "--max-fetches", "5"],
+    )
+    assert rc == 0
+    assert capsys.readouterr().out.strip()
+
+
+def test_cli_sample_rejected_for_kafka(monkeypatch):
+    # Kafka has no sampling; --sample with a kafka:// dsn is a usage error.
+    rc = _run_cli(
+        monkeypatch,
+        ["--dsn", "kafka://broker:9092", "--topic", "t", "--group", "g", "--sample", "0.5"],
+    )
+    assert rc != 0

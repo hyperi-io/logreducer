@@ -58,6 +58,8 @@ class SQLSource:
         *,
         params: dict[str, Any] | None = None,
         yield_per: int = 1000,
+        sample: float | None = None,
+        sample_seed: int | None = None,
     ) -> None:
         """Build a SQL source.
 
@@ -68,6 +70,13 @@ class SQLSource:
             params: Optional bound parameters for the query.
             yield_per: Server-side cursor batch size (rows fetched per round
                 trip). Larger trades memory for fewer round trips.
+            sample: Optional fraction in (0, 1] - return only that fraction of
+                rows via a per-dialect random predicate. Pass ``sample_seed``
+                for a deterministic, re-iterable sample (required for the
+                reducer's multi-pass modes; PostgreSQL/MySQL only). Without a
+                seed the sample is best-effort and not reproducible across passes.
+            sample_seed: Seed for a reproducible sample. Raises
+                ``SamplingNotSupported`` on engines with no seedable RNG (SQLite).
         """
         try:
             from sqlalchemy import create_engine
@@ -89,12 +98,29 @@ class SQLSource:
         self.query = query
         self.params = params
         self.yield_per = yield_per
+        self.sample = sample
+        self.sample_seed = sample_seed
+
+        # Precompute the sampled SQL now so an unsupported request (e.g. a seed
+        # on SQLite) fails at construction, not deep inside iteration.
+        self._sample_setup: str | None = None
+        self._sample_sql: str | None = None
+        if sample is not None:
+            from .sampling import build_sample_sql
+
+            self._sample_setup, self._sample_sql = build_sample_sql(
+                self._engine.dialect.name, query, sample, sample_seed
+            )
 
     def __iter__(self) -> Iterator[str]:
         from sqlalchemy import text
 
-        stmt = text(self.query)
+        stmt = text(self._sample_sql if self._sample_sql is not None else self.query)
         with self._engine.connect() as conn:
+            # A deterministic sample (PostgreSQL) needs its per-connection seed
+            # set before the query, on the same connection.
+            if self._sample_setup is not None:
+                conn.exec_driver_sql(self._sample_setup)
             # yield_per implies stream_results: a server-side cursor fetching
             # `yield_per` rows per round trip, so memory does not grow with the
             # result size.
@@ -106,6 +132,30 @@ class SQLSource:
                 line = str(value).strip()
                 if line:
                     yield line
+
+    def sample_batch(self, n: int) -> list[str]:
+        """Return one fresh random batch of up to ``n`` log lines.
+
+        Each call runs ``ORDER BY <rand> LIMIT n`` over the query, so successive
+        calls draw different rows (with-replacement) - the primitive the
+        ``reduce_to_target`` loop pulls batches from. Not re-iterable; a one-off
+        list, not a streaming pass.
+        """
+        from sqlalchemy import text
+
+        from .sampling import build_sample_batch_sql
+
+        sql = build_sample_batch_sql(self._engine.dialect.name, self.query, n)
+        out: list[str] = []
+        with self._engine.connect() as conn:
+            for row in conn.execute(text(sql), self.params or {}):
+                value = row[0]
+                if value is None:
+                    continue
+                line = str(value).strip()
+                if line:
+                    out.append(line)
+        return out
 
     def close(self) -> None:
         """Dispose the engine, but only if this source created it."""

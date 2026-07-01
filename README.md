@@ -120,6 +120,48 @@ with ClickHouseSource("clickhouse://user@host:8123/db", "SELECT message FROM log
 
 The query selects the log line as its **first column**. Sources are re-iterable (the engine makes multiple passes), so a database source re-runs its query per pass and a Kafka source re-reads from the earliest offset without committing.
 
+## Sampling large sources
+
+For a table too large to scan in full, sample a fraction of rows. SQL sampling is deterministic when you pass a seed (so the reducer's multi-pass modes see a stable input); ClickHouse uses its native `SAMPLE` clause.
+
+```python
+from logreducer import LogReducer
+from logreducer.sql import SQLSource
+
+# PostgreSQL / MySQL: seeded = reproducible across passes
+reducer = LogReducer(level="enhanced")
+source = SQLSource("postgresql://user@host/db", "SELECT msg FROM logs", sample=0.01, sample_seed=42)
+reduced = reducer.reduce(source)
+```
+
+```bash
+logreducer --dsn postgresql://user@host/db --query "SELECT msg FROM logs" --sample 0.01 --sample-seed 42
+```
+
+Notes: SQLite has no seedable RNG, so a seeded sample raises `SamplingNotSupported` (unseeded, best-effort sampling still works). ClickHouse `SAMPLE` needs the table to declare a `SAMPLE BY` key. For an arbitrary complex query, put the sampling clause in your own SQL instead.
+
+## Collecting a target number of lines
+
+When you want *about N* representative lines rather than "reduce everything", `reduce_to_target` pulls fresh random batches and reduces each, accumulating distinct representatives until it reaches the target - or the source runs dry, a fetch cap is hit, or the representatives stop growing. Peak memory is bounded to roughly one batch plus the accumulator; a byte budget sizes each batch and a memory watchdog shrinks it (and stops as a hard backstop) under pressure.
+
+```python
+from logreducer import LogReducer, reduce_to_target
+from logreducer.sql import SQLSource
+
+reducer = LogReducer(level="enhanced", mode="hybrid")
+source = SQLSource("postgresql://user@host/db", "SELECT msg FROM logs")
+outcome = reduce_to_target(source, reducer, target_rows=5000, max_batch_memory_gb=1.0)
+print(outcome["stats"]["stop_reason"])   # target / exhausted / max_fetches / plateau / memory
+lines = outcome["lines"]
+```
+
+```bash
+logreducer --dsn postgresql://user@host/db --query "SELECT msg FROM logs" \
+    --target-rows 5000 --max-fetches 50 --max-batch-memory 1.0
+```
+
+Batches come from the source's `sample_batch(n)` where available (SQL, ClickHouse do it in the engine); any other re-iterable is reservoir-sampled per round.
+
 ## Sources and sinks
 
 An application can hand the reducer its own IO instead of using an adapter - anything that yields `str` and can be iterated more than once is a `Source`:

@@ -8,7 +8,8 @@ import pytest
 
 pytest.importorskip("sqlalchemy")
 
-from logreducer import LogReducer
+from logreducer import LogReducer, reduce_to_target
+from logreducer.sampling import SamplingNotSupported
 from logreducer.sql import SQLSource
 
 
@@ -66,3 +67,32 @@ def test_reduce_over_sqlsource(sqlite_url):
 def test_sqlsource_rejects_bad_connectable():
     with pytest.raises(TypeError):
         SQLSource(1234, "SELECT 1")  # not an Engine or URL string
+
+
+def test_sqlsource_sample_returns_subset(sqlite_url):
+    # Unseeded SQLite sampling: a strict subset of the 100 rows.
+    source = SQLSource(sqlite_url, "SELECT line FROM logs", sample=0.3)
+    lines = list(source)
+    assert 0 <= len(lines) < 100
+
+
+def test_sqlsource_sample_seed_on_sqlite_raises(sqlite_url):
+    # SQLite has no seedable RNG; a deterministic request must fail at build.
+    with pytest.raises(SamplingNotSupported):
+        SQLSource(sqlite_url, "SELECT line FROM logs", sample=0.3, sample_seed=1)
+
+
+def test_sqlsource_sample_batch_size(sqlite_url):
+    source = SQLSource(sqlite_url, "SELECT line FROM logs")
+    batch = source.sample_batch(10)
+    assert len(batch) == 10
+    assert all(b.startswith("ERROR request failed") for b in batch)
+
+
+def test_reduce_to_target_over_sqlsource(sqlite_url):
+    # 4 distinct patterns in the table; ask for 3 - reached via sampled batches.
+    reducer = LogReducer(level="standard", mode="pattern")
+    source = SQLSource(sqlite_url, "SELECT line FROM logs")
+    result = reduce_to_target(source, reducer, target_rows=3, max_fetches=10)
+    assert result["stats"]["collected"] > 0
+    assert result["stats"]["stop_reason"] in {"target", "plateau"}

@@ -4,6 +4,7 @@ Memory management and monitoring utilities
 
 import gc
 import os
+import random
 from collections import deque
 from collections.abc import Iterable, Iterator
 from typing import Any
@@ -138,43 +139,37 @@ class StreamingProcessor:
                 yield from chunk
 
     def _read_sampled(self, file_path: str) -> Iterator[str]:
-        """Reservoir sampling for huge files"""
+        """Reservoir sampling for huge files (uniform, reproducible).
+
+        Uses Algorithm L with a fixed-seed RNG so every pass over this
+        re-iterable FileSource yields the SAME sample - the reducer's multi-pass
+        modes need a stable input. (The old ``hash(line) % (i+1)`` reservoir was
+        neither uniform nor stable across processes.)
+        """
+        from .sampling import reservoir_sample
+
         reservoir_size = min(self.chunk_size, 100000)
-        reservoir: list[str] = []
 
-        with open(file_path, encoding="utf-8", errors="ignore") as f:
-            for i, line in enumerate(f):
-                line = line.strip()
-                if not line:
-                    continue
+        def _lines() -> Iterator[str]:
+            with open(file_path, encoding="utf-8", errors="ignore") as f:
+                for line in f:
+                    stripped = line.strip()
+                    if stripped:
+                        yield stripped
 
-                if len(reservoir) < reservoir_size:
-                    reservoir.append(line)
-                else:
-                    j = hash(line) % (i + 1)
-                    if j < reservoir_size:
-                        reservoir[j] = line
-
-        yield from reservoir
+        yield from reservoir_sample(_lines(), reservoir_size, random.Random(0))
 
     def _read_sampled_remainder(self, file_handle: Any) -> Iterator[str]:
-        """Sample from current position"""
-        reservoir: list[str] = []
-        sample_size = 10000
+        """Reservoir-sample the rest of an already-open file (mid-chunk fallback)."""
+        from .sampling import reservoir_sample
 
-        for i, line in enumerate(file_handle):
-            line = line.strip()
-            if not line:
-                continue
+        def _lines() -> Iterator[str]:
+            for line in file_handle:
+                stripped = line.strip()
+                if stripped:
+                    yield stripped
 
-            if len(reservoir) < sample_size:
-                reservoir.append(line)
-            else:
-                j = hash(line) % (i + 1)
-                if j < sample_size:
-                    reservoir[j] = line
-
-        yield from reservoir
+        yield from reservoir_sample(_lines(), 10000, random.Random(0))
 
 
 class BoundedDeduplicator:

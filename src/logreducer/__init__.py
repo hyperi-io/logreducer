@@ -21,14 +21,19 @@ __author__ = "Derek"
 __email__ = "noreply@hyperi.io"
 __license__ = "Apache-2.0"
 __copyright__ = "Copyright 2026 HYPERI PTY LIMITED"
-__description__ = "High-performance log reduction with intelligent pattern extraction and anomaly detection"
+__description__ = (
+    "Reduce GB-scale logs to a representative sample - streaming Python library "
+    "and CLI with pattern mining and anomaly detection"
+)
 __url__ = "https://github.com/hyperi-io/logreducer"
 
 from .config import BigDialConfig, OutputFormat, ProcessingLevel, ProcessingMode
 from .core import LogReducer
 from .logging_config import setup_logging
+from .sampling import SamplingNotSupported
 from .sinks import FileSink, Sink
 from .sources import FileSource, Source
+from .target import reduce_to_target
 
 __all__ = [
     "BigDialConfig",
@@ -38,6 +43,7 @@ __all__ = [
     "OutputFormat",
     "ProcessingLevel",
     "ProcessingMode",
+    "SamplingNotSupported",
     "Sink",
     "Source",
     "__author__",
@@ -46,5 +52,6 @@ __all__ = [
     "__license__",
     "__url__",
     "__version__",
+    "reduce_to_target",
     "setup_logging",
 ]
