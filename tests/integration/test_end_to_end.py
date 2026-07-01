@@ -2,16 +2,11 @@
 End-to-end integration tests for LogReducer using real sample datasets
 """
 
-import json
-import os
-import tempfile
-from datetime import datetime
 from pathlib import Path
 
 import pytest
 
 from logreducer import LogReducer
-from logreducer.config import ProcessingLevel, ProcessingMode
 
 # Real sample files from data/samples/
 SAMPLE_FILES = [

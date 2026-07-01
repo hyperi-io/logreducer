@@ -10,14 +10,6 @@ from typing import Any
 
 from drain3 import TemplateMiner
 
-# Try to import polars
-try:
-    import polars as pl
-
-    POLARS_AVAILABLE = True
-except ImportError:
-    POLARS_AVAILABLE = False
-
 
 @dataclass
 class LogEntry:

@@ -108,7 +108,7 @@ for log_file in historical_logs:
 
 ### 1. Docker Container
 ```dockerfile
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 RUN pip install logreducer
 
@@ -127,7 +127,7 @@ spec:
     spec:
       containers:
       - name: logreducer
-        image: python:3.11-slim
+        image: python:3.12-slim
         command: ["sh", "-c"]
         args:
         - |
@@ -146,8 +146,12 @@ spec:
 - name: Reduce Test Logs
   run: |
     pip install logreducer
-    logreducer test-logs/*.log -l standard -m pattern --format json -o test-summary.json
-    
+    mkdir -p test-summary
+    # The CLI reduces one file per run, so loop over the logs.
+    for f in test-logs/*.log; do
+      logreducer "$f" -l standard -m pattern --format json -o "test-summary/$(basename "$f").json"
+    done
+
 - name: Upload Reduced Logs
   uses: actions/upload-artifact@v4
   with:
@@ -175,8 +179,7 @@ reducer = LogReducer(
     level="enhanced",       # Better algorithms
     mode="hybrid",          # All techniques
     max_memory_gb=8.0,      # Allow more memory
-    use_polars=True,        # Fast DataFrame operations
-    hash_algorithm="xxhash" # Faster hashing
+    hash_algorithm="xxhash" # Faster hashing (needs the 'enhanced' extra)
 )
 ```
 
@@ -226,12 +229,9 @@ except Exception as e:
 ### Memory Limit Handling
 ```python
 # Automatic degradation under memory pressure
-reducer = LogReducer(
-    max_memory_gb=1.0,
-    progressive_sampling=True  # Enable adaptive sampling
-)
+reducer = LogReducer(max_memory_gb=1.0)
 
-# Will automatically switch to sampling if memory limit reached
+# Large inputs automatically switch to reservoir sampling to stay in budget
 result = reducer.process_file("huge.log")
 ```
 
@@ -266,7 +266,6 @@ print(f"Memory used: {final_memory - initial_memory:.1f} MB")
 
 ## Next Steps
 
-- See `docs/` for complete API documentation
-- Run `python scripts/benchmark.py` for performance testing
+- See the [README](../README.md) for the full API and CLI reference
 - Check `tests/` for more usage examples
 - Use `logreducer --help` for all CLI options

@@ -2,9 +2,6 @@
 Anomaly detection utilities
 """
 
-from typing import List, Tuple
-
-import numpy as np
 from loguru import logger
 
 # Try optional imports

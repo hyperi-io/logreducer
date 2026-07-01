@@ -2,15 +2,13 @@
 Unit tests for core LogReducer functionality
 """
 
-import os
-import tempfile
-from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 
 from logreducer.config import ProcessingLevel, ProcessingMode
 from logreducer.core import LogReducer
+from logreducer.sources import FileSource
 
 
 class TestLogReducerInitialization:
@@ -61,9 +59,9 @@ class TestLogReducerInitialization:
         """Test that all components are properly initialized"""
         reducer = LogReducer(level="enhanced", mode="hybrid")
 
-        # Core components should be initialized
+        # Core components should be initialized. File streaming now lives in
+        # FileSource, not on the reducer - the reducer only sees a Source.
         assert reducer.memory_monitor is not None
-        assert reducer.streaming_processor is not None
         assert reducer.deduplicator is not None
         assert reducer.pattern_extractor is not None
 
@@ -163,7 +161,11 @@ class TestLogReducerProcessingModes:
 
             result = reducer.process_file(str(small_log_file))
 
-            mock_process.assert_called_once_with(str(small_log_file))
+            # process_file wraps the path in a FileSource before dispatching.
+            mock_process.assert_called_once()
+            (source_arg,) = mock_process.call_args.args
+            assert isinstance(source_arg, FileSource)
+            assert source_arg.path == str(small_log_file)
             assert result == ["test line"]
 
     def test_anomaly_mode(self, small_log_file):
@@ -175,7 +177,11 @@ class TestLogReducerProcessingModes:
 
             result = reducer.process_file(str(small_log_file))
 
-            mock_process.assert_called_once_with(str(small_log_file))
+            # process_file wraps the path in a FileSource before dispatching.
+            mock_process.assert_called_once()
+            (source_arg,) = mock_process.call_args.args
+            assert isinstance(source_arg, FileSource)
+            assert source_arg.path == str(small_log_file)
             assert result == ["anomaly line"]
 
     def test_temporal_mode(self, small_log_file):
@@ -187,7 +193,11 @@ class TestLogReducerProcessingModes:
 
             result = reducer.process_file(str(small_log_file))
 
-            mock_process.assert_called_once_with(str(small_log_file))
+            # process_file wraps the path in a FileSource before dispatching.
+            mock_process.assert_called_once()
+            (source_arg,) = mock_process.call_args.args
+            assert isinstance(source_arg, FileSource)
+            assert source_arg.path == str(small_log_file)
             assert result == ["temporal line"]
 
     def test_hybrid_mode(self, small_log_file):
@@ -199,7 +209,11 @@ class TestLogReducerProcessingModes:
 
             result = reducer.process_file(str(small_log_file))
 
-            mock_process.assert_called_once_with(str(small_log_file))
+            # process_file wraps the path in a FileSource before dispatching.
+            mock_process.assert_called_once()
+            (source_arg,) = mock_process.call_args.args
+            assert isinstance(source_arg, FileSource)
+            assert source_arg.path == str(small_log_file)
             assert result == ["hybrid line"]
 
 
@@ -236,24 +250,22 @@ class TestLogReducerInternalMethods:
         """Test pattern mode processing (standard level)"""
         reducer = LogReducer(level="standard", mode="pattern")
 
-        # Mock the components to control their behavior
+        # _process_pattern_mode iterates the source directly; a list is a valid
+        # re-iterable source. Mock dedup + extract to control the pipeline.
         with (
-            patch.object(reducer.streaming_processor, "read_file_streaming") as mock_stream,
             patch.object(reducer.deduplicator, "deduplicate_lines") as mock_dedup,
             patch.object(reducer.pattern_extractor, "extract_patterns") as mock_extract,
         ):
             # Setup mocks
-            mock_stream.return_value = ["line1", "line2", "line3"]
             mock_dedup.return_value = ["line1", "line2"]  # Deduplicated
 
             mock_pattern = Mock()
             mock_pattern.examples = ["example1", "example2"]
             mock_extract.return_value = [mock_pattern]
 
-            result = reducer._process_pattern_mode(str(small_log_file))
+            result = reducer._process_pattern_mode(["line1", "line2", "line3"])
 
             # Verify method calls
-            mock_stream.assert_called_once_with(str(small_log_file))
             mock_dedup.assert_called_once()
             mock_extract.assert_called_once()
 
@@ -265,13 +277,11 @@ class TestLogReducerInternalMethods:
         reducer = LogReducer(level="enhanced", mode="pattern")
 
         with (
-            patch.object(reducer.streaming_processor, "read_file_streaming") as mock_stream,
             patch.object(reducer.deduplicator, "deduplicate_lines") as mock_dedup,
             patch.object(reducer.fuzzy_dedup, "deduplicate") as mock_fuzzy,
             patch.object(reducer.pattern_extractor, "extract_patterns") as mock_extract,
         ):
             # Setup mocks
-            mock_stream.return_value = ["line1", "line2", "line3"]
             mock_dedup.return_value = ["line1", "line2", "line3"]
             mock_fuzzy.return_value = ["line1", "line2"]  # Fuzzy deduplicated
 
@@ -279,7 +289,7 @@ class TestLogReducerInternalMethods:
             mock_pattern.examples = ["example1"]
             mock_extract.return_value = [mock_pattern]
 
-            result = reducer._process_pattern_mode(str(small_log_file))
+            result = reducer._process_pattern_mode(["line1", "line2", "line3"])
 
             # Verify fuzzy dedup was called
             mock_fuzzy.assert_called_once_with(["line1", "line2", "line3"])
@@ -298,3 +308,45 @@ class TestLogReducerInternalMethods:
 
             mock_pattern.assert_called_once_with(str(small_log_file))
             assert result == ["pattern fallback"]
+
+
+class TestLogReducerStatefulness:
+    """The reducer's analysis components must not leak state across passes/runs."""
+
+    def test_reducer_is_reusable(self):
+        """Reducing twice with one reducer must not silently return an empty set.
+
+        Regression: the deduplicator/miner used to accumulate state, so the
+        second run saw every line as already-seen and returned nothing.
+        """
+        reducer = LogReducer(level="standard", mode="pattern")
+        lines = [f"ERROR request {i % 4} failed timeout" for i in range(80)]
+
+        first = reducer.reduce(lines)
+        second = reducer.reduce(lines)
+
+        assert first  # non-empty
+        assert second == first  # reuse yields the same result, not an empty one
+
+    def test_hybrid_anomaly_pass_sees_deduped_input(self):
+        """Hybrid's anomaly pass must get a fresh dedup, not an exhausted one.
+
+        Regression: the pattern pass populated the shared deduplicator's
+        seen-set, so the anomaly pass received an empty list and no anomaly
+        could ever survive (hybrid silently degraded to pattern-only).
+        """
+        reducer = LogReducer(level="enhanced", mode="hybrid")
+        lines = [f"INFO request {i} handled in 12ms" for i in range(60)] + ["FATAL kernel panic"]
+
+        seen_counts = []
+        real_detect = reducer.anomaly_detector.detect_anomalies
+
+        def spy(unique_lines):
+            seen_counts.append(len(unique_lines))
+            return real_detect(unique_lines)
+
+        reducer.anomaly_detector.detect_anomalies = spy
+        reducer.reduce(lines)
+
+        assert seen_counts  # the anomaly pass ran
+        assert seen_counts[0] > 0  # ... and saw the deduped input, not an empty list

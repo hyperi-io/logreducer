@@ -3,9 +3,6 @@ Unit tests for temporal processing module
 """
 
 from datetime import datetime
-from unittest.mock import Mock, patch
-
-import pytest
 
 from logreducer.temporal import LogEntry, TemporalProcessor, TimestampParser
 

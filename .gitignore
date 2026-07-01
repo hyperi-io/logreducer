@@ -21,7 +21,6 @@ __pycache__/
 build/
 develop-eggs/
 
-# dist/ - Keep dist/ for JFrog deployment artifacts
 downloads/
 eggs/
 .eggs/
@@ -91,6 +90,9 @@ Desktop.ini
 !data/samples/*.log
 logs/
 .tmp/
+
+# Generated reduction output (churns every test run - never track)
+data/output/
 
 # Temporary files
 *.tmp

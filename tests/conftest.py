@@ -6,12 +6,19 @@ import random
 import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import List
 
 import pytest
 
-from logreducer import LogReducer
-from logreducer.config import ProcessingLevel, ProcessingMode
+# Load the local .env (CLICKHOUSE_*, KAFKA_BOOTSTRAP_SERVERS, ...) so the
+# integration tests can reach a real local-network service when one is
+# configured. An absent or empty .env is fine - those tests then fall back to a
+# throwaway docker container, or skip if docker is unavailable too.
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+except ImportError:  # python-dotenv is a test-only dep; absence just means no .env load
+    pass
 
 
 @pytest.fixture(scope="session")
@@ -141,107 +148,3 @@ def large_log_file(test_data_dir) -> Path:
                 f.write(f"{timestamp.strftime('%Y-%m-%d %H:%M:%S')} {level} Operation {action} for {item}\n")
 
     return log_file
-
-
-@pytest.fixture(params=[ProcessingLevel.STANDARD, ProcessingLevel.ENHANCED, ProcessingLevel.MAXIMUM])
-def processing_level(request):
-    """Parametrized fixture for testing different processing levels"""
-    return request.param
-
-
-@pytest.fixture(
-    params=[
-        ProcessingMode.PATTERN,
-        ProcessingMode.ANOMALY,
-        ProcessingMode.TEMPORAL,
-        ProcessingMode.HYBRID,
-    ]
-)
-def processing_mode(request):
-    """Parametrized fixture for testing different processing modes"""
-    return request.param
-
-
-@pytest.fixture
-def log_reducer():
-    """Create a standard LogReducer instance with logging enabled for tests"""
-    # Enable logging for tests
-    reducer = LogReducer(level="standard", enable_logging=True, log_level="DEBUG")
-    return reducer
-
-
-@pytest.fixture
-def enhanced_log_reducer():
-    """Create an enhanced LogReducer instance with logging enabled for tests"""
-    return LogReducer(level="enhanced", enable_logging=True, log_level="DEBUG")
-
-
-@pytest.fixture
-def anomaly_log_file(test_data_dir) -> Path:
-    """Create a log file with known anomalies for anomaly detection testing"""
-    log_file = test_data_dir / "anomaly_test.log"
-
-    normal_lines = [
-        "INFO User logged in successfully",
-        "INFO Request processed in 150ms",
-        "INFO Database query completed",
-        "INFO Cache hit for user data",
-        "WARN Connection pool at 80%",
-    ]
-
-    # Add many normal lines
-    lines = []
-    for i in range(95):
-        lines.append(f"2024-01-01 12:{i // 60:02d}:{i % 60:02d} {random.choice(normal_lines)}")
-
-    # Add some anomalous lines
-    anomalies = [
-        "2024-01-01 12:01:30 ERROR SQL injection attempt detected from 192.168.1.666",
-        "2024-01-01 12:01:31 CRITICAL System compromised - unusual sudo activity",
-        "2024-01-01 12:01:32 ERROR Failed login attempts: 50 from user admin",
-        "2024-01-01 12:01:33 WARN Unusual network traffic pattern detected",
-        "2024-01-01 12:01:34 ERROR Buffer overflow detected in auth module",
-    ]
-
-    lines.extend(anomalies)
-    random.shuffle(lines)
-
-    with open(log_file, "w") as f:
-        for line in lines:
-            f.write(line + "\n")
-
-    return log_file
-
-
-class LogGenerator:
-    """Utility class for generating test logs"""
-
-    @staticmethod
-    def generate_structured_logs(num_lines: int, with_timestamps: bool = True) -> list[str]:
-        """Generate structured log lines for testing"""
-        levels = ["DEBUG", "INFO", "WARN", "ERROR", "CRITICAL"]
-        services = ["auth", "api", "db", "cache", "queue"]
-
-        lines = []
-        start_time = datetime.now()
-
-        for i in range(num_lines):
-            level = random.choice(levels)
-            service = random.choice(services)
-            message = f"Service {service} operation {i} completed"
-
-            if with_timestamps:
-                timestamp = (start_time + timedelta(seconds=i)).strftime("%Y-%m-%d %H:%M:%S")
-                line = f"{timestamp} {level} {message}"
-            else:
-                line = f"{level} {message}"
-
-            lines.append(line)
-
-        return lines
-
-
-@pytest.fixture
-def log_generator():
-    """Provide LogGenerator utility"""
-    return LogGenerator

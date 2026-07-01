@@ -4,12 +4,8 @@ Tests for different output formats
 
 import json
 from datetime import datetime
-from pathlib import Path
 
-import pytest
-
-from logreducer import LogReducer, OutputFormat
-from logreducer.config import ProcessingLevel
+from logreducer import LogReducer
 
 
 class TestOutputFormats:

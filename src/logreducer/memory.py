@@ -30,7 +30,6 @@ class MemoryMonitor:
         python_overhead = 3
         self.max_lines_in_memory = int(self.effective_limit / (avg_line_size * python_overhead))
         self.safe_chunk_size = max(1000, self.max_lines_in_memory // 10)
-        self.safe_dedup_cache = int(self.max_lines_in_memory * 0.2)
 
     def check_memory(self) -> tuple[float, bool]:
         """Check current memory usage"""

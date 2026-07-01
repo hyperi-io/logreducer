@@ -1,234 +1,231 @@
 #!/usr/bin/env python3
-"""
-LogReducer Command Line Interface
+"""LogReducer command-line interface.
 
-Provides a command-line interface for log reduction and analysis operations.
+A single command that reduces a log source to a representative sample. The
+source is one of:
+
+* a file - ``logreducer app.log``
+* a SQL or ClickHouse query - ``logreducer --dsn postgresql://... --query '...'``
+* a Kafka topic - ``logreducer --dsn kafka://broker:9092 --topic logs --group g``
+
+The DB and Kafka sources need the matching optional extra installed
+(``logreducer[sql]`` / ``[clickhouse]`` / ``[kafka]``); a plain file needs
+nothing. Built on typer.
 """
 
-import argparse
 import json
 import sys
-from pathlib import Path
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _pkg_version
+from typing import Any
 
-from . import LogReducer, __version__, setup_logging
-from .logging_config import get_logger
+import typer
 
-
-def create_parser() -> argparse.ArgumentParser:
-    """Create command line argument parser"""
-    parser = argparse.ArgumentParser(
-        prog="logreducer",
-        description="High-performance log reduction with intelligent pattern extraction",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  logreducer app.log                              # Basic reduction to stdout
-  logreducer app.log -o reduced.log              # Save to file
-  logreducer app.log -l enhanced -m hybrid       # Enhanced processing
-  logreducer app.log --format json -o result.json # JSON output
-  logreducer app.log --estimate                   # Estimate processing requirements
-  logreducer large.log --max-memory 4.0          # Limit memory usage
-
-Processing Levels:
-  standard  - Fast processing for typical logs (default)
-  enhanced  - Advanced algorithms with better accuracy
-  maximum   - Highest quality reduction for critical analysis
-
-Processing Modes:
-  pattern   - Pattern-based reduction using Drain algorithm (default)
-  anomaly   - Anomaly detection using Isolation Forest
-  temporal  - Time-series analysis for temporal patterns
-  hybrid    - Combined approach using multiple techniques
-
-Output Formats:
-  line      - Line-by-line text output (default)
-  json      - Structured JSON with metadata
-  jsonl     - JSON Lines format
-        """,
-    )
-
-    # Positional arguments
-    parser.add_argument("input_file", help="Input log file to process")
-
-    # Output options
-    parser.add_argument("-o", "--output", metavar="FILE", help="Output file (default: stdout)")
-    parser.add_argument(
-        "--format",
-        choices=["line", "json", "jsonl"],
-        default="line",
-        help="Output format (default: line)",
-    )
-    parser.add_argument("--pretty-json", action="store_true", help="Pretty print JSON output")
-
-    # Processing options
-    parser.add_argument(
-        "-l",
-        "--level",
-        choices=["standard", "enhanced", "maximum"],
-        default="standard",
-        help="Processing level (default: standard)",
-    )
-    parser.add_argument(
-        "-m",
-        "--mode",
-        choices=["pattern", "anomaly", "temporal", "hybrid"],
-        default="pattern",
-        help="Processing mode (default: pattern)",
-    )
-
-    # Resource limits
-    parser.add_argument("--max-memory", type=float, metavar="GB", help="Maximum memory usage in GB")
-    parser.add_argument(
-        "--max-patterns",
-        type=int,
-        metavar="N",
-        help="Maximum number of patterns to extract",
-    )
-
-    # Logging options
-    parser.add_argument("--log", action="store_true", help="Enable processing logs")
-    parser.add_argument("--log-file", metavar="FILE", help="Log file path")
-    parser.add_argument(
-        "--log-level",
-        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
-        default="INFO",
-        help="Logging level",
-    )
-
-    # Analysis options
-    parser.add_argument(
-        "--estimate",
-        action="store_true",
-        help="Estimate processing requirements and exit",
-    )
-    parser.add_argument("--metadata", action="store_true", help="Include detailed metadata in output")
-    parser.add_argument("--stats", action="store_true", help="Print processing statistics")
-
-    # Version
-    parser.add_argument("--version", action="version", version=f"LogReducer {__version__}")
-
-    return parser
+from .core import LogReducer
+from .logging_config import setup_logging
+from .sources import Source
 
 
-def estimate_processing(args: argparse.Namespace) -> None:
-    """Estimate processing requirements for the given file"""
+def _err(message: str) -> None:
+    """Write an error line to stderr."""
+    print(message, file=sys.stderr)
+
+
+def _version_callback(value: bool) -> None:
+    """Eager --version handler: print version and exit."""
+    if value:
+        try:
+            ver = _pkg_version("logreducer")
+        except PackageNotFoundError:
+            ver = "unknown"
+        print(f"logreducer version {ver}")
+        raise typer.Exit(0)
+
+
+def _build_dsn_source(dsn: str, query: str | None, topic: str | None, group: str | None) -> Source:
+    """Dispatch a ``--dsn`` to the matching source adapter by URL scheme.
+
+    ``clickhouse://`` -> ClickHouseSource, ``kafka://`` -> KafkaSource, and any
+    other scheme (postgresql, mysql, sqlite, ...) -> SQLSource via SQLAlchemy.
+    Adapter imports are lazy so a plain-file run never needs the extras.
+    """
+    scheme = dsn.split("://", 1)[0].lower() if "://" in dsn else ""
+
+    if scheme == "clickhouse":
+        if not query:
+            raise typer.BadParameter("--query is required for a clickhouse:// source")
+        from .clickhouse import ClickHouseSource
+
+        return ClickHouseSource(dsn, query)
+
+    if scheme == "kafka":
+        if not (topic and group):
+            raise typer.BadParameter("--topic and --group are required for a kafka:// source")
+        from .kafka import KafkaSource
+
+        brokers = dsn.split("://", 1)[1]
+        return KafkaSource(brokers, group, topic)
+
+    # Everything else is standard SQL reached through SQLAlchemy.
+    if not query:
+        raise typer.BadParameter("--query is required for a SQL --dsn source")
+    from .sql import SQLSource
+
+    return SQLSource(dsn, query)
+
+
+def _reduce(
+    input_file: str | None = typer.Argument(None, help="Log file to reduce (omit when using --dsn)"),
+    output: str | None = typer.Option(None, "--output", "-o", help="Output file (default: stdout)"),
+    output_format: str = typer.Option("line", "--format", help="Output format: line, json, jsonl"),
+    pretty_json: bool = typer.Option(False, "--pretty-json", help="Pretty-print JSON output"),
+    level: str = typer.Option("standard", "--level", "-l", help="Processing level: standard, enhanced, maximum"),
+    mode: str = typer.Option("pattern", "--mode", "-m", help="Processing mode: pattern, anomaly, temporal, hybrid"),
+    dsn: str | None = typer.Option(None, "--dsn", help="Source DSN: postgresql://, clickhouse://, kafka://, ..."),
+    query: str | None = typer.Option(None, "--query", help="SQL SELECT (first column is the log line) for --dsn"),
+    topic: str | None = typer.Option(None, "--topic", help="Kafka topic (with a kafka:// --dsn)"),
+    group: str | None = typer.Option(None, "--group", help="Kafka consumer group (with a kafka:// --dsn)"),
+    max_memory: float | None = typer.Option(None, "--max-memory", help="Maximum memory usage in GB"),
+    max_patterns: int | None = typer.Option(None, "--max-patterns", help="Maximum number of patterns to extract"),
+    log: bool = typer.Option(False, "--log", help="Enable processing logs"),
+    log_file: str | None = typer.Option(None, "--log-file", help="Log file path"),
+    log_level: str = typer.Option("INFO", "--log-level", help="Logging level: DEBUG, INFO, WARNING, ERROR"),
+    estimate: bool = typer.Option(False, "--estimate", help="Estimate processing requirements and exit (file only)"),
+    metadata: bool = typer.Option(False, "--metadata", help="Include detailed metadata in output"),
+    stats: bool = typer.Option(False, "--stats", help="Print processing statistics to stderr"),
+    version: bool = typer.Option(
+        False, "--version", "-V", callback=_version_callback, is_eager=True, help="Show version and exit"
+    ),
+) -> None:
+    """Reduce a log source to a representative sample."""
+    # Build reducer config overrides, dropping unset values.
+    overrides: dict[str, Any] = {
+        "max_memory_gb": max_memory,
+        "max_patterns": max_patterns,
+        "enable_logging": log or None,
+        "log_file": log_file,
+        "log_level": log_level,
+        "output_format": output_format,
+        "pretty_json": pretty_json or None,
+    }
+    kwargs = {k: v for k, v in overrides.items() if v is not None}
+
     try:
-        reducer = LogReducer(level=args.level, mode=args.mode)
-        estimate = reducer.estimate_processing(args.input_file)
+        reducer = LogReducer(level=level, mode=mode, **kwargs)
+    except ValueError as exc:
+        _err(f"Error: {exc}")
+        raise typer.Exit(1) from exc
 
-        logger = get_logger("cli")
-        logger.info("Processing Estimation")
-        logger.info("=" * 50)
-        logger.info(f"File size: {estimate['file_size_gb']:.2f} GB")
-        logger.info(f"Estimated memory: {estimate['memory_required_gb']:.2f} GB")
-        logger.info(f"Processing strategy: {estimate['strategy']}")
-        logger.info(f"Estimated time: {estimate['estimated_time_seconds']:.0f} seconds")
-        logger.info(f"Will sample data: {'Yes' if estimate['will_sample'] else 'No'}")
-        logger.info(f"Expected output lines: ~{estimate['estimated_output_lines']:,}")
+    # The reducer configures only a file sink; when --log is set the CLI also
+    # wants progress on the console.
+    if log:
+        setup_logging(enable=True, console=True, log_file=log_file, log_level=log_level)
 
-        if estimate["memory_required_gb"] > 8.0:
-            logger.warning("Large memory requirements detected")
-            logger.warning("Consider using --max-memory to limit usage")
+    # --estimate is a file-only, pre-flight sizing step.
+    if estimate:
+        if not input_file:
+            _err("Error: --estimate requires an input file")
+            raise typer.Exit(1)
+        _run_estimate(reducer, input_file)
+        return
 
-        if estimate["will_sample"]:
-            logger.info("File size requires sampling strategy")
-            logger.info("Full processing may not be possible with current memory limits")
-
-    except Exception as e:
-        logger = get_logger("cli")
-        logger.error(f"Error estimating processing: {e}")
-        sys.exit(1)
-
-
-def process_file(args: argparse.Namespace) -> None:
-    """Process the log file according to arguments"""
     try:
-        # Build kwargs for LogReducer
-        kwargs = {
-            "max_memory_gb": args.max_memory,
-            "max_patterns": args.max_patterns,
-            "enable_logging": args.log,
-            "log_file": args.log_file,
-            "log_level": args.log_level,
-            "output_format": args.format,
-            "pretty_json": args.pretty_json,
-        }
-
-        # Remove None values
-        kwargs = {k: v for k, v in kwargs.items() if v is not None}
-
-        # Create reducer
-        reducer = LogReducer(level=args.level, mode=args.mode, **kwargs)
-
-        # Process file
-        result = reducer.process_file(args.input_file, args.output, return_metadata=args.metadata)
-
-        # Handle output
-        if not args.output:
-            if args.metadata and isinstance(result, dict):
-                if args.format == "json":
-                    print(json.dumps(result, indent=2 if args.pretty_json else None))
-                else:
-                    # Print lines
-                    for line in result["lines"]:
-                        print(line)
-            elif isinstance(result, list):
-                for line in result:
-                    print(line)
-
-        # Print stats if requested
-        if args.stats:
-            stats = reducer.stats
-            print("\nProcessing completed:", file=sys.stderr)
-            print(
-                f"  Input: {stats['input_lines']:,} lines ({stats['input_size_mb']:.1f} MB)",
-                file=sys.stderr,
-            )
-            print(f"  Output: {stats['output_lines']:,} lines", file=sys.stderr)
-            print(f"  Reduction: {stats['reduction_percent']:.1f}%", file=sys.stderr)
-            print(f"  Time: {stats['processing_time_seconds']:.2f}s", file=sys.stderr)
-            print(
-                f"  Rate: {stats['processing_rate_mb_per_sec']:.1f} MB/sec",
-                file=sys.stderr,
-            )
-
+        if dsn:
+            source = _build_dsn_source(dsn, query, topic, group)
+            try:
+                result = reducer.reduce(source, output_file=output, return_metadata=metadata)
+            finally:
+                close = getattr(source, "close", None)
+                if callable(close):
+                    close()
+        elif input_file:
+            result = reducer.process_file(input_file, output, return_metadata=metadata)
+        else:
+            _err("Error: provide a log file, or --dsn with --query (SQL/ClickHouse) or --topic/--group (Kafka)")
+            raise typer.Exit(1)
+    except (typer.Exit, typer.BadParameter):
+        raise  # our control-flow exit / typer usage errors - let typer format them
     except KeyboardInterrupt:
-        print("\nProcessing interrupted by user", file=sys.stderr)
-        sys.exit(1)
-    except Exception as e:
-        print(f"Error processing file: {e}", file=sys.stderr)
-        sys.exit(1)
+        _err("Processing interrupted by user")
+        raise typer.Exit(1) from None
+    except Exception as exc:
+        # File-not-found, a missing optional extra (ImportError), or an adapter
+        # failure (bad DSN, connection refused, bad SQL, Kafka error) - report a
+        # clean one-line error instead of dumping a Python traceback.
+        _err(f"Error: {exc}")
+        raise typer.Exit(1) from exc
+
+    _emit_result(result, output, output_format, pretty_json, metadata)
+
+    if stats:
+        _print_stats(reducer.stats)
+
+
+def _run_estimate(reducer: LogReducer, input_file: str) -> None:
+    """Print a pre-flight processing estimate for a file.
+
+    The estimate is the command's product, so it goes to stdout via ``print``
+    (not the library logger, which is disabled unless --log is passed).
+    """
+    try:
+        est = reducer.estimate_processing(input_file)
+    except OSError as exc:
+        _err(f"Error estimating processing: {exc}")
+        raise typer.Exit(1) from exc
+
+    print("Processing Estimation")
+    print("=" * 50)
+    print(f"File size: {est['file_size_gb']:.2f} GB")
+    print(f"Estimated memory: {est['memory_required_gb']:.2f} GB")
+    print(f"Processing strategy: {est['strategy']}")
+    print(f"Estimated time: {est['estimated_time_seconds']:.0f} seconds")
+    print(f"Will sample data: {'Yes' if est['will_sample'] else 'No'}")
+    print(f"Expected output lines: ~{est['estimated_output_lines']:,}")
+    if est["memory_required_gb"] > 8.0:
+        _err("Warning: large memory requirements detected; consider --max-memory")
+
+
+def _emit_result(
+    result: list[str] | dict,
+    output: str | None,
+    output_format: str,
+    pretty_json: bool,
+    metadata: bool,
+) -> None:
+    """Print the reduced result to stdout when not writing to a file."""
+    if output:
+        return  # Already written by the reducer.
+
+    if metadata and isinstance(result, dict):
+        if output_format == "json":
+            print(json.dumps(result, indent=2 if pretty_json else None))
+        else:
+            for line in result["lines"]:
+                print(line)
+    elif isinstance(result, list):
+        for line in result:
+            print(line)
+
+
+def _print_stats(stats: dict) -> None:
+    """Print a processing summary to stderr (size/rate omitted for non-files)."""
+    print("\nProcessing completed:", file=sys.stderr)
+    input_size_mb = stats.get("input_size_mb")
+    if input_size_mb is not None:
+        print(f"  Input: {stats['input_lines']:,} lines ({input_size_mb:.1f} MB)", file=sys.stderr)
+    else:
+        print(f"  Input: {stats['input_lines']:,} lines", file=sys.stderr)
+    print(f"  Output: {stats['output_lines']:,} lines", file=sys.stderr)
+    print(f"  Reduction: {stats['reduction_percent']:.1f}%", file=sys.stderr)
+    print(f"  Time: {stats['processing_time_seconds']:.2f}s", file=sys.stderr)
+    rate = stats.get("processing_rate_mb_per_sec")
+    if rate is not None:
+        print(f"  Rate: {rate:.1f} MB/sec", file=sys.stderr)
 
 
 def main() -> None:
-    """Main CLI entry point"""
-    parser = create_parser()
-
-    # Handle case with no arguments
-    if len(sys.argv) == 1:
-        parser.print_help()
-        sys.exit(1)
-
-    args = parser.parse_args()
-
-    # Setup logging with console output for CLI if enabled
-    setup_logging(
-        enable=args.log,
-        console=args.log,  # Enable console logging if logging is enabled
-        log_file=args.log_file,
-        log_level=args.log_level,
-    )
-
-    # Validate input file
-    if not Path(args.input_file).exists():
-        print(f"Error: Input file '{args.input_file}' not found", file=sys.stderr)
-        sys.exit(1)
-
-    # Handle different modes
-    if args.estimate:
-        estimate_processing(args)
-    else:
-        process_file(args)
+    """Console-script entry point."""
+    typer.run(_reduce)
 
 
 if __name__ == "__main__":

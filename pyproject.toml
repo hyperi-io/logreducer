@@ -11,14 +11,14 @@ authors = [
 maintainers = [
     {name = "HyperI Team", email = "dev@hyperi.io"},
 ]
-description = "High-performance log reduction with intelligent pattern extraction and anomaly detection"
+description = "Reduce GB-scale logs to a representative sample - streaming Python library and CLI with pattern mining and anomaly detection"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
 requires-python = ">=3.12"
 # Python version policy: requires-python enforces the minimum. Do NOT add
 # version-specific classifiers (3.12, 3.13, ...) - "3 :: Only" avoids churn
-# on every new Python release. Matches the scalo-py convention.
+# on every new Python release.
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
@@ -33,19 +33,32 @@ classifiers = [
 keywords = ["log", "logging", "reduction", "analysis", "pattern-extraction", "memory-efficient", "streaming", "anomaly-detection"]
 dependencies = [
     "drain3>=0.9.0",
-    "tqdm>=4.65.0",
-    "psutil>=6.0.0",
-    "loguru>=0.7.0",
+    "psutil>=7.2.0",        # memory monitoring (MemoryMonitor)
+    "loguru>=0.7.3",
     "numpy>=2.0.0",
     "scikit-learn>=1.3.0",  # imports as sklearn
+    "typer>=0.25.0",        # CLI
 ]
 
 [project.optional-dependencies]
 enhanced = [
-    "xxhash>=3.0.0",      # Fast hash functions for better performance
-    "polars>=0.20.0",     # High-performance DataFrames (preferred over pandas)
-    "scipy>=1.10.0",      # Advanced scientific computing
-    "datasketch>=1.5.0",  # MinHash and LSH for similarity analysis
+    "xxhash>=3.0.0",      # Fast xxh64 dedup hashing (memory.BoundedDeduplicator)
+    "scipy>=1.10.0",      # Entropy scoring in pattern extraction
+    "datasketch>=1.5.0",  # MinHash/LSH similarity in fuzzy dedup
+]
+
+# IO adapters - thin OPTIONAL conveniences over the Source/Sink abstraction.
+# The core engine has zero IO deps; these only matter to the CLI or an app that
+# wants a ready-made source/sink. Each needs its own running service, so they
+# are covered by docker-gated integration tests.
+sql = [
+    "sqlalchemy>=2.0.30",         # cross-DB server-side-cursor streaming (SQLSource)
+]
+clickhouse = [
+    "clickhouse-connect>=0.8.0",  # native block streaming (ClickHouseSource)
+]
+kafka = [
+    "confluent-kafka>=2.14.0",    # librdkafka client (KafkaSource/Sink)
 ]
 [project.urls]
 Homepage = "https://github.com/hyperi-io/logreducer"
@@ -61,14 +74,13 @@ logreducer = "logreducer.cli:main"
 module-name = "logreducer"
 module-root = "src"
 
-# Ruff: lint + format (replaces black + flake8 + isort). Ported from
-# scalo-py for a consistent HyperI Python lint posture. Line length 120.
+# Ruff: lint + format (replaces black + flake8 + isort). Line length 120.
 [tool.ruff]
 target-version = "py312"
 line-length = 120
 indent-width = 4
 src = ["src"]
-# examples/ are illustrative snippets, not scanned code (matches scalo-py).
+# examples/ are illustrative snippets, not scanned code.
 extend-exclude = ["examples"]
 
 [tool.ruff.lint]
@@ -81,7 +93,7 @@ ignore = [
     "B904", "B008", "B017", "B007", "B028",
     "E402", "E722", "E501", "E741",
     "SIM105", "SIM108", "SIM102",
-    "F401", "F821", "F601",
+    "F821", "F601",
     "TRY300", "C901", "UP035", "W191",
     # Intentional security relaxations in this codebase
     "S104",   # bind-all-interfaces (containers)
@@ -115,10 +127,10 @@ indent-style = "space"
 skip-magic-trailing-comma = false
 line-ending = "auto"
 
-# MyPy: KEPT STRICT (deliberate deviation from scalo's relaxed profile -
-# logreducer is small and already clean-typed). ignore_missing_imports only
-# silences third-party libs without stubs (drain3, datasketch, ...); our own
-# code stays fully typed via disallow_untyped_defs below.
+# MyPy: KEPT STRICT (logreducer is small and already clean-typed).
+# ignore_missing_imports only silences third-party libs without stubs
+# (drain3, datasketch, ...); our own code stays fully typed via
+# disallow_untyped_defs below.
 [tool.mypy]
 python_version = "3.12"  # Matches minimum supported version
 ignore_missing_imports = true
@@ -229,6 +241,13 @@ dev = [
     "pip-audit>=2.6.0",      # Dependency vulnerability scanning
     "vulture>=2.16",         # Dead-code detection
     "vermin>=1.6.0",         # Python version-compat detection
+    # Adapter + integration test deps (TEST ONLY - never in the published
+    # wheel; these mirror the optional extras so the adapters can be exercised).
+    "sqlalchemy>=2.0.30",         # SQLSource against SQLite (real, no server)
+    "clickhouse-connect>=0.8.0",  # ClickHouseSource (local cluster or docker)
+    "confluent-kafka>=2.14.0",    # KafkaSource/KafkaSink
+    "testcontainers[clickhouse,kafka]>=4.14.0",  # docker fallback for CH + Kafka
+    "python-dotenv>=1.0.0",       # load the local .env (CLICKHOUSE_*) in tests
 ]
 docs = [
     "sphinx>=8.0.0",           # Documentation generator

@@ -6,28 +6,17 @@ import json
 import os
 import time
 from datetime import datetime
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
-from .logging_config import get_logger, setup_logging
-
-# Optional import for progress bars
-try:
-    from tqdm import tqdm
-
-    TQDM_AVAILABLE = True
-except ImportError:
-    TQDM_AVAILABLE = False
-
-    # Fallback - no-op tqdm
-    def tqdm(x: Any, **kwargs: Any) -> Any:
-        return x
-
-
 from .anomaly import AnomalyDetector
 from .config import ProcessingLevel, ProcessingMode, get_preset_config
-from .memory import BoundedDeduplicator, MemoryMonitor, StreamingProcessor
+from .logging_config import get_logger, setup_logging
+from .memory import BoundedDeduplicator, MemoryMonitor
 from .patterns import FuzzyDeduplicator, PatternExtractor
+from .sinks import Sink
+from .sources import FileSource, Source
 from .temporal import TemporalProcessor
 
 
@@ -98,14 +87,6 @@ class LogReducer:
 
         # Initialize components
         self.memory_monitor = MemoryMonitor(self.config.max_memory_gb)
-        self.streaming_processor = StreamingProcessor(self.memory_monitor)
-        self.deduplicator = BoundedDeduplicator(self.config.dedup_cache_size, self.config.hash_algorithm)
-        self.pattern_extractor = PatternExtractor(self.config)
-
-        if self.config.fuzzy_threshold and self.level != ProcessingLevel.STANDARD:
-            self.fuzzy_dedup: FuzzyDeduplicator | None = FuzzyDeduplicator(self.config.fuzzy_threshold)
-        else:
-            self.fuzzy_dedup = None
 
         if mode in [ProcessingMode.TEMPORAL, ProcessingMode.HYBRID]:
             self.temporal_processor: TemporalProcessor | None = TemporalProcessor(self.config.temporal_window_minutes)
@@ -117,7 +98,136 @@ class LogReducer:
         else:
             self.anomaly_detector = None
 
+        # Stateful analysis components (dedup seen-set, Drain3 miner, fuzzy LSH)
+        # are (re)created per run by _reset_components(), so a reused reducer
+        # never carries one run's accumulated state into the next.
+        self.fuzzy_dedup: FuzzyDeduplicator | None = None
+        self._reset_components()
+
         self.stats: dict[str, Any] = {}
+
+    def _reset_components(self) -> None:
+        """Recreate the stateful analysis components for a fresh, isolated run.
+
+        The deduplicator (seen-set), Drain3 miner, and fuzzy-dedup LSH all
+        accumulate per-line state. Recreating them keeps a LogReducer instance
+        reusable across reduce()/process_file() calls, and lets a single run make
+        independent deduplication passes (hybrid mode) without the first pass
+        poisoning the second.
+        """
+        self.deduplicator = BoundedDeduplicator(self.config.dedup_cache_size, self.config.hash_algorithm)
+        self.pattern_extractor = PatternExtractor(self.config)
+        if self.config.fuzzy_threshold and self.level != ProcessingLevel.STANDARD:
+            self.fuzzy_dedup = FuzzyDeduplicator(self.config.fuzzy_threshold)
+        else:
+            self.fuzzy_dedup = None
+
+    def reduce(
+        self,
+        source: Source,
+        output_file: str | None = None,
+        return_metadata: bool = False,
+        sink: Sink | None = None,
+    ) -> list[str] | dict:
+        """Reduce a source of log lines to a representative sample.
+
+        This is the core entry point: it operates on an abstraction, not on IO.
+        The source is any re-iterable stream of str lines - a list, a
+        FileSource, or an app-provided iterable wrapping its own DB cursor or
+        Kafka consumer. The reducer never manages the connection or loading
+        path.
+
+        Args:
+            source: Re-iterable stream of str lines (see logreducer.sources).
+                Multi-pass modes (hybrid) require the source to be re-iterable.
+            output_file: Optional path to also write the result to, with a
+                format-aware ``.meta.json`` sidecar of run stats (CLI use).
+            return_metadata: Return a dict with lines + stats + config instead
+                of just the lines.
+            sink: Optional output abstraction (see logreducer.sinks). The
+                reduced lines are also handed to ``sink.write`` - a FileSink, a
+                KafkaSink, or any app-provided destination.
+
+        Returns:
+            The reduced lines in memory (list[str]), or a metadata dict.
+        """
+        # A Source must be re-iterable: reduce() counts lines in one pass, then
+        # re-reads the source to process it (hybrid re-reads again). A one-shot
+        # iterator (a bare generator) would be drained by the count and leave
+        # nothing to process - fail loudly rather than return an empty result.
+        if iter(source) is source:
+            raise TypeError(
+                "source must be re-iterable (a fresh iterator on each pass); got a "
+                "one-shot iterator/generator - wrap it, e.g. list(source)."
+            )
+
+        # Fresh analysis state per run: a reused reducer must not carry the
+        # previous run's dedup/miner/LSH state, which would drop every line as
+        # already-seen and silently return an empty result.
+        self._reset_components()
+
+        start_time = time.time()
+
+        # Count input lines for the reduction ratio (one pass over the source).
+        # Note: a size-sampled FileSource yields its sampled line count, so for
+        # very large files the ratio and input_lines stat are approximate.
+        input_lines = sum(1 for _ in source)
+
+        size_bytes = getattr(source, "size_bytes", None)
+        file_size_mb = size_bytes / (1024 * 1024) if size_bytes else None
+
+        if self.config.enable_logging:
+            where = f"{file_size_mb:.1f} MB" if file_size_mb is not None else f"{input_lines:,} lines"
+            self.logger.info(f"Reducing {source!r} ({where})")
+            self.logger.info(f"Mode: {self.mode.value}, Level: {self.level.value}")
+            self.logger.info(f"Memory limit: {self.config.max_memory_gb:.1f} GB")
+
+        # Process based on mode
+        if self.mode == ProcessingMode.PATTERN:
+            result_lines = self._process_pattern_mode(source)
+        elif self.mode == ProcessingMode.ANOMALY:
+            result_lines = self._process_anomaly_mode(source)
+        elif self.mode == ProcessingMode.TEMPORAL:
+            result_lines = self._process_temporal_mode(source)
+        else:  # HYBRID
+            result_lines = self._process_hybrid_mode(source)
+
+        # Calculate stats
+        processing_time = time.time() - start_time
+        output_lines = len(result_lines)
+        reduction_percent = (1 - output_lines / max(input_lines, 1)) * 100 if input_lines > 0 else 0
+        input_label = getattr(source, "path", None)
+
+        self.stats = {
+            "input_file": str(input_label) if input_label is not None else repr(source),
+            "input_lines": input_lines,
+            "input_size_mb": file_size_mb,
+            "output_lines": output_lines,
+            "reduction_percent": reduction_percent,
+            "processing_time_seconds": processing_time,
+            "processing_rate_mb_per_sec": (
+                file_size_mb / max(processing_time, 0.001) if file_size_mb is not None else None
+            ),
+            "mode": self.mode.value,
+            "level": self.level.value,
+            "memory_limit_gb": self.config.max_memory_gb,
+        }
+
+        if output_file:
+            self._save_output(result_lines, output_file)
+
+        if sink is not None:
+            sink.write(result_lines)
+
+        self._print_summary()
+
+        if return_metadata:
+            return {
+                "lines": result_lines,
+                "stats": self.stats,
+                "config": self._config_as_dict(),
+            }
+        return result_lines
 
     def process_file(
         self,
@@ -125,87 +235,28 @@ class LogReducer:
         output_file: str | None = None,
         return_metadata: bool = False,
     ) -> list[str] | dict:
-        """
-        Process log file and reduce to representative samples
+        """Reduce a log file - convenience wrapper over reduce() + FileSource.
 
         Args:
-            input_file: Path to input log file
-            output_file: Optional output file path
-            return_metadata: Return metadata dict instead of just lines
+            input_file: Path to the input log file.
+            output_file: Optional output file path.
+            return_metadata: Return a metadata dict instead of just the lines.
 
         Returns:
-            List of reduced log lines or dict with lines and metadata
+            The reduced lines (list[str]) or a metadata dict.
         """
-        start_time = time.time()
-
-        # Check file
         if not os.path.exists(input_file):
             raise FileNotFoundError(f"File not found: {input_file}")
+        source = FileSource(input_file, max_memory_gb=self.config.max_memory_gb)
+        return self.reduce(source, output_file=output_file, return_metadata=return_metadata)
 
-        file_size = os.path.getsize(input_file)
-        file_size_mb = file_size / (1024 * 1024)
-
-        if self.config.enable_logging:
-            self.logger.info(f"Processing {input_file} ({file_size_mb:.1f} MB)")
-            self.logger.info(f"Mode: {self.mode.value}, Level: {self.level.value}")
-            self.logger.info(f"Memory limit: {self.config.max_memory_gb:.1f} GB")
-
-        # Count input lines for proper reduction calculation
-        with open(input_file, encoding="utf-8", errors="ignore") as f:
-            input_lines = sum(1 for _ in f)
-
-        # Process based on mode
-        if self.mode == ProcessingMode.PATTERN:
-            result_lines = self._process_pattern_mode(input_file)
-        elif self.mode == ProcessingMode.ANOMALY:
-            result_lines = self._process_anomaly_mode(input_file)
-        elif self.mode == ProcessingMode.TEMPORAL:
-            result_lines = self._process_temporal_mode(input_file)
-        else:  # HYBRID
-            result_lines = self._process_hybrid_mode(input_file)
-
-        # Calculate stats
-        processing_time = time.time() - start_time
-        output_lines = len(result_lines)
-        reduction_percent = (1 - output_lines / max(input_lines, 1)) * 100 if input_lines > 0 else 0
-
-        self.stats = {
-            "input_file": str(input_file),  # Convert to string for JSON serialization
-            "input_lines": input_lines,
-            "input_size_mb": file_size_mb,
-            "output_lines": output_lines,
-            "reduction_percent": reduction_percent,
-            "processing_time_seconds": processing_time,
-            "processing_rate_mb_per_sec": file_size_mb / max(processing_time, 0.001),
-            "mode": self.mode.value,
-            "level": self.level.value,
-            "memory_limit_gb": self.config.max_memory_gb,
-        }
-
-        # Save output
-        if output_file:
-            self._save_output(result_lines, output_file)
-
-        # Print summary
-        self._print_summary()
-
-        if return_metadata:
-            return {
-                "lines": result_lines,
-                "stats": self.stats,
-                "config": vars(self.config),
-            }
-        else:
-            return result_lines
-
-    def _process_pattern_mode(self, input_file: str) -> list[str]:
+    def _process_pattern_mode(self, source: Source) -> list[str]:
         """Process using pattern extraction"""
         if self.config.enable_logging:
             self.logger.info("Phase 1/3: Reading and deduplicating")
 
         # Stream read with deduplication
-        lines = self.streaming_processor.read_file_streaming(input_file)
-        unique_lines = list(self.deduplicator.deduplicate_lines(lines))
+        unique_lines = list(self.deduplicator.deduplicate_lines(source))
 
         if self.config.enable_logging:
             self.logger.info(f"Unique lines: {len(unique_lines):,}")
@@ -230,17 +281,16 @@ class LogReducer:
 
         return result
 
-    def _process_anomaly_mode(self, input_file: str) -> list[str]:
+    def _process_anomaly_mode(self, source: Source) -> list[str]:
         """Process using anomaly detection"""
         if not self.anomaly_detector:
             if self.config.enable_logging:
                 self.logger.warning("Anomaly detector not available, falling back to pattern mode")
-            return self._process_pattern_mode(input_file)
+            return self._process_pattern_mode(source)
 
         if self.config.enable_logging:
             self.logger.info("Phase 1/2: Reading and deduplicating")
-        lines = self.streaming_processor.read_file_streaming(input_file)
-        unique_lines = list(self.deduplicator.deduplicate_lines(lines))
+        unique_lines = list(self.deduplicator.deduplicate_lines(source))
 
         if self.config.enable_logging:
             self.logger.info("Phase 2/2: Anomaly detection")
@@ -260,16 +310,16 @@ class LogReducer:
 
         return result
 
-    def _process_temporal_mode(self, input_file: str) -> list[str]:
+    def _process_temporal_mode(self, source: Source) -> list[str]:
         """Process using temporal analysis"""
         if not self.temporal_processor:
             if self.config.enable_logging:
                 self.logger.warning("Temporal processor not available, falling back to pattern mode")
-            return self._process_pattern_mode(input_file)
+            return self._process_pattern_mode(source)
 
         if self.config.enable_logging:
             self.logger.info("Phase 1/2: Reading lines")
-        lines = list(self.streaming_processor.read_file_streaming(input_file))
+        lines = list(source)
 
         if self.config.enable_logging:
             self.logger.info("Phase 2/2: Temporal processing")
@@ -287,18 +337,21 @@ class LogReducer:
 
         return result
 
-    def _process_hybrid_mode(self, input_file: str) -> list[str]:
+    def _process_hybrid_mode(self, source: Source) -> list[str]:
         """Process using combined approach"""
         if self.config.enable_logging:
             self.logger.info("Hybrid mode: combining pattern and anomaly detection")
 
         # Get patterns
-        pattern_lines = self._process_pattern_mode(input_file)
+        pattern_lines = self._process_pattern_mode(source)
 
         # Get anomalies if available
         if self.anomaly_detector:
-            lines = list(self.streaming_processor.read_file_streaming(input_file))
-            unique_lines = list(self.deduplicator.deduplicate_lines(lines))
+            # The pattern pass above consumed self.deduplicator's seen-set, so the
+            # anomaly pass needs a fresh deduplicator - otherwise every line reads
+            # as already-seen and no anomalies survive (hybrid -> pattern-only).
+            self.deduplicator = BoundedDeduplicator(self.config.dedup_cache_size, self.config.hash_algorithm)
+            unique_lines = list(self.deduplicator.deduplicate_lines(source))
             anomalous, _ = self.anomaly_detector.detect_anomalies(unique_lines)
 
             # Combine, preferring anomalies
@@ -317,6 +370,17 @@ class LogReducer:
 
         return final[: self.config.max_patterns]
 
+    def _config_as_dict(self) -> dict[str, Any]:
+        """Config as a JSON-serialisable dict.
+
+        Enum members (output_format, ...) become their ``.value`` string so the
+        result survives ``json.dumps`` and never leaks ``OutputFormat.LINE``-style
+        reprs into metadata output. Private (``_``-prefixed) attrs are dropped.
+        """
+        return {
+            k: (v.value if isinstance(v, Enum) else v) for k, v in vars(self.config).items() if not k.startswith("_")
+        }
+
     def _save_output(self, lines: list[str], output_file: str) -> None:
         """Save output to file in specified format"""
         from .config import OutputFormat
@@ -330,11 +394,7 @@ class LogReducer:
             output_data = {
                 "lines": lines,
                 "stats": self.stats,
-                "config": {
-                    k: str(v) if hasattr(v, "value") else v
-                    for k, v in vars(self.config).items()
-                    if not k.startswith("_")
-                },
+                "config": self._config_as_dict(),
                 "timestamp": datetime.now().isoformat(),
             }
             with open(output_path, "w", encoding="utf-8") as f:
@@ -361,15 +421,11 @@ class LogReducer:
 
             # Save metadata separately for line format
             meta_file = output_path.with_suffix(".meta.json")
-            with open(meta_file, "w") as f:
+            with open(meta_file, "w", encoding="utf-8") as f:
                 json.dump(
                     {
                         "stats": self.stats,
-                        "config": {
-                            k: str(v) if hasattr(v, "value") else v
-                            for k, v in vars(self.config).items()
-                            if not k.startswith("_")
-                        },
+                        "config": self._config_as_dict(),
                         "timestamp": datetime.now().isoformat(),
                     },
                     f,
@@ -387,11 +443,18 @@ class LogReducer:
         self.logger.info("=" * 60)
         self.logger.info(f"Mode: {self.mode.value}")
         self.logger.info(f"Level: {self.level.value}")
-        self.logger.info(f"Input: {self.stats['input_size_mb']:.1f} MB")
+        # input_size_mb / rate are None for non-file sources (a list, a DB
+        # cursor) - only a file has a byte size. Log them when known.
+        input_size_mb = self.stats.get("input_size_mb")
+        if input_size_mb is not None:
+            self.logger.info(f"Input: {input_size_mb:.1f} MB")
+        self.logger.info(f"Input lines: {self.stats['input_lines']:,}")
         self.logger.info(f"Output: {self.stats['output_lines']} lines")
         self.logger.info(f"Reduction: {self.stats['reduction_percent']:.1f}%")
         self.logger.info(f"Time: {self.stats['processing_time_seconds']:.1f} seconds")
-        self.logger.info(f"Rate: {self.stats['processing_rate_mb_per_sec']:.1f} MB/sec")
+        rate = self.stats.get("processing_rate_mb_per_sec")
+        if rate is not None:
+            self.logger.info(f"Rate: {rate:.1f} MB/sec")
         self.logger.info("=" * 60)
 
     def estimate_processing(self, file_path: str) -> dict:

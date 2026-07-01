@@ -2,9 +2,7 @@
 Unit tests for pattern extraction module
 """
 
-from unittest.mock import MagicMock, Mock, patch
-
-import pytest
+from unittest.mock import Mock, patch
 
 from logreducer.config import BigDialConfig
 from logreducer.patterns import FuzzyDeduplicator, LogPattern, PatternExtractor

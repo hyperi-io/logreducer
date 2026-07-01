@@ -7,12 +7,18 @@
 [extend]
 useDefault = true
 
-[allowlist]
-description = "logreducer false positives"
-
 # Sample log files and test fixtures contain token-like strings that are not
 # real secrets - logreducer's whole job is chewing through log lines.
+[[allowlists]]
+description = "logreducer false positives"
 paths = [
     '''data/samples/.*''',
     '''tests/.*''',
 ]
+
+# Historical false positive: a literal "Bearer ACCESS_TOKEN" placeholder in a
+# since-deleted setup doc (docs/JIRA_OAUTH_SETUP.md). Not a real credential.
+[[allowlists]]
+description = "placeholder token in deleted JIRA doc"
+commits = ["fd249640e7b5c385158c75f27c595cb23ca52a23"]
+paths = ['''docs/JIRA_OAUTH_SETUP\.md''']

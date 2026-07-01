@@ -2,8 +2,6 @@
 Unit tests for configuration module
 """
 
-import pytest
-
 from logreducer.config import BigDialConfig, ProcessingLevel, ProcessingMode, get_preset_config
 
 

@@ -48,8 +48,6 @@ class BigDialConfig:
     # Speed Control
     n_workers: int | None = None
     hash_algorithm: str = "xxhash"
-    use_polars: bool = True
-    single_pass: bool = True
 
     # Quality Control
     drain_similarity: float = 0.4
@@ -59,11 +57,8 @@ class BigDialConfig:
 
     # Temporal Control
     temporal_window_minutes: int = 60
-    preserve_burst_patterns: bool = True
 
     # Sampling Control
-    reservoir_size: int = 100000
-    progressive_sampling: bool = True
     max_patterns: int = 1000
     examples_per_pattern: int = 3
 

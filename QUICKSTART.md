@@ -2,184 +2,89 @@
 
 Get up and running with LogReducer in minutes.
 
-## Quick Installation
+## Install
 
 ```bash
-# Install from PyPI (recommended)
 pip install logreducer
-
-# Or clone and install for development
-git clone https://github.com/hyperi-io/logreducer.git
-cd logreducer
-make setup  # Sets up dev environment
+# or
+uv add logreducer
 ```
 
-## Basic Usage
+## Command line
 
-### Command Line
 ```bash
-# Reduce a log file
+# Reduce a file to a smaller file
 logreducer app.log -o reduced.log
 
-# Enhanced processing with JSON output
+# Enhanced hybrid processing, JSON output
 logreducer app.log -l enhanced -m hybrid --format json -o result.json
 
-# Estimate processing requirements
+# Estimate memory/time before running
 logreducer large.log --estimate
 ```
 
-### Python API
+## Python API
+
 ```python
 from logreducer import LogReducer
 
-# Create reducer with default settings
 reducer = LogReducer()
 
-# Process a log file
+# Reduce a file
 reduced_lines = reducer.process_file("app.log")
 
-# Save to file with metadata
+# Reduce with metadata (lines + stats + config)
 result = reducer.process_file("app.log", "reduced.log", return_metadata=True)
 print(f"Reduced from {result['stats']['input_lines']} to {result['stats']['output_lines']} lines")
+
+# Reduce any re-iterable of str lines - no file needed
+reducer.reduce(["ERROR timeout", "INFO ok", "ERROR timeout"])
 ```
 
-## Development Setup
+To reduce from SQL, ClickHouse, or Kafka, see the "Sources and sinks" section of the [README](README.md).
 
-### New Developer Setup (One Command)
-```bash
-# Clone the repository
-git clone https://github.com/hyperi-io/logreducer.git
-cd logreducer
+## Processing modes
 
-# Set up everything (creates .venv, installs deps, runs checks)
-make setup
-```
-
-### Daily Development Commands
-```bash
-make test      # Run all tests
-make format    # Format code
-make lint      # Run linting
-make all       # Run all quality checks
-make build     # Build packages
-```
-
-### Alternative: Direct Script Usage
-```bash
-scripts/setup     # One-time setup
-scripts/pdev test # Run tests
-scripts/pdev all  # Run all checks
-```
-
-## Processing Modes
-
-| Mode | Description | Use Case |
+| Mode | Description | Use case |
 |------|-------------|----------|
 | `pattern` | Drain3 pattern extraction | General log reduction (default) |
-| `anomaly` | ML-based anomaly detection | Find unusual events |
+| `anomaly` | Isolation Forest anomaly detection | Find unusual events |
 | `temporal` | Time-based analysis | Time-series log analysis |
-| `hybrid` | Combined approach | Best quality reduction |
+| `hybrid` | Combined approach | Best-quality reduction |
 
-## Processing Levels
+## Processing levels
 
-| Level | Description | Reduction Rate | Speed |
-|-------|-------------|----------------|-------|
-| `standard` | Fast processing | 70-80% | Fast |
-| `enhanced` | Advanced algorithms | 80-90% | Medium |
-| `maximum` | Highest quality | 90-95% | Slower |
+| Level | Description | Speed |
+|-------|-------------|-------|
+| `standard` | Fast deduplication + patterns | Fast |
+| `enhanced` | + fuzzy dedup + anomaly ML | Medium |
+| `maximum` | + entropy scoring + wider budget | Slower |
 
-## Project Structure
+## Development setup
 
-```
-logreducer/
-|-- src/logreducer/    # Main package source
-|-- tests/             # Test suite
-|-- scripts/           # Development tools
-|-- docs/              # Documentation
-|-- data/samples/      # Sample log files
-`-- examples/          # Usage examples
-```
+```bash
+git clone https://github.com/hyperi-io/logreducer.git
+cd logreducer
+uv sync --all-extras        # create .venv and install everything
 
-## Configuration
-
-Create `config.yaml` to customize behavior:
-```yaml
-log_level: INFO
-processing:
-  level: enhanced
-  mode: hybrid
-  max_memory_gb: 2.0
-output:
-  format: json
-  include_metadata: true
+uv run pytest -m "not integration"   # fast test suite
+uv run ruff check           # lint
+uv run ruff format          # format
+uv run mypy src/logreducer  # type check
 ```
 
-## Performance Expectations
+`hyperi-ci check` runs the full quality + test gate the way CI does. Integration tests (ClickHouse, Kafka) need Docker or a reachable service - see [CONTRIBUTING.md](CONTRIBUTING.md).
 
-**Real-world benchmarks:**
-- **Apache logs (2MB)**: 90% reduction in 0.8s
-- **System logs (25MB)**: 92% reduction in 4.2s  
-- **HDFS logs (154MB)**: 92% reduction in 18.5s
-- **Spark logs (368MB)**: 91% reduction in 35.1s
+## Verify installation
 
-## Need Help?
+```bash
+logreducer --version
+python -c "import logreducer; print(logreducer.__version__)"
+```
 
-- **Full Documentation**: [docs/DEV.md](docs/DEV.md)
-- **API Reference**: [docs/](docs/)
+## Need help?
+
+- **Usage and API**: [README.md](README.md)
+- **Contributing**: [CONTRIBUTING.md](CONTRIBUTING.md)
 - **Issues**: [GitHub Issues](https://github.com/hyperi-io/logreducer/issues)
 - **Examples**: [examples/](examples/)
-
-## Verify Installation
-
-```bash
-# Test CLI
-logreducer --version
-
-# Test Python import
-python -c "import logreducer; print(f'Version: {logreducer.__version__}')"
-
-# Run development tests (if cloned)
-make test
-```
-
-## Troubleshooting
-
-### Git Hooks Error
-If setup shows `[ERROR] Cowardly refusing to install hooks with core.hooksPath set`:
-```bash
-git config --unset-all core.hooksPath
-make setup  # Re-run setup
-```
-
-### Virtual Environment Issues
-```bash
-# Remove corrupted venv and recreate
-rm -rf .venv
-make setup
-```
-
-### Tool Requirements
-**Need uv package manager:**
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-
-**Need Python 3.12+:**
-```bash
-python3 --version  # Check current version
-# Install via system package manager if needed
-```
-
-### Linting Warnings
-The codebase has some non-critical linting warnings (line length, type stubs). These don't affect functionality:
-```bash
-# Run tests without linting
-make test
-
-# See all warnings
-make lint
-```
-
----
-
-**Ready to reduce some logs?**

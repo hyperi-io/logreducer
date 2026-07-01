@@ -1,22 +1,13 @@
 LogReducer Documentation
 ========================
 
-**High-performance log reduction with intelligent pattern extraction and anomaly detection**
+**Reduce GB-scale logs to a representative sample - a streaming Python library and CLI**
 
-LogReducer is an enterprise-grade Python library designed to efficiently reduce large log files while preserving critical information. It combines advanced pattern extraction, anomaly detection, and temporal analysis to achieve 80-95% log reduction rates.
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Contents:
-
-   quickstart
-   installation
-   api_reference
-   examples
-   benchmarks
-   configuration
-   deployment
-   changelog
+LogReducer reduces large volumes of log lines to a small, representative sample
+while preserving the patterns and anomalies that matter. It ships as both a
+command-line tool (``logreducer app.log``) and an IO-agnostic library, combining
+pattern extraction, anomaly detection, and temporal analysis to achieve 80-95%
+log reduction rates.
 
 Key Features
 ------------
@@ -24,7 +15,7 @@ Key Features
 **High Performance**
    - Memory-safe streaming for unbounded file sizes
    - Achieves 80-95% reduction while preserving critical events
-   - Process 1GB logs in under 30 seconds
+   - Processes roughly 10 MB/s on commodity hardware (see benchmarks below)
 
 **Intelligent Processing**
    - Drain3 algorithm for pattern extraction
@@ -32,17 +23,15 @@ Key Features
    - Temporal analysis for time-series patterns
    - Hybrid mode combining all techniques
 
-**Enterprise Ready**
-   - Configurable processing levels (Standard, Enhanced, Maximum)
+**Configurable**
+   - Processing levels (Standard, Enhanced, Maximum)
    - Multiple output formats (LINE, JSON, JSONL)
-   - Optional logging with RFC 3339 timestamps
-   - Comprehensive security scanning
+   - Optional structured logging (human or JSON) with RFC 3339 timestamps
 
-? **Cloud Native**
-   - Auto-detects CPU cores for optimal threading
-   - Memory usage controls and monitoring
-   - Docker and Kubernetes deployment ready
-   - JFrog Artifactory integration
+**IO-agnostic**
+   - Reduce a file, a ``list[str]``, a SQL/ClickHouse query, or a Kafka topic
+   - Auto-detects CPU cores (respects container limits)
+   - Memory-usage controls and monitoring
 
 Quick Start
 -----------
@@ -110,7 +99,7 @@ LogReducer has been tested against real-world datasets from LogHub:
      - 35.1s
 
 Architecture Overview
---------------------
+---------------------
 
 LogReducer uses a multi-stage processing pipeline:
 

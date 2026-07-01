@@ -2,9 +2,8 @@
 Unit tests for memory management module
 """
 
+import importlib.util
 from unittest.mock import Mock, patch
-
-import pytest
 
 from logreducer.memory import BoundedDeduplicator, MemoryMonitor, StreamingProcessor
 
@@ -187,14 +186,12 @@ class TestBoundedDeduplicator:
         assert len(test_hash) == 32  # MD5 hash length
 
         # Test that xxhash works if available
-        try:
-            import xxhash
-
+        if importlib.util.find_spec("xxhash") is not None:
             dedup_xxhash = BoundedDeduplicator(hash_algorithm="xxhash")
             xxhash_result = dedup_xxhash.hash_func("test")
             assert isinstance(xxhash_result, str)
             assert len(xxhash_result) > 0
-        except ImportError:
+        else:
             # xxhash not available, test fallback behavior
             dedup_fallback = BoundedDeduplicator(hash_algorithm="xxhash")
             fallback_result = dedup_fallback.hash_func("test")

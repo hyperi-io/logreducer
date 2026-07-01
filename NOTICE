@@ -5,3 +5,20 @@ This product includes software developed at HYPERI PTY LIMITED
 (https://hyperi.io/).
 
 Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+-------------------------------------------------------------------------------
+Third-party data
+-------------------------------------------------------------------------------
+
+The sample log files under data/samples/ are drawn from LogHub, a collection of
+system log datasets for research:
+
+  Jieming Zhu, Shilin He, Pinjia He, Jinyang Liu, Michael R. Lyu.
+  "Loghub: A Large Collection of System Log Datasets for AI-driven Log
+  Analytics." ISSRE 2023.
+  https://github.com/logpai/loghub
+
+Some LogHub datasets originate from public sources, including the USENIX CFDR
+computer failure data repository (BGL and Thunderbird traces, Sandia National
+Laboratories). The datasets are redistributed here unmodified for demonstration
+and testing. See data/samples/README.md for the per-file mapping.

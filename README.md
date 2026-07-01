@@ -4,271 +4,212 @@
 [![Python Version](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
 
-A high-performance Python module for intelligently reducing large log files (GB+) to representative samples while preserving critical patterns. Features memory-safe processing, temporal awareness, and anomaly detection.
+Reduce gigabytes of logs to a small, representative sample - keeping the patterns and anomalies that matter and dropping the repetition that does not. Memory-safe streaming, temporal awareness, and ML-based anomaly detection.
+
+**LogReducer is two tools in one package:**
+
+- **A CLI you can use right now.** `logreducer app.log` reduces a file - or a SQL, ClickHouse, or Kafka source - straight from the shell. No code to write.
+- **A library with an IO-agnostic core.** The engine has zero IO dependencies and reduces any re-iterable stream of `str` lines (a `Source`). Embed it in your own pipeline and feed it a file, a `list[str]`, a database cursor, or a Kafka topic; the engine never manages the connection.
 
 ## Features
 
-- **Memory-Safe Processing**: Handle multi-GB log files with constant memory usage
-- **Multiple Processing Modes**: Pattern-based, anomaly detection, temporal analysis, and hybrid approaches
-- **High Performance**: Process GB+ files in seconds with optimized algorithms
-- **Intelligent Sampling**: Generate representative samples preserving critical patterns
-- **Temporal Awareness**: Time-based pattern extraction and burst detection
-- **Anomaly Detection**: ML-powered identification of unusual log entries
-- **Flexible Configuration**: Three processing levels with extensive customization options
+- **Memory-safe streaming**: constant memory on multi-GB inputs via server-side cursors and reservoir sampling
+- **Four reduction modes**: pattern (Drain3), anomaly (Isolation Forest), temporal, and hybrid
+- **IO-agnostic core**: reduce a file, a `list[str]`, a database cursor, or a Kafka stream through one `Source` seam
+- **Optional adapters**: SQL (SQLAlchemy), ClickHouse (clickhouse-connect), Kafka (confluent-kafka) - install only what you use
+- **Three quality levels**: `standard`, `enhanced`, `maximum`
+- **Structured logging**: RFC 3339 timestamps, human-readable or one-JSON-object-per-line output
 
 ## Installation
 
-### From PyPI
+### As a CLI tool
+
+Install it as an isolated tool so its dependencies never clash with your other Python projects. This puts a `logreducer` command on your PATH:
 
 ```bash
-pip install logreducer
+uv tool install logreducer     # recommended (uv)
+# or
+pipx install logreducer        # recommended (pipx)
+```
 
-# Or with uv
+To bundle an adapter extra with the tool:
+
+```bash
+uv tool install "logreducer[clickhouse]"
+pipx install "logreducer[kafka]"
+```
+
+### As a library
+
+Add it to your project like any other dependency:
+
+```bash
 uv add logreducer
-
-# With enhanced features (fuzzy dedup, faster hashing, scientific extras)
-uv add "logreducer[enhanced]"
+# or
+pip install logreducer
 ```
 
-### Development Installation
+Optional extras (install only what you need):
 
 ```bash
-git clone https://github.com/hyperi-io/logreducer.git
-cd logreducer
-make setup  # Sets up virtual environment and installs all dependencies
+uv add "logreducer[enhanced]"    # fuzzy dedup, entropy scoring, faster hashing
+uv add "logreducer[sql]"         # SQLSource (SQLAlchemy) - bring your own DBAPI driver
+uv add "logreducer[clickhouse]"  # ClickHouseSource (clickhouse-connect)
+uv add "logreducer[kafka]"       # KafkaSource / KafkaSink (confluent-kafka)
 ```
+
+> The `logreducer` command comes from a standard console-script entry point, so it works under any install: a project venv, `pip install --user` (into `~/.local/bin`), an isolated `pipx` / `uv tool` install, or a system-wide install. `pipx` / `uv tool` is the recommendation for end users - isolation without a manual venv. `pip install --user` gives a per-user install; a system-wide `sudo pip install` is possible but discouraged (it mixes into the system Python).
 
 ## Quick Start
 
-### Basic Usage
+### Library
 
 ```python
 from logreducer import LogReducer
 
-# Simple usage - reduce a log file
 reducer = LogReducer(level="standard")
-reduced_logs = reducer.process_file("app.log", output_file="reduced.log")
 
-print(f"Reduced {len(reduced_logs)} representative log lines")
+# Reduce a file (writes reduced.log + reduced.meta.json)
+reduced = reducer.process_file("app.log", output_file="reduced.log")
+print(f"{len(reduced)} representative lines")
+
+# Reduce any re-iterable of lines - no file needed
+lines = ["ERROR timeout upstream=payments", "INFO ok", "ERROR timeout upstream=payments"]
+reduced = reducer.reduce(lines)
 ```
 
-### Advanced Configuration
+`reduce()` returns the reduced lines in memory. Pass `return_metadata=True` for a dict of `{"lines", "stats", "config"}`.
 
-```python
-# Advanced usage with custom settings
-reducer = LogReducer(
-    level="enhanced",           # standard | enhanced | maximum
-    mode="hybrid",              # pattern | anomaly | temporal | hybrid  
-    max_memory_gb=4.0,          # Memory limit
-    max_patterns=2000           # Maximum patterns to extract
-)
-
-# Process with metadata
-result = reducer.process_file("huge.log", return_metadata=True)
-print(f"Processing stats: {result['stats']}")
-```
-
-### Command Line Usage
+### Command line
 
 ```bash
-# Basic log reduction
-logreducer --input app.log --output reduced.log --level standard
+# Reduce a file to stdout, or to a file with -o
+logreducer app.log
+logreducer app.log -o reduced.log -l enhanced -m hybrid
 
-# Enhanced processing with anomaly detection
-logreducer --input production.log --mode anomaly --level enhanced --memory 8GB
+# JSON output, with run stats on stderr
+logreducer app.log --format json -o result.json --stats
+
+# Cap memory, estimate first
+logreducer huge.log --max-memory 4 --estimate
 ```
 
-## Processing Modes
+### Reducing from a database or Kafka
 
-| Mode | Description | Best For | Performance |
-|------|-------------|----------|-------------|
-| `pattern` | Drain3-based pattern extraction | Structured logs, application logs | Fastest |
-| `anomaly` | ML-powered anomaly detection | Security logs, error detection | Moderate |
-| `temporal` | Time-aware pattern analysis | Time-series logs, monitoring | Fast |
-| `hybrid` | Combined approach | Complex logs, maximum coverage | Comprehensive |
+The CLI dispatches on the `--dsn` scheme; a library caller constructs the source directly.
 
-## Processing Levels
+```bash
+# PostgreSQL / MySQL / SQLite via SQLAlchemy (needs logreducer[sql] + a driver)
+logreducer --dsn postgresql://user@host/db --query "SELECT message FROM logs"
 
-| Level | Speed | Memory | Reduction % | Features |
-|-------|-------|--------|-------------|----------|
-| `standard` | Fast | Low | 99%+ | Basic deduplication + patterns |
-| `enhanced` | Moderate | Medium | 99.5%+ | + Fuzzy deduplication + ML |
-| `maximum` | Thorough | High | 99.9%+ | + Advanced algorithms + entropy |
+# ClickHouse via the native driver (needs logreducer[clickhouse])
+logreducer --dsn clickhouse://user@host:8123/db --query "SELECT message FROM logs"
 
-## Configuration Options
+# Kafka topic (needs logreducer[kafka])
+logreducer --dsn kafka://broker:9092 --topic app-logs --group logreducer
+```
 
-### Memory Management
+```python
+from logreducer import LogReducer
+from logreducer.clickhouse import ClickHouseSource
+
+reducer = LogReducer(level="enhanced", mode="hybrid")
+with ClickHouseSource("clickhouse://user@host:8123/db", "SELECT message FROM logs") as source:
+    reduced = reducer.reduce(source)
+```
+
+The query selects the log line as its **first column**. Sources are re-iterable (the engine makes multiple passes), so a database source re-runs its query per pass and a Kafka source re-reads from the earliest offset without committing.
+
+## Sources and sinks
+
+An application can hand the reducer its own IO instead of using an adapter - anything that yields `str` and can be iterated more than once is a `Source`:
+
+```python
+class MySource:
+    def __iter__(self):
+        yield from open_my_stream()  # must return a FRESH iterator each call
+
+reducer.reduce(MySource())
+```
+
+Output works the same way through a `Sink` (`write(lines) -> int`). `FileSink` is built in; `KafkaSink` ships with the `kafka` extra:
+
+```python
+from logreducer import LogReducer, FileSink
+
+reducer.reduce(source, sink=FileSink("reduced.jsonl", output_format="jsonl"))
+```
+
+## Processing modes
+
+| Mode | Description | Best for |
+|------|-------------|----------|
+| `pattern` | Drain3 template mining | Structured / application logs (fastest) |
+| `anomaly` | Isolation Forest outlier detection | Security and error logs |
+| `temporal` | Time-aware pattern analysis | Time-series and monitoring logs |
+| `hybrid` | Pattern + anomaly combined | Maximum coverage |
+
+## Processing levels
+
+| Level | Speed | Memory | Features |
+|-------|-------|--------|----------|
+| `standard` | Fast | Low | Deduplication + pattern extraction |
+| `enhanced` | Moderate | Medium | + fuzzy dedup + anomaly ML |
+| `maximum` | Thorough | High | + entropy scoring + wider pattern budget |
+
+## Configuration
+
+Override any config field as a keyword argument:
 
 ```python
 reducer = LogReducer(
-    max_memory_gb=2.0,          # Memory limit
-    chunk_size=50000,           # Lines per processing chunk
-    dedup_cache_size=100000     # Deduplication cache size
+    level="enhanced",
+    mode="hybrid",
+    max_memory_gb=4.0,          # memory ceiling
+    chunk_size=50000,           # lines per processing chunk
+    dedup_cache_size=100000,    # bounded dedup cache
+    drain_similarity=0.4,       # pattern similarity threshold
+    fuzzy_threshold=0.8,        # fuzzy-dedup threshold (enhanced/maximum)
+    anomaly_contamination=0.1,  # expected anomaly fraction
+    temporal_window_minutes=60, # grouping window for temporal mode
+    max_patterns=2000,          # cap on extracted patterns
 )
 ```
 
-### Quality Control
+## Logging
 
-```python
-reducer = LogReducer(
-    drain_similarity=0.4,       # Pattern similarity threshold
-    min_pattern_occurrences=2,  # Minimum pattern frequency
-    fuzzy_threshold=0.8,        # Fuzzy deduplication threshold
-    anomaly_contamination=0.1   # Expected anomaly percentage
-)
+Logging is off by default. Enable it and pick a format via env vars:
+
+```bash
+LOG_LEVEL=DEBUG LOG_FORMAT=json logreducer app.log --log
 ```
 
-### Temporal Processing
+`LOG_FORMAT=json` emits one JSON object per line for log aggregators; the default is human-readable (coloured in a terminal, plain in CI/containers).
 
-```python
-reducer = LogReducer(
-    temporal_window_minutes=60,     # Time window for grouping
-    preserve_burst_patterns=True    # Keep burst event patterns
-)
-```
+## Requirements
 
-## Performance Benchmarks
-
-| File Size | Mode | Level | Processing Time | Memory Usage | Reduction % |
-|-----------|------|-------|----------------|--------------|-------------|
-| 100 MB | pattern | standard | 3s | 50 MB | 99.5% |
-| 1 GB | pattern | standard | 30s | 200 MB | 99.8% |
-| 10 GB | pattern | standard | 5m | 1 GB | 99.9% |
-| 10 GB | hybrid | enhanced | 8m | 2 GB | 99.95% |
-
-## Advanced Usage
-
-### Programmatic Processing
-
-```python
-# Estimate processing requirements
-estimate = reducer.estimate_processing("large.log")
-print(f"Estimated time: {estimate['estimated_time_seconds']}s")
-print(f"Strategy: {estimate['strategy']}")
-
-# Process multiple files
-files = ["app1.log", "app2.log", "app3.log"]
-for file in files:
-    reduced = reducer.process_file(file, output_file=f"reduced_{file}")
-```
-
-### Integration with Analysis Pipelines
-
-```python
-# Get processed logs for advanced analysis
-reducer = LogReducer(mode="hybrid", level="enhanced")
-result = reducer.process_file("production.log", return_metadata=True)
-
-# Prepare for analysis
-analysis_data = {
-    "patterns": result['patterns'],
-    "anomalies": result.get('anomalies', []),
-    "sample_lines": result['lines']
-}
-```
-
-### Custom Output Processing
-
-```python
-# Process and filter results
-reduced_logs = reducer.process_file("app.log")
-
-# Filter for errors only
-errors = [line for line in reduced_logs if 'ERROR' in line.upper()]
-print(f"Found {len(errors)} error patterns")
-```
-
-## Log Format Support
-
-LogReducer automatically detects and handles various log formats:
-
-- **ISO 8601**: `2024-01-01T12:00:00Z`
-- **Apache/Nginx**: `[01/Jan/2024:12:00:00 +0000]`  
-- **Syslog**: `Jan 01 12:00:00`
-- **Application**: `2024-01-01 12:00:00.123`
-- **Custom formats** via timestamp parsing
-
-## Error Handling
-
-```python
-try:
-    reducer = LogReducer(level="enhanced")
-    result = reducer.process_file("app.log")
-except FileNotFoundError:
-    print("Log file not found")
-except MemoryError:
-    print("Insufficient memory - try standard level")
-except Exception as e:
-    print(f"Processing error: {e}")
-```
+- Python 3.12+
+- Runtime: `drain3`, `numpy`, `scikit-learn`, `psutil`, `loguru`, `typer`
+- `enhanced` extra: `xxhash`, `scipy`, `datasketch`
+- Adapter extras: `sqlalchemy` (sql), `clickhouse-connect` (clickhouse), `confluent-kafka` (kafka)
 
 ## Development
-
-For detailed development setup, testing, and contribution guidelines, see [docs/DEV.md](docs/DEV.md).
-
-### Quick Setup
 
 ```bash
 git clone https://github.com/hyperi-io/logreducer.git
 cd logreducer
-make setup  # Creates .venv, installs dependencies, sets up pre-commit hooks
+uv sync --all-extras        # create .venv and install everything
+
+uv run pytest -m "not integration"   # fast suite (integration needs Docker/services)
+uv run ruff check           # lint
+uv run ruff format          # format
+uv run mypy src/logreducer  # type check
 ```
 
-### Running Tests
-
-```bash
-pytest                          # Run all tests
-pytest -v tests/test_core.py   # Run specific test file
-pytest -m "not slow"           # Skip slow tests
-```
-
-### Code Quality
-
-```bash
-black logreducer/              # Format code
-flake8 logreducer/             # Lint code  
-mypy logreducer/               # Type check
-```
-
-## Requirements
-
-### Core Dependencies
-- Python 3.12+
-- drain3 >= 0.9.0
-- psutil >= 5.9.0
-- loguru >= 0.7.0
-
-### Enhanced Features (Optional)
-- scikit-learn >= 1.3.0 (anomaly detection)
-- numpy >= 1.24.0 (numerical processing)
-- xxhash >= 3.0.0 (fast hashing)
-- datasketch >= 1.5.0 (fuzzy deduplication)
+CI runs via [hyperi-ci](https://github.com/hyperi-io/hyperi-ci) - `hyperi-ci check` runs the full quality + test gate locally. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
 [Apache-2.0](LICENSE). Third-party attributions are recorded in [NOTICE](NOTICE).
 
 Copyright 2026 HYPERI PTY LIMITED.
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-See [docs/DEV.md](docs/DEV.md) for detailed development setup and [docs/BUILD_AND_CI.md](docs/BUILD_AND_CI.md) for build and CI information.
-
-## Support
-
-- **Documentation**: https://hyperi-io.github.io/logreducer/
-- **Issues**: https://github.com/hyperi-io/logreducer/issues
-
-## Changelog
-
-See [CHANGELOG.md](CHANGELOG.md) for a list of changes and version history.
-
----
-
-**Built by the HyperI Team**

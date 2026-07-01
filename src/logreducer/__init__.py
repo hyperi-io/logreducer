@@ -27,13 +27,19 @@ __url__ = "https://github.com/hyperi-io/logreducer"
 from .config import BigDialConfig, OutputFormat, ProcessingLevel, ProcessingMode
 from .core import LogReducer
 from .logging_config import setup_logging
+from .sinks import FileSink, Sink
+from .sources import FileSource, Source
 
 __all__ = [
     "BigDialConfig",
+    "FileSink",
+    "FileSource",
     "LogReducer",
     "OutputFormat",
     "ProcessingLevel",
     "ProcessingMode",
+    "Sink",
+    "Source",
     "__author__",
     "__description__",
     "__email__",
@@ -42,6 +48,3 @@ __all__ = [
     "__version__",
     "setup_logging",
 ]
-
-# Type annotation for mypy
-py_typed = True
