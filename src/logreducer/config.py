@@ -8,7 +8,7 @@ import multiprocessing as mp
 from dataclasses import dataclass
 from enum import Enum
 
-import psutil  # type: ignore[import-untyped]
+import psutil
 
 
 class ProcessingLevel(Enum):

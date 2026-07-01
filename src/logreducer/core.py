@@ -13,7 +13,7 @@ from .logging_config import get_logger, setup_logging
 
 # Optional import for progress bars
 try:
-    from tqdm import tqdm  # type: ignore[import-untyped]
+    from tqdm import tqdm
 
     TQDM_AVAILABLE = True
 except ImportError:

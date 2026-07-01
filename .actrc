@@ -1,6 +1,0 @@
-# act configuration for local CI/CD testing
---container-architecture linux/amd64
---artifact-server-path /tmp/artifacts
---env-file .env.act
---secret-file .secrets.act
--P ubuntu-latest=catthehacker/ubuntu:act-latest

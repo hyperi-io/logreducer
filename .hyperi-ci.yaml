@@ -1,0 +1,21 @@
+# HyperI CI configuration -- logreducer
+# Only values that differ from the hyperi-ci defaults.
+
+license: Apache-2.0
+
+build:
+  type: package
+
+publish:
+  enabled: true
+
+test:
+  min_coverage: 75  # currently 80%; ratchet up as coverage improves
+
+quality:
+  # examples/ are illustrative snippets, not scanned code
+  exclude_paths:
+    - examples/
+  python:
+    # library public API can look "unused" to dead-code analysis
+    vulture: warn

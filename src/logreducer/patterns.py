@@ -22,7 +22,7 @@ except ImportError:
 
 try:
     import numpy as np
-    from scipy.stats import entropy  # type: ignore[import-untyped]
+    from scipy.stats import entropy
 
     SCIPY_AVAILABLE = True
 except ImportError:

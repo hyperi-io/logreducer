@@ -8,7 +8,7 @@ from collections import deque
 from collections.abc import Iterable, Iterator
 from typing import Any
 
-import psutil  # type: ignore[import-untyped]
+import psutil
 
 
 class MemoryMonitor:

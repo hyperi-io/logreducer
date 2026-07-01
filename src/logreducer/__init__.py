@@ -10,7 +10,13 @@ Licensed under the Apache License, Version 2.0 (see LICENSE).
 Author: Derek <noreply@hyperi.io>
 """
 
-__version__ = "3.4.0"
+from importlib.metadata import PackageNotFoundError, version
+
+try:
+    __version__ = version("logreducer")
+except PackageNotFoundError:  # running from a source tree that is not installed
+    __version__ = "0.0.0+unknown"
+
 __author__ = "Derek"
 __email__ = "noreply@hyperi.io"
 __license__ = "Apache-2.0"

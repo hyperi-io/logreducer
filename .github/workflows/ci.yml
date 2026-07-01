@@ -1,0 +1,47 @@
+# Project:   logreducer
+# File:      .github/workflows/ci.yml
+# Purpose:   CI pipeline (delegates to the shared hyperi-ci reusable workflow)
+#
+# License:   Apache-2.0
+# Copyright: (c) 2026 HYPERI PTY LIMITED
+
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      tag:
+        type: string
+        required: false
+        default: ""
+        description: "Tag to re-publish (existing tag). Omit + set from-head to release HEAD."
+      from-head:
+        type: string
+        required: false
+        default: ""
+        description: "'true' to release/retry the current HEAD -- the CI creates the tag."
+      bump:
+        type: string
+        required: false
+        default: "auto"
+        description: "Version resolution for from-head: auto | patch | minor | X.Y.Z"
+
+permissions:
+  contents: write
+  issues: write
+  packages: write
+  pull-requests: write
+
+jobs:
+  ci:
+    uses: hyperi-io/hyperi-ci/.github/workflows/python-ci.yml@main
+    with:
+      publish-target: oss
+      tag: ${{ inputs.tag || '' }}
+      from-head: ${{ inputs.from-head || '' }}
+      bump: ${{ inputs.bump || 'auto' }}
+    secrets: inherit

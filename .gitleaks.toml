@@ -1,0 +1,18 @@
+# Project:   logreducer
+# File:      .gitleaks.toml
+# Purpose:   Gitleaks configuration - allowlist false positives
+# License:   Apache-2.0
+# Copyright: (c) 2026 HYPERI PTY LIMITED
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "logreducer false positives"
+
+# Sample log files and test fixtures contain token-like strings that are not
+# real secrets - logreducer's whole job is chewing through log lines.
+paths = [
+    '''data/samples/.*''',
+    '''tests/.*''',
+]
