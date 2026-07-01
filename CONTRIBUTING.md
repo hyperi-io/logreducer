@@ -9,7 +9,7 @@ logreducer uses [uv](https://docs.astral.sh/uv/) for dependency management.
 ```bash
 git clone https://github.com/hyperi-io/logreducer.git
 cd logreducer
-uv sync --extra dev --extra enhanced
+uv sync --all-extras   # core + enhanced feature deps + the dev group
 ```
 
 ## Running the checks

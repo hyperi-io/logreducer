@@ -521,6 +521,14 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+enhanced = [
+    { name = "datasketch" },
+    { name = "polars" },
+    { name = "scipy" },
+    { name = "xxhash" },
+]
+
+[package.dev-dependencies]
 dev = [
     { name = "bandit" },
     { name = "mypy" },
@@ -538,40 +546,40 @@ docs = [
     { name = "sphinx-autobuild" },
     { name = "sphinx-rtd-theme" },
 ]
-enhanced = [
-    { name = "datasketch" },
-    { name = "polars" },
-    { name = "scipy" },
-    { name = "xxhash" },
-]
 
 [package.metadata]
 requires-dist = [
-    { name = "bandit", extras = ["toml"], marker = "extra == 'dev'", specifier = ">=1.7.0" },
     { name = "datasketch", marker = "extra == 'enhanced'", specifier = ">=1.5.0" },
     { name = "drain3", specifier = ">=0.9.0" },
     { name = "loguru", specifier = ">=0.7.0" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.8.0" },
-    { name = "myst-parser", marker = "extra == 'docs'", specifier = ">=3.0.0" },
     { name = "numpy", specifier = ">=2.0.0" },
-    { name = "pip-audit", marker = "extra == 'dev'", specifier = ">=2.6.0" },
     { name = "polars", marker = "extra == 'enhanced'", specifier = ">=0.20.0" },
     { name = "psutil", specifier = ">=6.0.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5.0.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.15.0" },
     { name = "scikit-learn", specifier = ">=1.3.0" },
     { name = "scipy", marker = "extra == 'enhanced'", specifier = ">=1.10.0" },
-    { name = "sphinx", marker = "extra == 'docs'", specifier = ">=8.0.0" },
-    { name = "sphinx-autobuild", marker = "extra == 'docs'", specifier = ">=2024.0.0" },
-    { name = "sphinx-rtd-theme", marker = "extra == 'docs'", specifier = ">=3.0.0" },
     { name = "tqdm", specifier = ">=4.65.0" },
-    { name = "ty", marker = "extra == 'dev'", specifier = ">=0.0.34" },
-    { name = "vermin", marker = "extra == 'dev'", specifier = ">=1.6.0" },
-    { name = "vulture", marker = "extra == 'dev'", specifier = ">=2.16" },
     { name = "xxhash", marker = "extra == 'enhanced'", specifier = ">=3.0.0" },
 ]
-provides-extras = ["enhanced", "dev", "docs"]
+provides-extras = ["enhanced"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "bandit", extras = ["toml"], specifier = ">=1.7.0" },
+    { name = "mypy", specifier = ">=1.8.0" },
+    { name = "pip-audit", specifier = ">=2.6.0" },
+    { name = "pytest", specifier = ">=8.0.0" },
+    { name = "pytest-cov", specifier = ">=5.0.0" },
+    { name = "ruff", specifier = ">=0.15.0" },
+    { name = "ty", specifier = ">=0.0.34" },
+    { name = "vermin", specifier = ">=1.6.0" },
+    { name = "vulture", specifier = ">=2.16" },
+]
+docs = [
+    { name = "myst-parser", specifier = ">=3.0.0" },
+    { name = "sphinx", specifier = ">=8.0.0" },
+    { name = "sphinx-autobuild", specifier = ">=2024.0.0" },
+    { name = "sphinx-rtd-theme", specifier = ">=3.0.0" },
+]
 
 [[package]]
 name = "loguru"

@@ -47,24 +47,6 @@ enhanced = [
     "scipy>=1.10.0",      # Advanced scientific computing
     "datasketch>=1.5.0",  # MinHash and LSH for similarity analysis
 ]
-dev = [
-    "pytest>=8.0.0",         # Test framework
-    "pytest-cov>=5.0.0",     # Coverage reporting
-    "ruff>=0.15.0",          # Lint + format (replaces black/flake8/isort)
-    "ty>=0.0.34",            # Astral type checker (runs alongside mypy)
-    "mypy>=1.8.0",           # Static type checking (strict; see [tool.mypy])
-    "bandit[toml]>=1.7.0",   # Security linting
-    "pip-audit>=2.6.0",      # Dependency vulnerability scanning
-    "vulture>=2.16",         # Dead-code detection
-    "vermin>=1.6.0",         # Python version-compat detection
-]
-docs = [
-    "sphinx>=8.0.0",          # Documentation generator
-    "sphinx-rtd-theme>=3.0.0", # Read the Docs theme
-    "myst-parser>=3.0.0",     # Markdown parser for Sphinx
-    "sphinx-autobuild>=2024.0.0", # Live reload during development
-]
-
 [project.urls]
 Homepage = "https://github.com/hyperi-io/logreducer"
 Documentation = "https://hyperi-io.github.io/logreducer/"
@@ -230,3 +212,27 @@ no_tips = true
 [tool.bandit.assert_used]
 # Allow asserts in test files
 skips = ["*test*.py", "*tests*.py"]
+
+# Dependency groups (PEP 735): local dev + docs tooling. These are NOT part
+# of the published package - never installed by `pip install logreducer`,
+# and not advertised as extras in the wheel metadata. `uv sync` installs the
+# `dev` group by default. Only `enhanced` (a real user feature) stays in
+# [project.optional-dependencies].
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",         # Test framework
+    "pytest-cov>=5.0.0",     # Coverage reporting
+    "ruff>=0.15.0",          # Lint + format (replaces black/flake8/isort)
+    "ty>=0.0.34",            # Astral type checker (runs alongside mypy)
+    "mypy>=1.8.0",           # Static type checking (strict; see [tool.mypy])
+    "bandit[toml]>=1.7.0",   # Security linting
+    "pip-audit>=2.6.0",      # Dependency vulnerability scanning
+    "vulture>=2.16",         # Dead-code detection
+    "vermin>=1.6.0",         # Python version-compat detection
+]
+docs = [
+    "sphinx>=8.0.0",           # Documentation generator
+    "sphinx-rtd-theme>=3.0.0", # Read the Docs theme
+    "myst-parser>=3.0.0",      # Markdown parser for Sphinx
+    "sphinx-autobuild>=2024.0.0", # Live reload during development
+]
