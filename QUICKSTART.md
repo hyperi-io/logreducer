@@ -9,7 +9,7 @@ Get up and running with LogReducer in minutes.
 pip install logreducer
 
 # Or clone and install for development
-git clone https://github.com/hypersec-io/logreducer.git
+git clone https://github.com/hyperi-io/logreducer.git
 cd logreducer
 make setup  # Sets up dev environment
 ```
@@ -48,7 +48,7 @@ print(f"Reduced from {result['stats']['input_lines']} to {result['stats']['outpu
 ### New Developer Setup (One Command)
 ```bash
 # Clone the repository
-git clone https://github.com/hypersec-io/logreducer.git
+git clone https://github.com/hyperi-io/logreducer.git
 cd logreducer
 
 # Set up everything (creates .venv, installs deps, runs checks)
@@ -126,7 +126,7 @@ output:
 
 - **Full Documentation**: [docs/DEV.md](docs/DEV.md)
 - **API Reference**: [docs/](docs/)
-- **Issues**: [GitHub Issues](https://github.com/hypersec-io/logreducer/issues)
+- **Issues**: [GitHub Issues](https://github.com/hyperi-io/logreducer/issues)
 - **Examples**: [examples/](examples/)
 
 ## Verify Installation

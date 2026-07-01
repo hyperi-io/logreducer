@@ -4,7 +4,7 @@
 if [ -f .env ]; then
     export $(grep -E '^CICD_ENTITY=' .env | xargs)
 fi
-CICD_ENTITY=${CICD_ENTITY:-"HyperSec"}
+CICD_ENTITY=${CICD_ENTITY:-"HyperI"}
 
 # Commit message hook for semantic release compliance
 # Validates commit messages follow conventional commit format

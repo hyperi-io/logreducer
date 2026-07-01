@@ -103,11 +103,11 @@ jobs:
       id: jfrog-config
       run: |
         if [[ "${{ github.event.inputs.deploy_environment }}" == "production" ]]; then
-          echo "repo_url=https://hypersec.jfrog.io/artifactory/api/pypi/hypersec-pypi-local/" >> $GITHUB_OUTPUT
+          echo "repo_url=https://hyperi.jfrog.io/artifactory/api/pypi/hyperi-pypi-local/" >> $GITHUB_OUTPUT
         elif [[ "${{ github.event.inputs.deploy_environment }}" == "staging" ]]; then
-          echo "repo_url=https://hypersec.jfrog.io/artifactory/api/pypi/hypersec-pypi-staging/" >> $GITHUB_OUTPUT
+          echo "repo_url=https://hyperi.jfrog.io/artifactory/api/pypi/hyperi-pypi-staging/" >> $GITHUB_OUTPUT
         else
-          echo "repo_url=https://hypersec.jfrog.io/artifactory/api/pypi/hypersec-pypi-test/" >> $GITHUB_OUTPUT
+          echo "repo_url=https://hyperi.jfrog.io/artifactory/api/pypi/hyperi-pypi-test/" >> $GITHUB_OUTPUT
         fi
         echo "Target repository: $(grep repo_url $GITHUB_OUTPUT | cut -d= -f2)"
     

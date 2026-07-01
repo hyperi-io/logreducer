@@ -293,6 +293,6 @@ jobs:
         ARTIFACTORY_TOKEN: ${{ secrets.ARTIFACTORY_PASSWORD }}
         TWINE_USERNAME: ${{ secrets.ARTIFACTORY_USERNAME }}
         TWINE_PASSWORD: ${{ secrets.ARTIFACTORY_PASSWORD }}
-        TWINE_REPOSITORY_URL: "https://hypersec.jfrog.io/artifactory/api/pypi/hypersec-pypi-local/"
+        TWINE_REPOSITORY_URL: "https://hyperi.jfrog.io/artifactory/api/pypi/hyperi-pypi-local/"
       run: |
         twine upload dist/* --verbose

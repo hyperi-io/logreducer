@@ -9,7 +9,7 @@
 Instead of organization-wide, tie the runner to ONLY this specific repository:
 ```bash
 # When configuring, use repository URL, not organization
-./config.sh --url https://github.com/hypersec-io/logreducer
+./config.sh --url https://github.com/hyperi-io/logreducer
 ```
 
 ### 3. **Restrict Who Can Trigger Workflows**
@@ -167,7 +167,7 @@ echo "Runner emergency stopped and removed!"
 #!/bin/bash
 # Check who's been using your runner
 
-gh api /repos/hypersec-io/logreducer/actions/runs \
+gh api /repos/hyperi-io/logreducer/actions/runs \
   --jq '.workflow_runs[] | 
     select(.runner_name == "logreducer-local") | 
     {actor: .actor.login, workflow: .name, created: .created_at}'

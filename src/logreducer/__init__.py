@@ -5,18 +5,18 @@ Enterprise-grade log processing module that intelligently reduces large log file
 preserving critical patterns and anomalies. Features memory-safe streaming, temporal analysis,
 and advanced pattern extraction for operational insights.
 
-Copyright (c) HyperSec 2025. All rights reserved.
-Licensed under the HyperSec EULA: https://hypersec.io/eula
-Author: Derek <noreply@hypersec.io>
+Copyright 2026 HYPERI PTY LIMITED.
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+Author: Derek <noreply@hyperi.io>
 """
 
 __version__ = "3.4.0"
 __author__ = "Derek"
-__email__ = "noreply@hypersec.io"
-__license__ = "HyperSec EULA"
-__copyright__ = "Copyright (c) HyperSec 2025"
+__email__ = "noreply@hyperi.io"
+__license__ = "Apache-2.0"
+__copyright__ = "Copyright 2026 HYPERI PTY LIMITED"
 __description__ = "High-performance log reduction with intelligent pattern extraction and anomaly detection"
-__url__ = "https://github.com/hypersec-io/logreducer"
+__url__ = "https://github.com/hyperi-io/logreducer"
 
 from .config import BigDialConfig, OutputFormat, ProcessingLevel, ProcessingMode
 from .core import LogReducer

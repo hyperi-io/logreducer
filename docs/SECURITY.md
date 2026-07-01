@@ -16,7 +16,7 @@ We take security seriously. If you discover a security vulnerability in LogReduc
 
 ### How to Report
 
-1. **Email**: Send details to security@hypersec.io with the subject line "LogReducer Security Vulnerability"
+1. **Email**: Send details to security@hyperi.io with the subject line "LogReducer Security Vulnerability"
 2. **Include**: 
    - Description of the vulnerability
    - Steps to reproduce
@@ -155,9 +155,9 @@ LogReducer is designed to support security compliance requirements:
 
 ## Contact Information
 
-- **Security Team**: security@hypersec.io
-- **General Support**: support@hypersec.io
-- **Documentation**: https://hypersec-io.github.io/logreducer/
+- **Security Team**: security@hyperi.io
+- **General Support**: support@hyperi.io
+- **Documentation**: https://hyperi-io.github.io/logreducer/
 
 ---
 

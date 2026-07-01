@@ -13,7 +13,7 @@ The ONLY exception is JFrog Artifactory deployment which uses GitHub Actions for
 - **Trigger**: Manual only (workflow_dispatch)
 - **When to use**: After running `make ci` locally and confirming all tests pass
 - **Environments**: production, staging, test
-- **Repository**: https://hypersec.jfrog.io/artifactory/api/pypi/hypersec-pypi-local/
+- **Repository**: https://hyperi.jfrog.io/artifactory/api/pypi/hyperi-pypi-local/
 
 ## How to Deploy to JFrog
 

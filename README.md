@@ -1,8 +1,8 @@
 # LogReducer
 
-[![Python Version](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://python.org)
-[![License: HyperSec EULA](https://img.shields.io/badge/License-HyperSec_EULA-red.svg)](https://hypersec.io/eula)
-[![Package Version](https://img.shields.io/badge/version-3.2.1-green.svg)](https://pypi.org/project/logreducer/)
+[![PyPI](https://img.shields.io/pypi/v/logreducer?logo=pypi)](https://pypi.org/project/logreducer/)
+[![Python Version](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/)
+[![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
 
 A high-performance Python module for intelligently reducing large log files (GB+) to representative samples while preserving critical patterns. Features memory-safe processing, temporal awareness, and anomaly detection.
 
@@ -18,20 +18,22 @@ A high-performance Python module for intelligently reducing large log files (GB+
 
 ## Installation
 
-### From Private PyPI Repository (Corporate)
+### From PyPI
 
 ```bash
-# Configure pip for your corporate Artifactory repository
-pip install --index-url https://your-company.jfrog.io/artifactory/api/pypi/pypi/simple/ logreducer
+pip install logreducer
 
-# Or with enhanced features
-pip install --index-url https://your-company.jfrog.io/artifactory/api/pypi/pypi/simple/ "logreducer[enhanced]"
+# Or with uv
+uv add logreducer
+
+# With enhanced features (fuzzy dedup, faster hashing, scientific extras)
+uv add "logreducer[enhanced]"
 ```
 
 ### Development Installation
 
 ```bash
-git clone https://github.com/hypersec-io/logreducer.git
+git clone https://github.com/hyperi-io/logreducer.git
 cd logreducer
 make setup  # Sets up virtual environment and installs all dependencies
 ```
@@ -207,7 +209,7 @@ For detailed development setup, testing, and contribution guidelines, see [docs/
 ### Quick Setup
 
 ```bash
-git clone https://github.com/hypersec-io/logreducer.git
+git clone https://github.com/hyperi-io/logreducer.git
 cd logreducer
 make setup  # Creates .venv, installs dependencies, sets up pre-commit hooks
 ```
@@ -244,11 +246,9 @@ mypy logreducer/               # Type check
 
 ## License
 
-This project is licensed under the HyperSec EULA - see the [LICENSE](LICENSE) file for details.
+[Apache-2.0](LICENSE). Third-party attributions are recorded in [NOTICE](NOTICE).
 
-Copyright (c) HyperSec 2025. All rights reserved.
-
-For complete license terms, visit: https://hypersec.io/eula
+Copyright 2026 HYPERI PTY LIMITED.
 
 ## Contributing
 
@@ -262,9 +262,8 @@ See [docs/DEV.md](docs/DEV.md) for detailed development setup and [docs/BUILD_AN
 
 ## Support
 
-- **Documentation**: [https://docs.company.com/logreducer](https://docs.company.com/logreducer)
-- **Issues**: [GitHub Issues](https://github.com/company/logreducer/issues)
-- **Enterprise Support**: Contact devops@company.com
+- **Documentation**: https://hyperi-io.github.io/logreducer/
+- **Issues**: https://github.com/hyperi-io/logreducer/issues
 
 ## Changelog
 
@@ -272,4 +271,4 @@ See [CHANGELOG.md](CHANGELOG.md) for a list of changes and version history.
 
 ---
 
-**Built by the HyperSec Development Team**
+**Built by the HyperI Team**

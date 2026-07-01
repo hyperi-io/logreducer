@@ -41,7 +41,7 @@ twine check dist/*
 # Configure Artifactory credentials
 export TWINE_USERNAME="your-artifactory-user"
 export TWINE_PASSWORD="your-artifactory-token" 
-export TWINE_REPOSITORY_URL="https://hypersec.jfrog.io/artifactory/api/pypi/hypersec-pypi-local/simple/"
+export TWINE_REPOSITORY_URL="https://hyperi.jfrog.io/artifactory/api/pypi/hyperi-pypi-local/simple/"
 
 # Upload to staging
 twine upload dist/*
@@ -50,7 +50,7 @@ twine upload dist/*
 ### 3. Deploy to Production
 ```bash
 # Production deployment (after staging validation)
-export TWINE_REPOSITORY_URL="https://hypersec.jfrog.io/artifactory/api/pypi/hypersec-pypi-local/simple/"
+export TWINE_REPOSITORY_URL="https://hyperi.jfrog.io/artifactory/api/pypi/hyperi-pypi-local/simple/"
 twine upload dist/*
 ```
 
@@ -62,7 +62,7 @@ twine upload dist/*
    ```
    ARTIFACTORY_USERNAME      # Your JFrog Artifactory username
    ARTIFACTORY_PASSWORD      # Your JFrog Artifactory API token
-   ARTIFACTORY_PYPI_URL      # https://hypersec.jfrog.io/artifactory/api/pypi/hypersec-pypi-local/simple/
+   ARTIFACTORY_PYPI_URL      # https://hyperi.jfrog.io/artifactory/api/pypi/hyperi-pypi-local/simple/
    STAGING_PYPI_USERNAME     # Staging environment credentials
    STAGING_PYPI_PASSWORD     # Staging environment token
    STAGING_PYPI_URL          # Staging PyPI repository URL
@@ -143,7 +143,7 @@ The package is configured with both `setup.py` (legacy) and `pyproject.toml` (mo
 
 ```bash
 # Create deployment user
-curl -X POST "https://hypersec.jfrog.io/artifactory/api/security/users/pypi-deployer" \
+curl -X POST "https://hyperi.jfrog.io/artifactory/api/security/users/pypi-deployer" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "pypi-deployer",
@@ -159,8 +159,8 @@ curl -X POST "https://hypersec.jfrog.io/artifactory/api/security/users/pypi-depl
 
 ```bash
 # Configure pip for corporate repository
-pip config set global.index-url https://hypersec.jfrog.io/artifactory/api/pypi/hypersec-pypi-local/simple/
-pip config set global.trusted-host hypersec.jfrog.io
+pip config set global.index-url https://hyperi.jfrog.io/artifactory/api/pypi/hyperi-pypi-local/simple/
+pip config set global.trusted-host hyperi.jfrog.io
 
 # Install LogReducer
 pip install logreducer
@@ -173,10 +173,10 @@ pip install "logreducer[enhanced]"
 
 ```bash
 # Using pip with credentials
-pip install --index-url https://user:token@hypersec.jfrog.io/artifactory/api/pypi/hypersec-pypi-local/simple/ logreducer
+pip install --index-url https://user:token@hyperi.jfrog.io/artifactory/api/pypi/hyperi-pypi-local/simple/ logreducer
 
 # Using uv (recommended)
-uv pip install --index-url https://user:token@hypersec.jfrog.io/artifactory/api/pypi/hypersec-pypi-local/simple/ logreducer
+uv pip install --index-url https://user:token@hyperi.jfrog.io/artifactory/api/pypi/hyperi-pypi-local/simple/ logreducer
 ```
 
 ### Environment Configuration
@@ -188,7 +188,7 @@ Create `.pypirc` file for users:
 index-servers = corporate
 
 [corporate]
-repository = https://hypersec.jfrog.io/artifactory/api/pypi/hypersec-pypi-local/
+repository = https://hyperi.jfrog.io/artifactory/api/pypi/hyperi-pypi-local/
 username = your-username
 password = your-token
 ```
@@ -400,7 +400,7 @@ uv pip install --verbose logreducer
 **Authentication Errors**:
 ```bash
 # Verify credentials
-curl -u username:token https://hypersec.jfrog.io/artifactory/api/system/ping
+curl -u username:token https://hyperi.jfrog.io/artifactory/api/system/ping
 
 # Update .pypirc configuration
 pip config list

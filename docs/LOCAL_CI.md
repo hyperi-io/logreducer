@@ -50,7 +50,7 @@ export MIN_SECURITY_LEVEL=NONE
 
 # JFrog Artifactory credentials (stored in GitHub Secrets, not locally)
 # ARTIFACTORY_USER and ARTIFACTORY_TOKEN are in GitHub Secrets
-# Repository URL: https://hypersec.jfrog.io/artifactory/api/pypi/hypersec-pypi-local/
+# Repository URL: https://hyperi.jfrog.io/artifactory/api/pypi/hyperi-pypi-local/
 
 # Run CI with custom settings
 MIN_SECURITY_LEVEL=LOW make ci
@@ -221,7 +221,7 @@ gh workflow run deploy-jfrog.yml \
 # For local testing only (not recommended for production):
 export ARTIFACTORY_USER=xxx
 export ARTIFACTORY_TOKEN=yyy
-twine upload --repository-url https://hypersec.jfrog.io/artifactory/api/pypi/hypersec-pypi-local/ dist/* --verbose
+twine upload --repository-url https://hyperi.jfrog.io/artifactory/api/pypi/hyperi-pypi-local/ dist/* --verbose
 ```
 
 ### CI Takes Too Long

@@ -14,9 +14,9 @@ ci:
     # JFrog Artifactory URLs for different environments
     # Credentials are stored in GitHub Secrets: ARTIFACTORY_USERNAME and ARTIFACTORY_PASSWORD
     artifactory_urls:
-      production: "https://hypersec.jfrog.io/artifactory/api/pypi/hypersec-pypi-local/"
-      staging: "https://hypersec.jfrog.io/artifactory/api/pypi/hypersec-pypi-staging/"
-      test: "https://hypersec.jfrog.io/artifactory/api/pypi/hypersec-pypi-test/"
+      production: "https://hyperi.jfrog.io/artifactory/api/pypi/hyperi-pypi-local/"
+      staging: "https://hyperi.jfrog.io/artifactory/api/pypi/hyperi-pypi-staging/"
+      test: "https://hyperi.jfrog.io/artifactory/api/pypi/hyperi-pypi-test/"
   
   # Security configuration
   security:

@@ -134,7 +134,7 @@ jobs:
       env:
         TWINE_USERNAME: ${{ secrets.ARTIFACTORY_USERNAME }}
         TWINE_PASSWORD: ${{ secrets.ARTIFACTORY_PASSWORD }}
-        TWINE_REPOSITORY_URL: "https://hypersec.jfrog.io/artifactory/api/pypi/hypersec-pypi-local/"
+        TWINE_REPOSITORY_URL: "https://hyperi.jfrog.io/artifactory/api/pypi/hyperi-pypi-local/"
       run: |
         echo "Deploying to JFrog Artifactory..."
         twine upload --repository-url $TWINE_REPOSITORY_URL dist/*

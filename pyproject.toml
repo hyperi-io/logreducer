@@ -6,12 +6,15 @@ build-backend = "setuptools.build_meta"
 name = "logreducer"
 version = "3.4.0"
 authors = [
-    {name = "HyperSec Development Team", email = "dev@hypersec.io"},
+    {name = "HyperI Team", email = "dev@hyperi.io"},
+]
+maintainers = [
+    {name = "HyperI Team", email = "dev@hyperi.io"},
 ]
 description = "High-performance log reduction with intelligent pattern extraction and anomaly detection"
 readme = "README.md"
-license = "LicenseRef-HyperSec-EULA"
-license-files = ["LICENSE"]
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
 requires-python = ">=3.12"
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -67,11 +70,11 @@ docs = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/hypersec-io/logreducer"
-Documentation = "https://hypersec-io.github.io/logreducer/"
-Repository = "https://github.com/hypersec-io/logreducer"
-"Bug Reports" = "https://github.com/hypersec-io/logreducer/issues"
-Changelog = "https://github.com/hypersec-io/logreducer/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/hyperi-io/logreducer"
+Documentation = "https://hyperi-io.github.io/logreducer/"
+Repository = "https://github.com/hyperi-io/logreducer"
+"Bug Reports" = "https://github.com/hyperi-io/logreducer/issues"
+Changelog = "https://github.com/hyperi-io/logreducer/blob/main/CHANGELOG.md"
 
 [project.scripts]
 logreducer = "logreducer.cli:main"

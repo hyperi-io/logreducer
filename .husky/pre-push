@@ -4,7 +4,7 @@
 if [ -f .env ]; then
     export $(grep -E '^CICD_ENTITY=' .env | xargs)
 fi
-CICD_ENTITY=${CICD_ENTITY:-"HyperSec"}
+CICD_ENTITY=${CICD_ENTITY:-"HyperI"}
 
 # Pre-push hook
 # Ensures comprehensive quality checks before pushing to remote

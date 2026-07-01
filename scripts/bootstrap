@@ -233,7 +233,7 @@ build:
     - sdist
 
 jfrog:
-  repository_url: "https://hypersec.jfrog.io/artifactory/api/pypi/hypersec-pypi-local/"
+  repository_url: "https://hyperi.jfrog.io/artifactory/api/pypi/hyperi-pypi-local/"
   # Credentials should be in environment or GitHub Secrets
 """
     

@@ -61,9 +61,9 @@ jobs:
     - name: Get entity name for commit message
       id: entity
       run: |
-        ENTITY="HyperSec"
+        ENTITY="HyperI"
         if [ -f .env ]; then
-          ENTITY=$(grep "^CICD_ENTITY=" .env | cut -d= -f2 | sed 's/^"//' | sed 's/"$//' || echo "HyperSec")
+          ENTITY=$(grep "^CICD_ENTITY=" .env | cut -d= -f2 | sed 's/^"//' | sed 's/"$//' || echo "HyperI")
         fi
         echo "entity=$ENTITY" >> $GITHUB_OUTPUT
     

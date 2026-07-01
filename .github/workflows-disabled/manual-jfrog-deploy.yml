@@ -65,7 +65,7 @@ jobs:
       env:
         TWINE_USERNAME: ${{ secrets.ARTIFACTORY_USERNAME }}
         TWINE_PASSWORD: ${{ secrets.ARTIFACTORY_PASSWORD }}
-        TWINE_REPOSITORY_URL: "https://hypersec.jfrog.io/artifactory/api/pypi/hypersec-pypi-local/"
+        TWINE_REPOSITORY_URL: "https://hyperi.jfrog.io/artifactory/api/pypi/hyperi-pypi-local/"
       run: |
         echo "[PKG] Deploying to JFrog Artifactory..."
         echo "Repository: $TWINE_REPOSITORY_URL"
@@ -89,7 +89,7 @@ jobs:
         
         ## Package Information
         - **Version**: ${{ steps.version.outputs.version }}
-        - **Repository**: hypersec-pypi-local
+        - **Repository**: hyperi-pypi-local
         - **Time**: $(date)
         
         ## Artifacts Deployed
@@ -100,9 +100,9 @@ jobs:
         ## Installation Command
         \`\`\`bash
         pip install logreducer==${{ steps.version.outputs.version }} \\
-          --index-url https://hypersec.jfrog.io/artifactory/api/pypi/hypersec-pypi-local/simple
+          --index-url https://hyperi.jfrog.io/artifactory/api/pypi/hyperi-pypi-local/simple
         \`\`\`
         
         ## View in JFrog
-        [Open JFrog Artifactory](https://hypersec.jfrog.io)
+        [Open JFrog Artifactory](https://hyperi.jfrog.io)
         EOF

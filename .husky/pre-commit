@@ -4,7 +4,7 @@
 if [ -f .env ]; then
     export $(grep -E '^CICD_ENTITY=' .env | xargs)
 fi
-CICD_ENTITY=${CICD_ENTITY:-"HyperSec"}
+CICD_ENTITY=${CICD_ENTITY:-"HyperI"}
 
 # Pre-commit hook
 echo "Running ${CICD_ENTITY} pre-commit checks..."

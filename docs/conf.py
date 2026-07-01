@@ -13,8 +13,8 @@ sys.path.insert(0, os.path.abspath('../src'))
 # -- Project information -----------------------------------------------------
 
 project = 'LogReducer'
-copyright = '2025, HyperSec Development Team'
-author = 'HyperSec Development Team'
+copyright = '2025, HyperI Team'
+author = 'HyperI Team'
 
 # Get version dynamically
 import re
