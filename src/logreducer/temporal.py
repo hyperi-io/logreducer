@@ -6,7 +6,7 @@ import re
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Any
 
 from drain3 import TemplateMiner
 
@@ -24,8 +24,8 @@ class LogEntry:
     """Parsed log entry with timestamp"""
 
     raw_line: str
-    timestamp: Optional[datetime] = None
-    level: Optional[str] = None
+    timestamp: datetime | None = None
+    level: str | None = None
     line_number: int = 0
 
 
@@ -54,9 +54,7 @@ class TimestampParser:
                     if "%Y" not in date_format:
                         timestamp_str = f"{datetime.now().year} {timestamp_str}"
                         date_format = f"%Y {date_format}"
-                    entry.timestamp = datetime.strptime(
-                        timestamp_str.replace("T", " "), date_format
-                    )
+                    entry.timestamp = datetime.strptime(timestamp_str.replace("T", " "), date_format)
                     break
                 except (ValueError, TypeError):
                     # Timestamp parsing failed, try next pattern
@@ -76,16 +74,16 @@ class TemporalProcessor:
     def __init__(self, window_minutes: int = 60):
         self.window_minutes = window_minutes
         self.parser = TimestampParser()
-        self.miners_by_window = {}
+        self.miners_by_window: dict[int, TemplateMiner] = {}
 
-    def process_temporal(self, lines: List[str]) -> Dict:
+    def process_temporal(self, lines: list[str]) -> dict:
         """Process with temporal awareness"""
         entries = [self.parser.parse_line(line, i) for i, line in enumerate(lines)]
 
         timed = [e for e in entries if e.timestamp]
         timeless = [e for e in entries if not e.timestamp]
 
-        results = {
+        results: dict[str, Any] = {
             "temporal_patterns": [],
             "timeless_patterns": [],
             "time_distribution": {},
@@ -100,7 +98,7 @@ class TemporalProcessor:
 
         return results
 
-    def _extract_temporal_patterns(self, entries: List[LogEntry]) -> List[Dict]:
+    def _extract_temporal_patterns(self, entries: list[LogEntry]) -> list[dict]:
         """Extract patterns with time context"""
         patterns = []
         windows = defaultdict(list)
@@ -108,9 +106,7 @@ class TemporalProcessor:
         # Group by time window
         for entry in entries:
             if entry.timestamp:
-                window_key = int(
-                    entry.timestamp.timestamp() // (self.window_minutes * 60)
-                )
+                window_key = int(entry.timestamp.timestamp() // (self.window_minutes * 60))
                 windows[window_key].append(entry)
 
         # Process each window
@@ -131,9 +127,7 @@ class TemporalProcessor:
 
                 patterns.append(
                     {
-                        "template": miner.drain.id_to_cluster[
-                            cluster_id
-                        ].get_template(),
+                        "template": miner.drain.id_to_cluster[cluster_id].get_template(),
                         "window": window_key,
                         "count": 1,
                         "example": entry.raw_line,
@@ -142,7 +136,7 @@ class TemporalProcessor:
 
         return patterns
 
-    def _extract_timeless_patterns(self, entries: List[LogEntry]) -> List[Dict]:
+    def _extract_timeless_patterns(self, entries: list[LogEntry]) -> list[dict]:
         """Extract patterns without timestamps"""
         from drain3.template_miner_config import TemplateMinerConfig
 
@@ -164,9 +158,9 @@ class TemporalProcessor:
 
         return patterns
 
-    def _analyze_distribution(self, entries: List[LogEntry]) -> Dict:
+    def _analyze_distribution(self, entries: list[LogEntry]) -> dict:
         """Analyze time distribution"""
-        dist = {"hourly": defaultdict(int), "levels": defaultdict(int)}
+        dist: dict[str, Any] = {"hourly": defaultdict(int), "levels": defaultdict(int)}
 
         for entry in entries:
             if entry.timestamp:

@@ -63,9 +63,7 @@ class TestAnomalyDetector:
     @patch("logreducer.anomaly.SKLEARN_AVAILABLE", True)
     @patch("logreducer.anomaly.TfidfVectorizer")
     @patch("logreducer.anomaly.IsolationForest")
-    def test_detect_anomalies_sufficient_data_mocked(
-        self, mock_isolation_forest, mock_tfidf
-    ):
+    def test_detect_anomalies_sufficient_data_mocked(self, mock_isolation_forest, mock_tfidf):
         """Test anomaly detection with mocked ML components"""
         # Mock TfidfVectorizer
         mock_vectorizer = Mock()
@@ -119,9 +117,7 @@ class TestAnomalyDetector:
         detector = AnomalyDetector()
         detector.enabled = True
 
-        lines = [
-            "Line " + str(i) for i in range(15)
-        ]  # Enough lines to trigger processing
+        lines = ["Line " + str(i) for i in range(15)]  # Enough lines to trigger processing
 
         anomalies, normal = detector.detect_anomalies(lines)
 

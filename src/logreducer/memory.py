@@ -5,9 +5,10 @@ Memory management and monitoring utilities
 import gc
 import os
 from collections import deque
-from typing import Iterator, Tuple
+from collections.abc import Iterable, Iterator
+from typing import Any
 
-import psutil
+import psutil  # type: ignore[import-untyped]
 
 
 class MemoryMonitor:
@@ -27,13 +28,11 @@ class MemoryMonitor:
         # Calculate safe parameters
         avg_line_size = 200  # bytes
         python_overhead = 3
-        self.max_lines_in_memory = int(
-            self.effective_limit / (avg_line_size * python_overhead)
-        )
+        self.max_lines_in_memory = int(self.effective_limit / (avg_line_size * python_overhead))
         self.safe_chunk_size = max(1000, self.max_lines_in_memory // 10)
         self.safe_dedup_cache = int(self.max_lines_in_memory * 0.2)
 
-    def check_memory(self) -> Tuple[float, bool]:
+    def check_memory(self) -> tuple[float, bool]:
         """Check current memory usage"""
         current = self.process.memory_info().rss
         current_gb = current / (1024**3)
@@ -57,7 +56,7 @@ class MemoryMonitor:
         # Update peak usage
         if current > self.peak_usage_bytes:
             self.peak_usage_bytes = current
-        return current / (1024**3)
+        return float(current / (1024**3))
 
     def get_peak_usage_gb(self) -> float:
         """Get peak memory usage in GB"""
@@ -70,7 +69,7 @@ class MemoryMonitor:
     def is_limit_exceeded(self) -> bool:
         """Check if memory limit is exceeded"""
         current = self.process.memory_info().rss
-        return current > self.effective_limit
+        return bool(current > self.effective_limit)
 
     def reset(self) -> None:
         """Reset peak memory tracking"""
@@ -102,7 +101,7 @@ class StreamingProcessor:
         strategy = self.memory_monitor.estimate_file_strategy(file_size)
 
         if strategy == "full":
-            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+            with open(file_path, encoding="utf-8", errors="ignore") as f:
                 for line in f:
                     line = line.strip()
                     if line:
@@ -118,7 +117,7 @@ class StreamingProcessor:
         """Read file in chunks"""
         chunk = []
 
-        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+        with open(file_path, encoding="utf-8", errors="ignore") as f:
             for line_num, line in enumerate(f):
                 line = line.strip()
                 if not line:
@@ -142,9 +141,9 @@ class StreamingProcessor:
     def _read_sampled(self, file_path: str) -> Iterator[str]:
         """Reservoir sampling for huge files"""
         reservoir_size = min(self.chunk_size, 100000)
-        reservoir = []
+        reservoir: list[str] = []
 
-        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+        with open(file_path, encoding="utf-8", errors="ignore") as f:
             for i, line in enumerate(f):
                 line = line.strip()
                 if not line:
@@ -159,9 +158,9 @@ class StreamingProcessor:
 
         yield from reservoir
 
-    def _read_sampled_remainder(self, file_handle) -> Iterator[str]:
+    def _read_sampled_remainder(self, file_handle: Any) -> Iterator[str]:
         """Sample from current position"""
-        reservoir = []
+        reservoir: list[str] = []
         sample_size = 10000
 
         for i, line in enumerate(file_handle):
@@ -194,18 +193,14 @@ class BoundedDeduplicator:
             except ImportError:
                 import hashlib
 
-                self.hash_func = lambda x: hashlib.blake2b(
-                    x.encode(), digest_size=16
-                ).hexdigest()
+                self.hash_func = lambda x: hashlib.blake2b(x.encode(), digest_size=16).hexdigest()
         else:
             import hashlib
 
-            self.hash_func = lambda x: hashlib.md5(
-                x.encode(), usedforsecurity=False
-            ).hexdigest()
+            self.hash_func = lambda x: hashlib.md5(x.encode(), usedforsecurity=False).hexdigest()
 
-        self.seen_hashes = deque(maxlen=max_cache_size)
-        self.seen_set = set()
+        self.seen_hashes: deque[str] = deque(maxlen=max_cache_size)
+        self.seen_set: set[str] = set()
         self.stats = {"total": 0, "unique": 0, "duplicates": 0}
 
     def is_duplicate(self, line: str) -> bool:
@@ -226,7 +221,7 @@ class BoundedDeduplicator:
         self.stats["unique"] += 1
         return False
 
-    def deduplicate_lines(self, lines: Iterator[str]) -> Iterator[str]:
+    def deduplicate_lines(self, lines: Iterable[str]) -> Iterator[str]:
         """Deduplicate a stream of lines"""
         for line in lines:
             if not self.is_duplicate(line):

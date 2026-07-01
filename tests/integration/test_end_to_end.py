@@ -62,9 +62,7 @@ class TestRealDatasetProcessing:
         print(f"\nProcessing {sample_file} -> {output_file}")
 
         # Process file with output to data/output directory
-        result = reducer.process_file(
-            str(input_file), str(output_file), return_metadata=True
-        )
+        result = reducer.process_file(str(input_file), str(output_file), return_metadata=True)
 
         # Verify result structure
         assert isinstance(result, dict)
@@ -76,7 +74,7 @@ class TestRealDatasetProcessing:
         assert output_file.exists()
 
         # Verify the reduced log file has content that matches result
-        with open(output_file, "r") as f:
+        with open(output_file) as f:
             output_lines = [line.strip() for line in f.readlines()]
 
         assert len(output_lines) == len(result["lines"])
@@ -90,21 +88,15 @@ class TestRealDatasetProcessing:
         assert stats["level"] == "standard"
 
         # Print processing summary
-        print(
-            f"  Input: {stats['input_lines']} lines ({stats['input_size_mb']:.2f} MB)"
-        )
-        print(
-            f"  Output: {stats['output_lines']} lines ({stats['reduction_percent']:.1f}% reduction)"
-        )
+        print(f"  Input: {stats['input_lines']} lines ({stats['input_size_mb']:.2f} MB)")
+        print(f"  Output: {stats['output_lines']} lines ({stats['reduction_percent']:.1f}% reduction)")
         print(f"  Time: {stats['processing_time_seconds']:.3f}s")
 
         # Verify some reduction occurred for non-trivial files
         if stats["input_lines"] > 10:  # Only check reduction for files with >10 lines
             assert stats["reduction_percent"] >= 0
 
-    @pytest.mark.parametrize(
-        "sample_file", ["apache_access.log", "hdfs_system.log", "linux_system.log"]
-    )
+    @pytest.mark.parametrize("sample_file", ["apache_access.log", "hdfs_system.log", "linux_system.log"])
     def test_process_key_samples_enhanced(self, sample_file, samples_dir, output_dir):
         """Test enhanced processing on key sample files"""
         input_file = samples_dir / sample_file
@@ -118,9 +110,7 @@ class TestRealDatasetProcessing:
 
         print(f"\nEnhanced processing {sample_file} -> {output_file}")
 
-        result = reducer.process_file(
-            str(input_file), str(output_file), return_metadata=True
-        )
+        result = reducer.process_file(str(input_file), str(output_file), return_metadata=True)
 
         # Verify output file exists
         assert output_file.exists()
@@ -144,9 +134,7 @@ class TestRealDatasetProcessing:
         reducer = LogReducer(level="enhanced", mode="hybrid")
         output_file = test_data_dir / "e2e_output_medium.log"
 
-        result = reducer.process_file(
-            str(medium_log_file), str(output_file), return_metadata=True
-        )
+        result = reducer.process_file(str(medium_log_file), str(output_file), return_metadata=True)
 
         # Verify significant reduction
         stats = result["stats"]
@@ -171,9 +159,7 @@ class TestRealDatasetProcessing:
         reducer = LogReducer(level="enhanced", mode="pattern", max_memory_gb=1.0)
         output_file = test_data_dir / "e2e_output_large.log"
 
-        result = reducer.process_file(
-            str(large_log_file), str(output_file), return_metadata=True
-        )
+        result = reducer.process_file(str(large_log_file), str(output_file), return_metadata=True)
 
         # Verify high reduction ratio
         stats = result["stats"]
@@ -182,9 +168,7 @@ class TestRealDatasetProcessing:
 
         # Performance should be reasonable
         processing_rate = stats["processing_rate_mb_per_sec"]
-        assert (
-            processing_rate > 0.05
-        )  # At least 0.05 MB/s (adjusted for small test files)
+        assert processing_rate > 0.05  # At least 0.05 MB/s (adjusted for small test files)
 
         # Memory usage should be controlled
         assert reducer.memory_monitor.max_memory_gb <= 1.0
@@ -418,9 +402,7 @@ class TestErrorHandling:
         malformed_file = test_data_dir / "malformed.log"
         with open(malformed_file, "w", encoding="utf-8") as f:
             f.write("Good line: 2024-01-01 12:00:00 INFO Normal log\n")
-            f.write(
-                "Bad line with special chars: \u00e9\u00fc\u00f1\n"
-            )  # Valid UTF-8 chars
+            f.write("Bad line with special chars: \u00e9\u00fc\u00f1\n")  # Valid UTF-8 chars
             f.write("Another good line: 2024-01-01 12:00:01 WARN Warning\n")
             f.write("\n")  # Empty line
             f.write("Line without timestamp but with content\n")
@@ -455,9 +437,7 @@ class TestComprehensiveRealDataValidation:
             reducer = LogReducer(level="standard", mode="pattern")
             output_file = output_dir / f"comprehensive_{sample_file}"
 
-            result = reducer.process_file(
-                str(input_file), str(output_file), return_metadata=True
-            )
+            result = reducer.process_file(str(input_file), str(output_file), return_metadata=True)
 
             stats = result["stats"]
             processing_results.append(
@@ -485,12 +465,10 @@ class TestComprehensiveRealDataValidation:
         assert len(processing_results) > 0
 
         # Print summary for visibility during testing
-        print(f"\n{'='*70}")
+        print(f"\n{'=' * 70}")
         print("COMPREHENSIVE REAL DATA PROCESSING SUMMARY")
-        print(f"{'='*70}")
-        print(
-            f"{'File':<25} {'Lines':<8} {'Out':<6} {'Reduction':<10} {'Time(s)':<8} {'Size(MB)':<8}"
-        )
+        print(f"{'=' * 70}")
+        print(f"{'File':<25} {'Lines':<8} {'Out':<6} {'Reduction':<10} {'Time(s)':<8} {'Size(MB)':<8}")
         print("-" * 70)
 
         for result in processing_results:
@@ -553,8 +531,7 @@ class TestComprehensiveRealDataValidation:
         print(f"\nEnhanced Processing Results:")
         for result in enhanced_results:
             print(
-                f"  {result['file']}: {result['reduction_percent']:.1f}% reduction "
-                f"in {result['processing_time']:.3f}s"
+                f"  {result['file']}: {result['reduction_percent']:.1f}% reduction in {result['processing_time']:.3f}s"
             )
 
     def test_very_long_lines_handling(self, test_data_dir):

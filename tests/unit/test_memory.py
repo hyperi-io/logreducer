@@ -6,8 +6,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from logreducer.memory import (BoundedDeduplicator, MemoryMonitor,
-                               StreamingProcessor)
+from logreducer.memory import BoundedDeduplicator, MemoryMonitor, StreamingProcessor
 
 
 class TestMemoryMonitor:
@@ -200,9 +199,7 @@ class TestBoundedDeduplicator:
             dedup_fallback = BoundedDeduplicator(hash_algorithm="xxhash")
             fallback_result = dedup_fallback.hash_func("test")
             assert isinstance(fallback_result, str)
-            assert (
-                len(fallback_result) == 32
-            )  # Should fall back to blake2b (16 bytes = 32 hex chars)
+            assert len(fallback_result) == 32  # Should fall back to blake2b (16 bytes = 32 hex chars)
 
     def test_is_duplicate_new_line(self):
         """Test duplicate detection for new line"""

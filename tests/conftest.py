@@ -126,36 +126,24 @@ def large_log_file(test_data_dir) -> Path:
             # Create more realistic log patterns
             if i % 100 == 0:
                 # Periodic system messages
-                f.write(
-                    f"{timestamp.strftime('%Y-%m-%d %H:%M:%S')} INFO System health check passed\n"
-                )
+                f.write(f"{timestamp.strftime('%Y-%m-%d %H:%M:%S')} INFO System health check passed\n")
             elif i % 1000 == 0:
                 # Rare critical events
-                f.write(
-                    f"{timestamp.strftime('%Y-%m-%d %H:%M:%S')} CRITICAL Memory spike detected\n"
-                )
+                f.write(f"{timestamp.strftime('%Y-%m-%d %H:%M:%S')} CRITICAL Memory spike detected\n")
             elif i % 50 == 0:
                 # Regular errors
-                f.write(
-                    f"{timestamp.strftime('%Y-%m-%d %H:%M:%S')} ERROR Connection timeout to service-{i%5}\n"
-                )
+                f.write(f"{timestamp.strftime('%Y-%m-%d %H:%M:%S')} ERROR Connection timeout to service-{i % 5}\n")
             else:
                 # Normal operations
                 level = random.choice(["INFO", "DEBUG", "WARN"])
-                action = random.choice(
-                    ["processed", "completed", "started", "finished"]
-                )
+                action = random.choice(["processed", "completed", "started", "finished"])
                 item = f"task_{i:06d}"
-                f.write(
-                    f"{timestamp.strftime('%Y-%m-%d %H:%M:%S')} {level} Operation {action} for {item}\n"
-                )
+                f.write(f"{timestamp.strftime('%Y-%m-%d %H:%M:%S')} {level} Operation {action} for {item}\n")
 
     return log_file
 
 
-@pytest.fixture(
-    params=[ProcessingLevel.STANDARD, ProcessingLevel.ENHANCED, ProcessingLevel.MAXIMUM]
-)
+@pytest.fixture(params=[ProcessingLevel.STANDARD, ProcessingLevel.ENHANCED, ProcessingLevel.MAXIMUM])
 def processing_level(request):
     """Parametrized fixture for testing different processing levels"""
     return request.param
@@ -204,9 +192,7 @@ def anomaly_log_file(test_data_dir) -> Path:
     # Add many normal lines
     lines = []
     for i in range(95):
-        lines.append(
-            f"2024-01-01 12:{i//60:02d}:{i%60:02d} {random.choice(normal_lines)}"
-        )
+        lines.append(f"2024-01-01 12:{i // 60:02d}:{i % 60:02d} {random.choice(normal_lines)}")
 
     # Add some anomalous lines
     anomalies = [
@@ -231,9 +217,7 @@ class LogGenerator:
     """Utility class for generating test logs"""
 
     @staticmethod
-    def generate_structured_logs(
-        num_lines: int, with_timestamps: bool = True
-    ) -> List[str]:
+    def generate_structured_logs(num_lines: int, with_timestamps: bool = True) -> list[str]:
         """Generate structured log lines for testing"""
         levels = ["DEBUG", "INFO", "WARN", "ERROR", "CRITICAL"]
         services = ["auth", "api", "db", "cache", "queue"]
@@ -247,9 +231,7 @@ class LogGenerator:
             message = f"Service {service} operation {i} completed"
 
             if with_timestamps:
-                timestamp = (start_time + timedelta(seconds=i)).strftime(
-                    "%Y-%m-%d %H:%M:%S"
-                )
+                timestamp = (start_time + timedelta(seconds=i)).strftime("%Y-%m-%d %H:%M:%S")
                 line = f"{timestamp} {level} {message}"
             else:
                 line = f"{level} {message}"

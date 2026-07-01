@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=64.0.0", "wheel", "pip>=22.1"]
-build-backend = "setuptools.build_meta"
+requires = ["uv_build>=0.8.0,<1"]
+build-backend = "uv_build"
 
 [project]
 name = "logreducer"
@@ -16,6 +16,9 @@ readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
 requires-python = ">=3.12"
+# Python version policy: requires-python enforces the minimum. Do NOT add
+# version-specific classifiers (3.12, 3.13, ...) - "3 :: Only" avoids churn
+# on every new Python release. Matches the scalo-py convention.
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
@@ -24,7 +27,6 @@ classifiers = [
     "Topic :: System :: Systems Administration", 
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3 :: Only",
     "Operating System :: OS Independent",
 ]
@@ -48,18 +50,18 @@ enhanced = [
     "datasketch>=1.5.0",  # MinHash and LSH for similarity analysis
 ]
 dev = [
-    "pytest>=8.0.0",         # Modern test framework
-    "pytest-cov>=5.0.0",     # Test coverage reporting
-    "black>=24.0.0",         # Code formatting
-    "flake8>=7.0.0",         # Code linting
-    "mypy>=1.8.0",           # Static type checking
-    "build>=1.0.0",          # Package building
-    "twine>=5.0.0",          # PyPI package uploads
-    "vermin>=1.6.0",         # Python version detection for automation
-    "python-dotenv>=1.0.0",  # Environment configuration
-    "pyyaml>=6.0.1",         # YAML configuration support
+    "pytest>=8.0.0",         # Test framework
+    "pytest-cov>=5.0.0",     # Coverage reporting
+    "ruff>=0.15.0",          # Lint + format (replaces black/flake8/isort)
+    "ty>=0.0.34",            # Astral type checker (runs alongside mypy)
+    "mypy>=1.8.0",           # Static type checking (strict; see [tool.mypy])
+    "bandit[toml]>=1.7.0",   # Security linting
+    "pip-audit>=2.6.0",      # Dependency vulnerability scanning
+    "vulture>=2.16",         # Dead-code detection
+    "vermin>=1.6.0",         # Python version-compat detection
     "pre-commit>=3.0.0",     # Git pre-commit hooks
-    "isort>=5.12.0",         # Import sorting
+    "python-dotenv>=1.0.0",  # Environment configuration for scripts
+    "pyyaml>=6.0.1",         # YAML config support for scripts
     "requests>=2.31.0",      # For download_datasets script
 ]
 docs = [
@@ -79,44 +81,71 @@ Changelog = "https://github.com/hyperi-io/logreducer/blob/main/CHANGELOG.md"
 [project.scripts]
 logreducer = "logreducer.cli:main"
 
-[tool.setuptools]
-package-dir = {"" = "src"}
+[tool.uv.build-backend]
+module-name = "logreducer"
+module-root = "src"
 
-[tool.setuptools.packages.find]
-where = ["src"]
-include = ["logreducer*"]
-exclude = ["tests*"]
+# Ruff: lint + format (replaces black + flake8 + isort). Ported from
+# scalo-py for a consistent HyperI Python lint posture. Line length 120.
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+indent-width = 4
+src = ["src"]
+# examples/ are illustrative snippets, not scanned code (matches scalo-py).
+extend-exclude = ["examples"]
 
-[tool.setuptools.package-data]
-logreducer = ["py.typed"]
+[tool.ruff.lint]
+select = [
+    "E", "W", "F", "I", "B", "C4", "UP", "ARG", "SIM", "S", "N", "PT",
+    "RUF", "PIE", "T20",
+]
+ignore = [
+    "ARG001", "ARG002",
+    "B904", "B008", "B017", "B007", "B028",
+    "E402", "E722", "E501", "E741",
+    "SIM105", "SIM108", "SIM102",
+    "F401", "F821", "F601",
+    "TRY300", "C901", "UP035", "W191",
+    # Intentional security relaxations in this codebase
+    "S104",   # bind-all-interfaces (containers)
+    "S110",   # try-except-pass (intentional error handling)
+    "S112",   # try-except-continue (intentional skip)
+    "S311",   # non-crypto random (jitter/sampling)
+    "S603",   # subprocess without shell=True (helper scripts)
+    "S607",   # partial executable path (helper scripts)
+    "S608",   # hardcoded SQL (query builders, not user input)
+    "T201",   # print (CLI output)
+    "RUF012", "RUF059", "RUF001", "RUF002", "RUF005", "RUF006",
+    "N806", "N818",
+    "PIE810",
+]
+fixable = ["ALL"]
+unfixable = []
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
-# Black code formatting
-[tool.black]
-line-length = 88
-target-version = ['py312', 'py313']
-# Future target versions (uncomment when Black supports them):
-# target-version = ['py311', 'py312', 'py313', 'py314']  # Add py314 when available
-# Note: Black will add support for Python 3.26+ (calendar versioning) as py326, py327, py328
-include = '\.pyi?$'
-extend-exclude = '''
-/(
-  # directories
-  \.eggs
-  | \.git
-  | \.hg
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | build
-  | dist
-  | \.tmp
-  | logs
-)/
-'''
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+    "S101", "S105", "S106", "S108", "F541", "RUF013",
+    "PT017", "PT011", "PT012", "RUF043",
+]
 
-# MyPy type checking
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+# MyPy: KEPT STRICT (deliberate deviation from scalo's relaxed profile -
+# logreducer is small and already clean-typed). ignore_missing_imports only
+# silences third-party libs without stubs (drain3, datasketch, ...); our own
+# code stays fully typed via disallow_untyped_defs below.
 [tool.mypy]
 python_version = "3.12"  # Matches minimum supported version
+ignore_missing_imports = true
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
@@ -180,6 +209,29 @@ exclude_dirs = [
     "data/samples"
 ]
 skips = ["B101", "B603"]
+
+# uv dependency resolution. Bleeding-edge policy: force latest majors even
+# when transitive deps pin older lower bounds; revisit each /deps pass.
+[tool.uv]
+index-strategy = "unsafe-best-match"
+override-dependencies = []
+
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple"
+default = true
+
+# ty: Astral type checker, runs alongside mypy.
+[tool.ty.environment]
+python-version = "3.12"
+
+[tool.ty.src]
+exclude = ["examples/", "docs/", "scripts/"]
+
+# vermin: verify no syntax/features newer than the minimum Python.
+[tool.vermin]
+targets = ["3.12"]
+no_tips = true
 
 # Semantic Release Configuration
 [tool.semantic_release]

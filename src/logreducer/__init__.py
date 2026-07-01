@@ -23,18 +23,18 @@ from .core import LogReducer
 from .logging_config import setup_logging
 
 __all__ = [
+    "BigDialConfig",
     "LogReducer",
+    "OutputFormat",
     "ProcessingLevel",
     "ProcessingMode",
-    "BigDialConfig",
-    "OutputFormat",
-    "setup_logging",
-    "__version__",
     "__author__",
+    "__description__",
     "__email__",
     "__license__",
-    "__description__",
     "__url__",
+    "__version__",
+    "setup_logging",
 ]
 
 # Type annotation for mypy

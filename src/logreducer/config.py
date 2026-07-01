@@ -8,7 +8,7 @@ import multiprocessing as mp
 from dataclasses import dataclass
 from enum import Enum
 
-import psutil
+import psutil  # type: ignore[import-untyped]
 
 
 class ProcessingLevel(Enum):
@@ -46,14 +46,14 @@ class BigDialConfig:
     dedup_cache_size: int = 100000
 
     # Speed Control
-    n_workers: int = None
+    n_workers: int | None = None
     hash_algorithm: str = "xxhash"
     use_polars: bool = True
     single_pass: bool = True
 
     # Quality Control
     drain_similarity: float = 0.4
-    fuzzy_threshold: float = 0.8
+    fuzzy_threshold: float | None = 0.8
     min_pattern_occurrences: int = 2
     anomaly_contamination: float = 0.1
 
@@ -69,7 +69,7 @@ class BigDialConfig:
 
     # Logging Control
     enable_logging: bool = False  # Logging disabled by default
-    log_file: str = None  # Path to log file (None = no file logging)
+    log_file: str | None = None  # Path to log file (None = no file logging)
     log_level: str = "INFO"  # DEBUG, INFO, WARNING, ERROR
     log_format: str = "rfc3339"  # rfc3339 or simple
 
@@ -84,14 +84,14 @@ class BigDialConfig:
             # In containers, respect CPU limits if available
             try:
                 # Try to read container CPU quota (Docker/Kubernetes)
-                with open("/sys/fs/cgroup/cpu/cpu.cfs_quota_us", "r") as f:
+                with open("/sys/fs/cgroup/cpu/cpu.cfs_quota_us") as f:
                     quota = int(f.read().strip())
-                with open("/sys/fs/cgroup/cpu/cpu.cfs_period_us", "r") as f:
+                with open("/sys/fs/cgroup/cpu/cpu.cfs_period_us") as f:
                     period = int(f.read().strip())
                 if quota > 0 and period > 0:
                     container_cpus = max(1, int(quota / period))
                     cpu_count = min(cpu_count, container_cpus)
-            except (FileNotFoundError, ValueError, IOError):
+            except (OSError, FileNotFoundError, ValueError):
                 # Not in a container or cgroup not available, use system CPU count
                 pass
 

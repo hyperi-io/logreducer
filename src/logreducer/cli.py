@@ -51,18 +51,14 @@ Output Formats:
     parser.add_argument("input_file", help="Input log file to process")
 
     # Output options
-    parser.add_argument(
-        "-o", "--output", metavar="FILE", help="Output file (default: stdout)"
-    )
+    parser.add_argument("-o", "--output", metavar="FILE", help="Output file (default: stdout)")
     parser.add_argument(
         "--format",
         choices=["line", "json", "jsonl"],
         default="line",
         help="Output format (default: line)",
     )
-    parser.add_argument(
-        "--pretty-json", action="store_true", help="Pretty print JSON output"
-    )
+    parser.add_argument("--pretty-json", action="store_true", help="Pretty print JSON output")
 
     # Processing options
     parser.add_argument(
@@ -81,9 +77,7 @@ Output Formats:
     )
 
     # Resource limits
-    parser.add_argument(
-        "--max-memory", type=float, metavar="GB", help="Maximum memory usage in GB"
-    )
+    parser.add_argument("--max-memory", type=float, metavar="GB", help="Maximum memory usage in GB")
     parser.add_argument(
         "--max-patterns",
         type=int,
@@ -107,17 +101,11 @@ Output Formats:
         action="store_true",
         help="Estimate processing requirements and exit",
     )
-    parser.add_argument(
-        "--metadata", action="store_true", help="Include detailed metadata in output"
-    )
-    parser.add_argument(
-        "--stats", action="store_true", help="Print processing statistics"
-    )
+    parser.add_argument("--metadata", action="store_true", help="Include detailed metadata in output")
+    parser.add_argument("--stats", action="store_true", help="Print processing statistics")
 
     # Version
-    parser.add_argument(
-        "--version", action="version", version=f"LogReducer {__version__}"
-    )
+    parser.add_argument("--version", action="version", version=f"LogReducer {__version__}")
 
     return parser
 
@@ -144,9 +132,7 @@ def estimate_processing(args: argparse.Namespace) -> None:
 
         if estimate["will_sample"]:
             logger.info("File size requires sampling strategy")
-            logger.info(
-                "Full processing may not be possible with current memory limits"
-            )
+            logger.info("Full processing may not be possible with current memory limits")
 
     except Exception as e:
         logger = get_logger("cli")
@@ -175,9 +161,7 @@ def process_file(args: argparse.Namespace) -> None:
         reducer = LogReducer(level=args.level, mode=args.mode, **kwargs)
 
         # Process file
-        result = reducer.process_file(
-            args.input_file, args.output, return_metadata=args.metadata
-        )
+        result = reducer.process_file(args.input_file, args.output, return_metadata=args.metadata)
 
         # Handle output
         if not args.output:
@@ -195,7 +179,7 @@ def process_file(args: argparse.Namespace) -> None:
         # Print stats if requested
         if args.stats:
             stats = reducer.stats
-            print(f"\nProcessing completed:", file=sys.stderr)
+            print("\nProcessing completed:", file=sys.stderr)
             print(
                 f"  Input: {stats['input_lines']:,} lines ({stats['input_size_mb']:.1f} MB)",
                 file=sys.stderr,

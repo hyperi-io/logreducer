@@ -20,6 +20,7 @@ __pycache__/
 .Python
 build/
 develop-eggs/
+
 # dist/ - Keep dist/ for JFrog deployment artifacts
 downloads/
 eggs/
@@ -172,7 +173,6 @@ htmlcov/
 # Temporary files
 .tmp/
 *.tmp
-uv.lock
 
 # Bandit security scan results
 bandit-report.json
@@ -191,5 +191,38 @@ Pipfile.lock
 act-*
 .act/
 .secrets.act
+
 # CI virtual environment
 .venv-ci/
+
+# Local environment files (never commit -- contain secrets)
+!.env.example.*
+
+# Local working files (not committed)
+#
+# Authoritative protection for hyperi-ai content is .git/info/exclude
+# (per-repo, never committed). The entries below ALSO appear there;
+# duplicating them in .gitignore is belt-and-braces -- if a developer
+# uses a tool that doesn't respect .git/info/exclude (unusual), the
+# .gitignore still catches it. We do not RELY on these being committed
+# in .gitignore -- attach surgically appends them if missing, leaves
+# them alone if already present.
+docs/superpowers/
+.mcp.json
+.ai-version
+
+# hyperi-ai per-project context + tool-specific equivalents.
+# all load these from project root natively). Local-only, never
+# committed -- mirrored in .git/info/exclude.
+TODO.md
+
+# Git worktrees (local dev convenience)
+.worktrees/
+
+# Python build artefacts
+dist/
+
+# Python virtual envs and caches
+.venv/
+.ruff_cache/
+pip-wheel-metadata/

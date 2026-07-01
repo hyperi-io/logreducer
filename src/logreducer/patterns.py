@@ -4,10 +4,13 @@ Pattern extraction and clustering utilities
 
 from collections import Counter
 from dataclasses import dataclass, field
-from typing import Dict, List
+from typing import TYPE_CHECKING, Any
 
 from drain3 import TemplateMiner
 from drain3.template_miner_config import TemplateMinerConfig
+
+if TYPE_CHECKING:
+    from .config import BigDialConfig
 
 # Try optional imports
 try:
@@ -19,7 +22,7 @@ except ImportError:
 
 try:
     import numpy as np
-    from scipy.stats import entropy
+    from scipy.stats import entropy  # type: ignore[import-untyped]
 
     SCIPY_AVAILABLE = True
 except ImportError:
@@ -31,21 +34,21 @@ class LogPattern:
     """Represents a unique log pattern"""
 
     template: str
-    examples: List[str] = field(default_factory=list)
+    examples: list[str] = field(default_factory=list)
     count: int = 0
     priority: float = 0.0
     anomaly_score: float = 0.0
-    metadata: Dict = field(default_factory=dict)
+    metadata: dict = field(default_factory=dict)
 
 
 class PatternExtractor:
     """Extract patterns using Drain3 and other methods"""
 
-    def __init__(self, config):
+    def __init__(self, config: "BigDialConfig") -> None:
         self.config = config
         self.setup_drain3()
 
-    def setup_drain3(self):
+    def setup_drain3(self) -> None:
         """Configure Drain3"""
         drain_config = TemplateMinerConfig()
         drain_config.profiling_enabled = False
@@ -55,7 +58,7 @@ class PatternExtractor:
         drain_config.snapshot_compress_state = False
         self.miner = TemplateMiner(config=drain_config)
 
-    def extract_patterns(self, lines: List[str]) -> List[LogPattern]:
+    def extract_patterns(self, lines: list[str]) -> list[LogPattern]:
         """Extract patterns from lines"""
         pattern_map = {}
 
@@ -87,14 +90,14 @@ class PatternExtractor:
         patterns.sort(key=lambda p: p.priority, reverse=True)
         return patterns[: self.config.max_patterns]
 
-    def _filter_by_occurrence(self, patterns: List[LogPattern]) -> List[LogPattern]:
+    def _filter_by_occurrence(self, patterns: list[LogPattern]) -> list[LogPattern]:
         """Filter patterns by minimum occurrence"""
         return [p for p in patterns if p.count >= self.config.min_pattern_occurrences]
 
-    def _calculate_priority(self, patterns: List[LogPattern]) -> List[LogPattern]:
+    def _calculate_priority(self, patterns: list[LogPattern]) -> list[LogPattern]:
         """Calculate priority scores"""
         for pattern in patterns:
-            priority = pattern.count
+            priority: float = pattern.count
 
             # Boost errors and warnings
             template_upper = pattern.template.upper()
@@ -113,7 +116,7 @@ class PatternExtractor:
 
         return patterns
 
-    def _entropy_filter(self, patterns: List[LogPattern]) -> List[LogPattern]:
+    def _entropy_filter(self, patterns: list[LogPattern]) -> list[LogPattern]:
         """Filter by information entropy"""
         if not SCIPY_AVAILABLE:
             return patterns
@@ -126,11 +129,7 @@ class PatternExtractor:
 
         # Filter by entropy threshold
         if hasattr(self.config, "entropy_threshold"):
-            patterns = [
-                p
-                for p in patterns
-                if p.metadata.get("entropy", 1) > self.config.entropy_threshold
-            ]
+            patterns = [p for p in patterns if p.metadata.get("entropy", 1) > self.config.entropy_threshold]
 
         return patterns
 
@@ -144,9 +143,9 @@ class FuzzyDeduplicator:
 
         if self.enabled:
             self.lsh = MinHashLSH(threshold=threshold, num_perm=64)
-            self.minhashes = {}
+            self.minhashes: dict[str, Any] = {}
 
-    def deduplicate(self, lines: List[str]) -> List[str]:
+    def deduplicate(self, lines: list[str]) -> list[str]:
         """Remove near-duplicates"""
         if not self.enabled:
             return lines

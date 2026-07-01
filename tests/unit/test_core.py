@@ -118,7 +118,7 @@ class TestLogReducerProcessFile:
         assert output_file.exists()
 
         # Check output file content
-        with open(output_file, "r") as f:
+        with open(output_file) as f:
             output_lines = [line.strip() for line in f.readlines()]
 
         assert output_lines == result
@@ -238,13 +238,10 @@ class TestLogReducerInternalMethods:
 
         # Mock the components to control their behavior
         with (
-            patch.object(
-                reducer.streaming_processor, "read_file_streaming"
-            ) as mock_stream,
+            patch.object(reducer.streaming_processor, "read_file_streaming") as mock_stream,
             patch.object(reducer.deduplicator, "deduplicate_lines") as mock_dedup,
             patch.object(reducer.pattern_extractor, "extract_patterns") as mock_extract,
         ):
-
             # Setup mocks
             mock_stream.return_value = ["line1", "line2", "line3"]
             mock_dedup.return_value = ["line1", "line2"]  # Deduplicated
@@ -268,14 +265,11 @@ class TestLogReducerInternalMethods:
         reducer = LogReducer(level="enhanced", mode="pattern")
 
         with (
-            patch.object(
-                reducer.streaming_processor, "read_file_streaming"
-            ) as mock_stream,
+            patch.object(reducer.streaming_processor, "read_file_streaming") as mock_stream,
             patch.object(reducer.deduplicator, "deduplicate_lines") as mock_dedup,
             patch.object(reducer.fuzzy_dedup, "deduplicate") as mock_fuzzy,
             patch.object(reducer.pattern_extractor, "extract_patterns") as mock_extract,
         ):
-
             # Setup mocks
             mock_stream.return_value = ["line1", "line2", "line3"]
             mock_dedup.return_value = ["line1", "line2", "line3"]

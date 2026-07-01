@@ -4,8 +4,7 @@ Unit tests for configuration module
 
 import pytest
 
-from logreducer.config import (BigDialConfig, ProcessingLevel, ProcessingMode,
-                               get_preset_config)
+from logreducer.config import BigDialConfig, ProcessingLevel, ProcessingMode, get_preset_config
 
 
 class TestProcessingLevel:
@@ -58,9 +57,7 @@ class TestBigDialConfig:
 
     def test_custom_config(self):
         """Test custom configuration values"""
-        config = BigDialConfig(
-            max_memory_gb=4.0, chunk_size=100000, drain_similarity=0.3
-        )
+        config = BigDialConfig(max_memory_gb=4.0, chunk_size=100000, drain_similarity=0.3)
 
         assert config.max_memory_gb == 4.0
         assert config.chunk_size == 100000

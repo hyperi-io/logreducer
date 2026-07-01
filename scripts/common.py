@@ -4,14 +4,15 @@ Common utilities for Python project scripts
 Provides centralized logging, configuration, and version management
 """
 
-import sys
 import re
 import subprocess
-import yaml
+import sys
 from pathlib import Path
-from typing import Optional, Any, Dict, Tuple
-from loguru import logger
+from typing import Any, Dict, Optional, Tuple
+
+import yaml
 from dynaconf import Dynaconf
+from loguru import logger
 
 # Project root detection
 SCRIPT_DIR = Path(__file__).parent
@@ -25,10 +26,10 @@ VENV_ACTIVATE = VENV_PATH / "bin" / "activate"
 
 def setup_logging(
     level: str = "INFO",
-    format_template: Optional[str] = None,
+    format_template: str | None = None,
     enable_console: bool = True,
     enable_file: bool = True,
-    log_file: Optional[str] = None,
+    log_file: str | None = None,
 ) -> None:
     """
     Configure loguru logging with RFC 3339 timestamps (tee approach)
@@ -82,14 +83,10 @@ def setup_logging(
             diagnose=True,
         )
 
-    logger.info(
-        f"Logger initialized at {level} level (console={enable_console}, file={enable_file})"
-    )
+    logger.info(f"Logger initialized at {level} level (console={enable_console}, file={enable_file})")
 
 
-def setup_config(
-    config_file: Optional[str] = None, env_prefix: str = "APP", **kwargs
-) -> Dynaconf:
+def setup_config(config_file: str | None = None, env_prefix: str = "APP", **kwargs) -> Dynaconf:
     """
     Setup configuration with proper precedence:
     1. config.yaml (lowest priority)
@@ -131,29 +128,31 @@ def setup_config(
 def load_pdev_config():
     """Load configuration from pdev.yaml"""
     pdev_config_file = PROJECT_ROOT / "scripts" / "pdev.yaml"
-    
+
     if pdev_config_file.exists():
         try:
             import yaml
+
             with open(pdev_config_file) as f:
                 pdev_config = yaml.safe_load(f)
-                return pdev_config.get('config', {})
+                return pdev_config.get("config", {})
         except ImportError:
             pass
         except Exception as e:
             logger.warning(f"Could not load pdev config: {e}")
-    
+
     # Fallback minimal config
     return {
-        'logging': {'level': 'INFO', 'format': 'rfc3339', 'enable_console': True, 'enable_file': True},
-        'dev': {'parallel_jobs': 4, 'verbose': True},
-        'paths': {'venv': '.venv', 'tmp': '.tmp', 'logs': '.tmp/logs'}
+        "logging": {"level": "INFO", "format": "rfc3339", "enable_console": True, "enable_file": True},
+        "dev": {"parallel_jobs": 4, "verbose": True},
+        "paths": {"venv": ".venv", "tmp": ".tmp", "logs": ".tmp/logs"},
     }
+
 
 def create_default_config(config_file: str) -> None:
     """Create a default configuration file from pdev.yaml template"""
     pdev_config = load_pdev_config()
-    
+
     # Convert the config section to YAML for the default config file
     default_config = """# LogReducer Configuration
 # This file provides base configuration that can be overridden by:
@@ -162,9 +161,10 @@ def create_default_config(config_file: str) -> None:
 
 # Configuration loaded from pdev.yaml - edit scripts/pdev.yaml to change defaults
 """
-    
+
     try:
         import yaml
+
         default_config += yaml.dump(pdev_config, default_flow_style=False)
     except ImportError:
         # Minimal fallback if PyYAML not available
@@ -215,13 +215,13 @@ def ensure_venv_python() -> Path:
 def run_command(cmd, check=True, capture_output=False, **kwargs):
     """
     Run a command with consistent error handling
-    
+
     Args:
         cmd: Command as list of strings
         check: Raise exception on non-zero exit
         capture_output: Capture stdout/stderr
         **kwargs: Additional arguments for subprocess.run
-    
+
     Returns:
         subprocess.CompletedProcess
     """
@@ -237,10 +237,11 @@ def run_command(cmd, check=True, capture_output=False, **kwargs):
         logger.error(f"Command not found: {cmd[0]}")
         raise
 
+
 def get_project_version():
     """
     Get current project version from pyproject.toml
-    
+
     Returns:
         Version string or None if not found
     """
@@ -252,10 +253,11 @@ def get_project_version():
             return match.group(1)
     return None
 
+
 def get_package_name():
     """
     Get package name from pyproject.toml
-    
+
     Returns:
         Package name or None if not found
     """
@@ -267,31 +269,33 @@ def get_package_name():
             return match.group(1)
     return None
 
+
 def get_python_version():
     """
     Get required Python version from .python-version file
     Falls back to config floor if not found
-    
+
     Returns:
         Python version string or None if not configured
     """
     version_file = PROJECT_ROOT / ".python-version"
     if version_file.exists():
         return version_file.read_text().strip()
-    
+
     # Fall back to floor version from config
     config_file = SCRIPT_DIR / "pdev.yaml"
     config = load_yaml_config(config_file)
     floor = config.get("base", {}).get("python_version_floor")
     return floor
 
-def load_yaml_config(config_file: Path) -> Dict[str, Any]:
+
+def load_yaml_config(config_file: Path) -> dict[str, Any]:
     """
     Load YAML configuration file
-    
+
     Args:
         config_file: Path to YAML file
-    
+
     Returns:
         Parsed configuration dictionary
     """
@@ -300,47 +304,39 @@ def load_yaml_config(config_file: Path) -> Dict[str, Any]:
             return yaml.safe_load(f) or {}
     return {}
 
+
 def check_git_repo() -> bool:
     """
     Check if current directory is a git repository
-    
+
     Returns:
         True if in a git repo, False otherwise
     """
     try:
-        subprocess.run(
-            ["git", "rev-parse", "--git-dir"],
-            capture_output=True,
-            check=True,
-            cwd=PROJECT_ROOT
-        )
+        subprocess.run(["git", "rev-parse", "--git-dir"], capture_output=True, check=True, cwd=PROJECT_ROOT)
         return True
     except (subprocess.CalledProcessError, FileNotFoundError):
         return False
 
+
 def get_git_tags():
     """
     Get list of git tags
-    
+
     Returns:
         List of tag names
     """
     try:
-        result = subprocess.run(
-            ["git", "tag", "-l"],
-            capture_output=True,
-            text=True,
-            check=True,
-            cwd=PROJECT_ROOT
-        )
-        return [t for t in result.stdout.strip().split('\n') if t]
+        result = subprocess.run(["git", "tag", "-l"], capture_output=True, text=True, check=True, cwd=PROJECT_ROOT)
+        return [t for t in result.stdout.strip().split("\n") if t]
     except (subprocess.CalledProcessError, FileNotFoundError):
         return []
 
+
 def init_script(
     script_name: str,
-    config_file: Optional[str] = None,
-    log_level: Optional[str] = None,
+    config_file: str | None = None,
+    log_level: str | None = None,
     **cli_args,
 ) -> tuple[Dynaconf, Any]:
     """
@@ -365,9 +361,7 @@ def init_script(
     # Setup logging with config values (tee approach by default)
     setup_logging(
         level=config.get("log_level", "INFO"),
-        format_template=(
-            None if config.get("log_format") == "rfc3339" else config.get("log_format")
-        ),
+        format_template=(None if config.get("log_format") == "rfc3339" else config.get("log_format")),
         enable_console=config.get("enable_console_log", True),
         enable_file=config.get("enable_file_log", True),
         log_file=config.get("log_file"),
@@ -385,7 +379,7 @@ def init_script(
 
 
 # Kubernetes/Docker configuration helpers
-def load_k8s_config() -> Dict[str, Any]:
+def load_k8s_config() -> dict[str, Any]:
     """Load configuration from Kubernetes ConfigMap/Secret pattern"""
     k8s_config = {}
 

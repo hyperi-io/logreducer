@@ -26,7 +26,7 @@ class TestOutputFormats:
             output_format="line",  # Explicit line format
         )
 
-        result = reducer.process_file(small_log_file, output_file)
+        reducer.process_file(small_log_file, output_file)
 
         # Check output file exists
         assert output_file.exists()
@@ -35,14 +35,14 @@ class TestOutputFormats:
         assert meta_file.exists()
 
         # Read output and verify it's line format
-        with open(output_file, "r") as f:
+        with open(output_file) as f:
             lines = f.readlines()
 
         assert len(lines) > 0
         assert all("\n" in line for line in lines)
 
         # Verify metadata
-        with open(meta_file, "r") as f:
+        with open(meta_file) as f:
             metadata = json.load(f)
 
         assert "stats" in metadata
@@ -60,13 +60,13 @@ class TestOutputFormats:
             output_format="json",
         )
 
-        result = reducer.process_file(small_log_file, output_file)
+        reducer.process_file(small_log_file, output_file)
 
         # Check output file exists
         assert output_file.exists()
 
         # Read and parse JSON
-        with open(output_file, "r") as f:
+        with open(output_file) as f:
             output_data = json.load(f)
 
         assert "lines" in output_data
@@ -87,10 +87,10 @@ class TestOutputFormats:
 
         reducer = LogReducer(level="standard", output_format="json", pretty_json=True)
 
-        result = reducer.process_file(small_log_file, output_file)
+        reducer.process_file(small_log_file, output_file)
 
         # Read file content
-        with open(output_file, "r") as f:
+        with open(output_file) as f:
             content = f.read()
 
         # Pretty JSON should have indentation
@@ -107,13 +107,13 @@ class TestOutputFormats:
 
         reducer = LogReducer(level="standard", output_format="jsonl")
 
-        result = reducer.process_file(small_log_file, output_file)
+        reducer.process_file(small_log_file, output_file)
 
         # Check output file exists
         assert output_file.exists()
 
         # Read and parse JSONL
-        with open(output_file, "r") as f:
+        with open(output_file) as f:
             lines = f.readlines()
 
         assert len(lines) > 0
@@ -138,7 +138,7 @@ class TestOutputFormats:
                 output_format=format_type,
             )
 
-            result = reducer.process_file(small_log_file, output_file)
+            reducer.process_file(small_log_file, output_file)
 
             assert output_file.exists()
 
@@ -158,22 +158,18 @@ class TestOutputFormats:
             output_format="json",
         )
 
-        result = reducer.process_file(small_log_file, output_file)
+        reducer.process_file(small_log_file, output_file)
 
         # Both output and log file should exist
         assert output_file.exists()
         assert log_file.exists()
 
         # Verify log file has content
-        with open(log_file, "r") as f:
+        with open(log_file) as f:
             log_content = f.read()
 
         assert len(log_content) > 0
-        assert (
-            "Processing" in log_content
-            or "DEBUG" in log_content
-            or "INFO" in log_content
-        )
+        assert "Processing" in log_content or "DEBUG" in log_content or "INFO" in log_content
 
     def test_log_file_error_handling(self, small_log_file, tmp_path):
         """Test that processing continues if log file can't be created"""
@@ -201,9 +197,7 @@ class TestOutputFormats:
             # With metadata - create fresh reducer
             reducer = LogReducer(level="standard", output_format=format_type)
 
-            result_with_meta = reducer.process_file(
-                small_log_file, output_file, return_metadata=True
-            )
+            result_with_meta = reducer.process_file(small_log_file, output_file, return_metadata=True)
 
             assert isinstance(result_with_meta, dict)
             assert "lines" in result_with_meta
@@ -213,9 +207,7 @@ class TestOutputFormats:
             # Without metadata (default) - create fresh reducer
             reducer2 = LogReducer(level="standard", output_format=format_type)
 
-            result_no_meta = reducer2.process_file(
-                small_log_file, str(output_file) + ".2"
-            )
+            result_no_meta = reducer2.process_file(small_log_file, str(output_file) + ".2")
 
             assert isinstance(result_no_meta, list)
             assert len(result_no_meta) > 0
@@ -236,7 +228,7 @@ class TestOutputFormats:
                     enable_logging=False,
                 )
 
-                result = reducer.process_file(small_log_file, output_file)
+                reducer.process_file(small_log_file, output_file)
 
                 assert output_file.exists()
                 assert output_file.stat().st_size > 0
@@ -253,7 +245,7 @@ class TestOutputFormats:
                 max_patterns=100,  # Limit for faster test
             )
 
-            result = reducer.process_file(large_log_file, output_file)
+            reducer.process_file(large_log_file, output_file)
 
             assert output_file.exists()
 

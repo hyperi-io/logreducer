@@ -27,7 +27,7 @@ class AnomalyDetector:
         if not self.enabled:
             logger.warning("scikit-learn not available, anomaly detection disabled")
 
-    def detect_anomalies(self, lines: List[str]) -> Tuple[List[str], List[str]]:
+    def detect_anomalies(self, lines: list[str]) -> tuple[list[str], list[str]]:
         """
         Separate anomalous and normal lines
 
@@ -51,22 +51,18 @@ class AnomalyDetector:
             return [], lines
 
         # Detect anomalies
-        iso_forest = IsolationForest(
-            contamination=self.contamination, random_state=42, n_estimators=100
-        )
+        iso_forest = IsolationForest(contamination=self.contamination, random_state=42, n_estimators=100)
 
         labels = iso_forest.fit_predict(X)
         scores = iso_forest.score_samples(X)
 
         # Separate
-        anomalous = [line for line, label in zip(lines, labels) if label == -1]
-        normal = [line for line, label in zip(lines, labels) if label == 1]
+        anomalous = [line for line, label in zip(lines, labels, strict=False) if label == -1]
+        normal = [line for line, label in zip(lines, labels, strict=False) if label == 1]
 
         # Sort by anomaly score
         anomaly_with_scores = [
-            (line, score)
-            for line, label, score in zip(lines, labels, scores)
-            if label == -1
+            (line, score) for line, label, score in zip(lines, labels, scores, strict=False) if label == -1
         ]
         anomaly_with_scores.sort(key=lambda x: x[1])
 

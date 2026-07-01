@@ -56,9 +56,7 @@ class TestMemoryLimits:
         # Create a large temporary file to force memory constraints
         large_content = []
         for i in range(10000):  # 10K lines
-            large_content.append(
-                f"[2025-08-26 10:{i:04d}:00] INFO Processing item {i} with some additional data"
-            )
+            large_content.append(f"[2025-08-26 10:{i:04d}:00] INFO Processing item {i} with some additional data")
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False) as f:
             f.write("\n".join(large_content))
@@ -82,9 +80,7 @@ class TestMemoryLimits:
 
             # Check that memory limit was considered in stats
             stats = reducer.stats
-            assert "memory_limit_triggered" in str(stats) or len(result) < len(
-                large_content
-            )
+            assert "memory_limit_triggered" in str(stats) or len(result) < len(large_content)
 
         finally:
             os.unlink(temp_file)
@@ -92,11 +88,9 @@ class TestMemoryLimits:
     def test_chunk_size_adapts_to_memory_limit(self):
         """Test that chunk size is adjusted based on memory limits"""
         # Small memory limit should result in small chunks
-        config_small = BigDialConfig(max_memory_gb=0.1)
         reducer_small = LogReducer(level="standard", max_memory_gb=0.1)
 
         # Large memory limit should allow larger chunks
-        config_large = BigDialConfig(max_memory_gb=4.0)
         reducer_large = LogReducer(level="standard", max_memory_gb=4.0)
 
         # Chunk size should adapt (this is implementation-dependent)
@@ -116,9 +110,9 @@ class TestMemoryLimits:
         for i in range(5000):
             # Each line is roughly 100 characters
             stress_content.append(
-                f"[2025-08-26 12:{i%60:02d}:{i%60:02d}] ERROR "
-                f"Database connection failed for user_{i} with error code {i%100} "
-                f"after {i%10} retries - full stack trace follows..."
+                f"[2025-08-26 12:{i % 60:02d}:{i % 60:02d}] ERROR "
+                f"Database connection failed for user_{i} with error code {i % 100} "
+                f"after {i % 10} retries - full stack trace follows..."
             )
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False) as f:
@@ -150,9 +144,7 @@ class TestMemoryLimits:
 
                 # Memory usage should be reasonable (allow some overhead)
                 # This is a soft check as exact memory control is difficult
-                assert (
-                    memory_used < limit * 3
-                ), f"Used {memory_used:.2f}GB with {limit}GB limit"
+                assert memory_used < limit * 3, f"Used {memory_used:.2f}GB with {limit}GB limit"
 
         finally:
             os.unlink(temp_file)
@@ -164,12 +156,12 @@ class TestMemoryLimits:
         huge_content = []
         for i in range(20000):  # 20K lines
             huge_content.append(
-                f"[2025-08-26 15:{i%60:02d}:{i%60:02d}] WARN "
-                f"Cache miss for key 'user_session_{i}_data_chunk_{i%1000}' "
+                f"[2025-08-26 15:{i % 60:02d}:{i % 60:02d}] WARN "
+                f"Cache miss for key 'user_session_{i}_data_chunk_{i % 1000}' "
                 f"in region us-east-1 zone a caused fallback to database query "
                 f"SELECT * FROM user_sessions WHERE session_id = '{i}' "
                 f"AND created_at > '2025-08-26' AND status IN ('active', 'pending') "
-                f"resulting in {i%100}ms latency spike"
+                f"resulting in {i % 100}ms latency spike"
             )
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False) as f:
@@ -218,13 +210,9 @@ class TestMemoryLimits:
 
             # Memory usage should stay within bounds (with some tolerance)
             memory_increase = peak_memory - initial_memory
-            assert (
-                memory_increase < 0.5
-            ), f"Memory increased by {memory_increase:.2f}GB (too much)"
+            assert memory_increase < 0.5, f"Memory increased by {memory_increase:.2f}GB (too much)"
 
-            print(
-                f"[PASS] Processed {len(huge_content)} lines using {memory_increase:.3f}GB additional memory"
-            )
+            print(f"[PASS] Processed {len(huge_content)} lines using {memory_increase:.3f}GB additional memory")
 
         finally:
             os.unlink(temp_file)
@@ -236,8 +224,8 @@ class TestMemoryLimits:
         test_content = []
         for i in range(3000):
             test_content.append(
-                f"[2025-08-26 16:{i%60:02d}:{i%60:02d}] INFO "
-                f"Processing batch {i} with pattern_{i%10} status_{i%5}"
+                f"[2025-08-26 16:{i % 60:02d}:{i % 60:02d}] INFO "
+                f"Processing batch {i} with pattern_{i % 10} status_{i % 5}"
             )
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False) as f:
@@ -269,13 +257,11 @@ class TestMemoryLimits:
                 assert len(result) > 0, f"Mode {mode} should produce output"
 
                 # Memory usage should be reasonable
-                assert (
-                    memory_used < memory_limit * 2
-                ), f"Mode {mode} used {memory_used:.2f}GB (exceeds {memory_limit}GB limit)"
-
-                print(
-                    f"[PASS] Mode {mode}: processed to {len(result)} lines, used {memory_used:.3f}GB"
+                assert memory_used < memory_limit * 2, (
+                    f"Mode {mode} used {memory_used:.2f}GB (exceeds {memory_limit}GB limit)"
                 )
+
+                print(f"[PASS] Mode {mode}: processed to {len(result)} lines, used {memory_used:.3f}GB")
 
         finally:
             os.unlink(temp_file)
@@ -289,9 +275,7 @@ class TestMemoryLimits:
         assert hasattr(reducer, "memory_monitor") or "memory" in str(reducer.__dict__)
 
         # Create simple test file with varied content to avoid complete deduplication
-        simple_content = [
-            f"[2025-08-26 17:00:00] INFO Test line {i}" for i in range(100)
-        ]
+        simple_content = [f"[2025-08-26 17:00:00] INFO Test line {i}" for i in range(100)]
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False) as f:
             f.write("\n".join(simple_content))
@@ -305,9 +289,9 @@ class TestMemoryLimits:
             assert len(result) > 0
             # Stats should include some memory-related information
             stats_str = str(stats).lower()
-            assert any(
-                keyword in stats_str for keyword in ["memory", "mb", "usage", "peak"]
-            ), f"Stats missing memory info: {stats}"
+            assert any(keyword in stats_str for keyword in ["memory", "mb", "usage", "peak"]), (
+                f"Stats missing memory info: {stats}"
+            )
 
         finally:
             os.unlink(temp_file)
@@ -353,9 +337,6 @@ class TestMemoryMonitor:
     def test_memory_monitor_reset(self):
         """Test memory monitor reset functionality"""
         monitor = MemoryMonitor(max_memory_gb=5.0)
-
-        # Get initial values
-        initial_usage = monitor.get_current_usage_gb()
 
         # Force some allocation
         temp_data = [f"test data {i}" * 100 for i in range(1000)]

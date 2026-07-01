@@ -4,14 +4,17 @@ Logging configuration for LogReducer
 
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING
 
 from loguru import logger
+
+if TYPE_CHECKING:
+    from loguru import Logger
 
 
 def setup_logging(
     enable: bool = False,
-    log_file: Optional[str] = None,
+    log_file: str | None = None,
     log_level: str = "INFO",
     log_format: str = "rfc3339",
     console: bool = False,
@@ -69,7 +72,7 @@ def setup_logging(
     logger.enable("logreducer")
 
 
-def get_logger(name: str = "logreducer"):
+def get_logger(name: str = "logreducer") -> "Logger":
     """
     Get a logger instance.
 

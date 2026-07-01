@@ -7,19 +7,22 @@ import os
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import Any
 
 from .logging_config import get_logger, setup_logging
 
 # Optional import for progress bars
 try:
-    from tqdm import tqdm
+    from tqdm import tqdm  # type: ignore[import-untyped]
 
     TQDM_AVAILABLE = True
 except ImportError:
     TQDM_AVAILABLE = False
+
     # Fallback - no-op tqdm
-    tqdm = lambda x, **kwargs: x
+    def tqdm(x: Any, **kwargs: Any) -> Any:
+        return x
+
 
 from .anomaly import AnomalyDetector
 from .config import ProcessingLevel, ProcessingMode, get_preset_config
@@ -39,12 +42,12 @@ class LogReducer:
 
     def __init__(
         self,
-        level: Union[str, ProcessingLevel] = "standard",
-        mode: Union[str, ProcessingMode] = "pattern",
-        max_memory_gb: Optional[float] = None,
-        max_patterns: Optional[int] = None,
-        **kwargs,
-    ):
+        level: str | ProcessingLevel = "standard",
+        mode: str | ProcessingMode = "pattern",
+        max_memory_gb: float | None = None,
+        max_patterns: int | None = None,
+        **kwargs: Any,
+    ) -> None:
         """
         Initialize LogReducer
 
@@ -96,36 +99,32 @@ class LogReducer:
         # Initialize components
         self.memory_monitor = MemoryMonitor(self.config.max_memory_gb)
         self.streaming_processor = StreamingProcessor(self.memory_monitor)
-        self.deduplicator = BoundedDeduplicator(
-            self.config.dedup_cache_size, self.config.hash_algorithm
-        )
+        self.deduplicator = BoundedDeduplicator(self.config.dedup_cache_size, self.config.hash_algorithm)
         self.pattern_extractor = PatternExtractor(self.config)
 
         if self.config.fuzzy_threshold and self.level != ProcessingLevel.STANDARD:
-            self.fuzzy_dedup = FuzzyDeduplicator(self.config.fuzzy_threshold)
+            self.fuzzy_dedup: FuzzyDeduplicator | None = FuzzyDeduplicator(self.config.fuzzy_threshold)
         else:
             self.fuzzy_dedup = None
 
         if mode in [ProcessingMode.TEMPORAL, ProcessingMode.HYBRID]:
-            self.temporal_processor = TemporalProcessor(
-                self.config.temporal_window_minutes
-            )
+            self.temporal_processor: TemporalProcessor | None = TemporalProcessor(self.config.temporal_window_minutes)
         else:
             self.temporal_processor = None
 
         if mode in [ProcessingMode.ANOMALY, ProcessingMode.HYBRID]:
-            self.anomaly_detector = AnomalyDetector(self.config.anomaly_contamination)
+            self.anomaly_detector: AnomalyDetector | None = AnomalyDetector(self.config.anomaly_contamination)
         else:
             self.anomaly_detector = None
 
-        self.stats = {}
+        self.stats: dict[str, Any] = {}
 
     def process_file(
         self,
         input_file: str,
-        output_file: Optional[str] = None,
+        output_file: str | None = None,
         return_metadata: bool = False,
-    ) -> Union[List[str], dict]:
+    ) -> list[str] | dict:
         """
         Process log file and reduce to representative samples
 
@@ -145,7 +144,6 @@ class LogReducer:
 
         file_size = os.path.getsize(input_file)
         file_size_mb = file_size / (1024 * 1024)
-        file_size_gb = file_size / (1024 * 1024 * 1024)
 
         if self.config.enable_logging:
             self.logger.info(f"Processing {input_file} ({file_size_mb:.1f} MB)")
@@ -153,7 +151,7 @@ class LogReducer:
             self.logger.info(f"Memory limit: {self.config.max_memory_gb:.1f} GB")
 
         # Count input lines for proper reduction calculation
-        with open(input_file, "r", encoding="utf-8", errors="ignore") as f:
+        with open(input_file, encoding="utf-8", errors="ignore") as f:
             input_lines = sum(1 for _ in f)
 
         # Process based on mode
@@ -169,9 +167,7 @@ class LogReducer:
         # Calculate stats
         processing_time = time.time() - start_time
         output_lines = len(result_lines)
-        reduction_percent = (
-            (1 - output_lines / max(input_lines, 1)) * 100 if input_lines > 0 else 0
-        )
+        reduction_percent = (1 - output_lines / max(input_lines, 1)) * 100 if input_lines > 0 else 0
 
         self.stats = {
             "input_file": str(input_file),  # Convert to string for JSON serialization
@@ -202,7 +198,7 @@ class LogReducer:
         else:
             return result_lines
 
-    def _process_pattern_mode(self, input_file: str) -> List[str]:
+    def _process_pattern_mode(self, input_file: str) -> list[str]:
         """Process using pattern extraction"""
         if self.config.enable_logging:
             self.logger.info("Phase 1/3: Reading and deduplicating")
@@ -234,13 +230,11 @@ class LogReducer:
 
         return result
 
-    def _process_anomaly_mode(self, input_file: str) -> List[str]:
+    def _process_anomaly_mode(self, input_file: str) -> list[str]:
         """Process using anomaly detection"""
         if not self.anomaly_detector:
             if self.config.enable_logging:
-                self.logger.warning(
-                    "Anomaly detector not available, falling back to pattern mode"
-                )
+                self.logger.warning("Anomaly detector not available, falling back to pattern mode")
             return self._process_pattern_mode(input_file)
 
         if self.config.enable_logging:
@@ -266,13 +260,11 @@ class LogReducer:
 
         return result
 
-    def _process_temporal_mode(self, input_file: str) -> List[str]:
+    def _process_temporal_mode(self, input_file: str) -> list[str]:
         """Process using temporal analysis"""
         if not self.temporal_processor:
             if self.config.enable_logging:
-                self.logger.warning(
-                    "Temporal processor not available, falling back to pattern mode"
-                )
+                self.logger.warning("Temporal processor not available, falling back to pattern mode")
             return self._process_pattern_mode(input_file)
 
         if self.config.enable_logging:
@@ -285,9 +277,7 @@ class LogReducer:
 
         # Collect examples from temporal patterns
         result = []
-        for pattern in temporal_results.get("temporal_patterns", [])[
-            : self.config.max_patterns
-        ]:
+        for pattern in temporal_results.get("temporal_patterns", [])[: self.config.max_patterns]:
             if "example" in pattern:
                 result.append(pattern["example"])
 
@@ -297,7 +287,7 @@ class LogReducer:
 
         return result
 
-    def _process_hybrid_mode(self, input_file: str) -> List[str]:
+    def _process_hybrid_mode(self, input_file: str) -> list[str]:
         """Process using combined approach"""
         if self.config.enable_logging:
             self.logger.info("Hybrid mode: combining pattern and anomaly detection")
@@ -327,7 +317,7 @@ class LogReducer:
 
         return final[: self.config.max_patterns]
 
-    def _save_output(self, lines: List[str], output_file: str):
+    def _save_output(self, lines: list[str], output_file: str) -> None:
         """Save output to file in specified format"""
         from .config import OutputFormat
 
@@ -357,9 +347,7 @@ class LogReducer:
             # JSON Lines format - one JSON object per line
             with open(output_path, "w", encoding="utf-8") as f:
                 for line in lines:
-                    json.dump(
-                        {"line": line, "timestamp": datetime.now().isoformat()}, f
-                    )
+                    json.dump({"line": line, "timestamp": datetime.now().isoformat()}, f)
                     f.write("\n")
 
             if self.config.enable_logging:
@@ -392,7 +380,7 @@ class LogReducer:
                 self.logger.info(f"Output saved to {output_file}")
                 self.logger.info(f"Metadata saved to {meta_file}")
 
-    def _print_summary(self):
+    def _print_summary(self) -> None:
         """Log processing summary"""
         self.logger.info("\n" + "=" * 60)
         self.logger.info("LOG REDUCTION SUMMARY")
