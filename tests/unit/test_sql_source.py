@@ -89,6 +89,20 @@ def test_sqlsource_sample_batch_size(sqlite_url):
     assert all(b.startswith("ERROR request failed") for b in batch)
 
 
+def test_sqlsource_from_table_samples(sqlite_url):
+    source = SQLSource.from_table(sqlite_url, "logs", "line", sample=0.3)
+    try:
+        lines = list(source)
+    finally:
+        source.close()
+    assert 0 <= len(lines) < 100
+
+
+def test_sqlsource_from_table_seed_on_sqlite_raises(sqlite_url):
+    with pytest.raises(SamplingNotSupported):
+        SQLSource.from_table(sqlite_url, "logs", "line", sample=0.3, sample_seed=1)
+
+
 def test_reduce_to_target_over_sqlsource(sqlite_url):
     # 4 distinct patterns in the table; ask for 3 - reached via sampled batches.
     reducer = LogReducer(level="standard", mode="pattern")

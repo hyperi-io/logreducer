@@ -54,6 +54,13 @@ class BigDialConfig:
     fuzzy_threshold: float | None = 0.8
     min_pattern_occurrences: int = 2
     anomaly_contamination: float = 0.1
+    # Bound the Drain3 template store (LRU-evict beyond this many templates).
+    # None = unbounded (default; the store grows with distinct templates).
+    max_clusters: int | None = None
+    # Cap the rows fed to anomaly detection (reservoir-sampled). Bounds the
+    # TF-IDF matrix on a huge unique-line set, at the cost of anomaly recall
+    # (rare lines may be sampled out). None = no cap (use every unique line).
+    anomaly_max_rows: int | None = None
 
     # Temporal Control
     temporal_window_minutes: int = 60

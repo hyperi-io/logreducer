@@ -4,6 +4,7 @@ Core LogReducer implementation
 
 import json
 import os
+import random
 import time
 from datetime import datetime
 from enum import Enum
@@ -15,6 +16,7 @@ from .config import ProcessingLevel, ProcessingMode, get_preset_config
 from .logging_config import get_logger, setup_logging
 from .memory import BoundedDeduplicator, MemoryMonitor
 from .patterns import FuzzyDeduplicator, PatternExtractor
+from .sampling import reservoir_sample
 from .sinks import Sink
 from .sources import FileSource, Source
 from .temporal import TemporalProcessor
@@ -251,28 +253,23 @@ class LogReducer:
         return self.reduce(source, output_file=output_file, return_metadata=return_metadata)
 
     def _process_pattern_mode(self, source: Source) -> list[str]:
-        """Process using pattern extraction"""
+        """Process using pattern extraction, streaming end to end.
+
+        Exact dedup -> optional fuzzy dedup -> Drain3 all run as generators, so
+        the unique lines are never collected into a list. Peak memory is the
+        bounded dedup cache plus the Drain3 template store (see max_clusters),
+        independent of how many unique lines the source has.
+        """
         if self.config.enable_logging:
-            self.logger.info("Phase 1/3: Reading and deduplicating")
+            self.logger.info("Phase 1/2: Streaming dedup")
 
-        # Stream read with deduplication
-        unique_lines = list(self.deduplicator.deduplicate_lines(source))
+        unique_stream = self.deduplicator.deduplicate_lines(source)
+        if self.fuzzy_dedup:
+            unique_stream = self.fuzzy_dedup.deduplicate_stream(unique_stream)
 
         if self.config.enable_logging:
-            self.logger.info(f"Unique lines: {len(unique_lines):,}")
-
-        # Fuzzy deduplication if enabled
-        if self.fuzzy_dedup and self.level != ProcessingLevel.STANDARD:
-            if self.config.enable_logging:
-                self.logger.info("Phase 2/3: Fuzzy deduplication")
-            unique_lines = self.fuzzy_dedup.deduplicate(unique_lines)
-            if self.config.enable_logging:
-                self.logger.info(f"After fuzzy dedup: {len(unique_lines):,}")
-
-        # Pattern extraction
-        if self.config.enable_logging:
-            self.logger.info("Phase 3/3: Pattern extraction")
-        patterns = self.pattern_extractor.extract_patterns(unique_lines)
+            self.logger.info("Phase 2/2: Pattern extraction")
+        patterns = self.pattern_extractor.extract_patterns(unique_stream)
 
         # Collect examples
         result = []
@@ -280,6 +277,20 @@ class LogReducer:
             result.extend(pattern.examples)
 
         return result
+
+    def _cap_for_anomaly(self, unique_lines: list[str]) -> list[str]:
+        """Reservoir-cap unique lines to anomaly_max_rows to bound the ML matrix.
+
+        Anomaly detection (Isolation Forest over a TF-IDF matrix) is batch ML and
+        cannot stream, so a huge unique-line set is the one place a hard memory
+        cap needs an explicit sample. Fixed seed = reproducible across passes.
+        Trades anomaly recall (a rare line may be sampled out) for bounded memory;
+        off unless anomaly_max_rows is set.
+        """
+        cap = self.config.anomaly_max_rows
+        if cap and len(unique_lines) > cap:
+            return reservoir_sample(unique_lines, cap, random.Random(0))
+        return unique_lines
 
     def _process_anomaly_mode(self, source: Source) -> list[str]:
         """Process using anomaly detection"""
@@ -290,7 +301,7 @@ class LogReducer:
 
         if self.config.enable_logging:
             self.logger.info("Phase 1/2: Reading and deduplicating")
-        unique_lines = list(self.deduplicator.deduplicate_lines(source))
+        unique_lines = self._cap_for_anomaly(list(self.deduplicator.deduplicate_lines(source)))
 
         if self.config.enable_logging:
             self.logger.info("Phase 2/2: Anomaly detection")
@@ -351,7 +362,7 @@ class LogReducer:
             # anomaly pass needs a fresh deduplicator - otherwise every line reads
             # as already-seen and no anomalies survive (hybrid -> pattern-only).
             self.deduplicator = BoundedDeduplicator(self.config.dedup_cache_size, self.config.hash_algorithm)
-            unique_lines = list(self.deduplicator.deduplicate_lines(source))
+            unique_lines = self._cap_for_anomaly(list(self.deduplicator.deduplicate_lines(source)))
             anomalous, _ = self.anomaly_detector.detect_anomalies(unique_lines)
 
             # Combine, preferring anomalies

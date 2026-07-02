@@ -140,6 +140,26 @@ logreducer --dsn postgresql://user@host/db --query "SELECT msg FROM logs" --samp
 
 Notes: SQLite has no seedable RNG, so a seeded sample raises `SamplingNotSupported` (unseeded, best-effort sampling still works). ClickHouse `SAMPLE` needs the table to declare a `SAMPLE BY` key. For an arbitrary complex query, put the sampling clause in your own SQL instead.
 
+`sample=` on an arbitrary query is a full scan with a random filter. To sample a **table** cheaply, use `from_table`, which emits the engine's native sampler - PostgreSQL `TABLESAMPLE SYSTEM (p) REPEATABLE (seed)` (page-level, sub-linear), ClickHouse native `SAMPLE`:
+
+```python
+from logreducer.sql import SQLSource
+
+# page-level sample of a table, deterministic via REPEATABLE(seed)
+source = SQLSource.from_table("postgresql://user@host/db", "logs", "message", sample=0.01, sample_seed=42)
+```
+
+## Bounding memory
+
+The reduction core streams (exact dedup -> optional fuzzy dedup -> Drain3) without materialising the unique-line set, so pattern/temporal modes run in near-constant memory. Two knobs cap the rest:
+
+- `max_clusters` - LRU-bound the Drain3 template store (unbounded by default).
+- `anomaly_max_rows` - reservoir-cap the rows fed to anomaly detection (Isolation Forest is batch ML and cannot stream). Off by default; trades anomaly recall for a bounded TF-IDF matrix.
+
+```python
+reducer = LogReducer(level="enhanced", mode="hybrid", max_clusters=50_000, anomaly_max_rows=200_000)
+```
+
 ## Collecting a target number of lines
 
 When you want *about N* representative lines rather than "reduce everything", `reduce_to_target` pulls fresh random batches and reduces each, accumulating distinct representatives until it reaches the target - or the source runs dry, a fetch cap is hit, or the representatives stop growing. Peak memory is bounded to roughly one batch plus the accumulator; a byte budget sizes each batch and a memory watchdog shrinks it (and stops as a hard backstop) under pressure.

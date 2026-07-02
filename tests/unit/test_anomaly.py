@@ -108,10 +108,11 @@ class TestAnomalyDetector:
     @patch("logreducer.anomaly.SKLEARN_AVAILABLE", True)
     @patch("logreducer.anomaly.TfidfVectorizer")
     def test_detect_anomalies_vectorization_error(self, mock_tfidf):
-        """Test error handling during vectorization"""
-        # Mock vectorizer to raise exception
+        """An empty-vocabulary ValueError degrades to 'all normal', not a crash."""
+        # The real failure mode of fit_transform is ValueError (empty vocabulary).
+        # detect_anomalies catches exactly that; other exceptions surface as bugs.
         mock_vectorizer = Mock()
-        mock_vectorizer.fit_transform.side_effect = Exception("Vectorization failed")
+        mock_vectorizer.fit_transform.side_effect = ValueError("empty vocabulary")
         mock_tfidf.return_value = mock_vectorizer
 
         detector = AnomalyDetector()

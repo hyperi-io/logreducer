@@ -3,8 +3,9 @@ Pattern extraction and clustering utilities
 """
 
 from collections import Counter
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from drain3 import TemplateMiner
 from drain3.template_miner_config import TemplateMinerConfig
@@ -56,10 +57,18 @@ class PatternExtractor:
         drain_config.drain_depth = 4
         drain_config.snapshot_interval_minutes = 0  # Disable snapshots
         drain_config.snapshot_compress_state = False
+        # Bound the template store when configured: Drain3 LRU-evicts beyond
+        # drain_max_clusters, keeping memory flat on high-cardinality logs.
+        drain_config.drain_max_clusters = self.config.max_clusters
         self.miner = TemplateMiner(config=drain_config)
 
-    def extract_patterns(self, lines: list[str]) -> list[LogPattern]:
-        """Extract patterns from lines"""
+    def extract_patterns(self, lines: Iterable[str]) -> list[LogPattern]:
+        """Extract patterns from lines (accepts a stream; only clusters are held).
+
+        Feeds each line into Drain3's online miner, so the caller can pass a
+        generator - no need to materialise the whole line set. Memory is bounded
+        by the number of clusters (see ``max_clusters``), not the line count.
+        """
         pattern_map = {}
 
         for line in lines:
@@ -143,14 +152,17 @@ class FuzzyDeduplicator:
 
         if self.enabled:
             self.lsh = MinHashLSH(threshold=threshold, num_perm=64)
-            self.minhashes: dict[str, Any] = {}
 
-    def deduplicate(self, lines: list[str]) -> list[str]:
-        """Remove near-duplicates"""
+    def deduplicate_stream(self, lines: Iterable[str]) -> Iterator[str]:
+        """Yield near-unique lines as they arrive (streaming near-dup filter).
+
+        Queries the LSH per line and inserts only new ones, so the reducer never
+        materialises the full unique-line list. Note the LSH itself grows with
+        the number of near-unique lines - that is inherent to fuzzy dedup.
+        """
         if not self.enabled:
-            return lines
-
-        unique_lines = []
+            yield from lines
+            return
 
         for i, line in enumerate(lines):
             m = MinHash(num_perm=64)
@@ -159,7 +171,8 @@ class FuzzyDeduplicator:
 
             if not self.lsh.query(m):
                 self.lsh.insert(f"line_{i}", m)
-                unique_lines.append(line)
-                self.minhashes[f"line_{i}"] = m
+                yield line
 
-        return unique_lines
+    def deduplicate(self, lines: Iterable[str]) -> list[str]:
+        """Remove near-duplicates, returning a list (eager wrapper of the stream)."""
+        return list(self.deduplicate_stream(lines))

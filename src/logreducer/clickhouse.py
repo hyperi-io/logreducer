@@ -88,6 +88,33 @@ class ClickHouseSource:
         self.sample = sample
         self._query = f"{query} SAMPLE {float(sample)!r}" if sample is not None else query
 
+    @classmethod
+    def from_table(
+        cls,
+        client_or_dsn: Client | str,
+        table: str,
+        column: str,
+        *,
+        sample: float,
+        where: str | None = None,
+        parameters: dict[str, Any] | None = None,
+        settings: dict[str, Any] | None = None,
+    ) -> ClickHouseSource:
+        """Sample a fraction of a table with ClickHouse's native ``SAMPLE`` clause.
+
+        Builds ``SELECT column FROM table SAMPLE k [WHERE ...]`` with the clause
+        in the correct position (after the table, before WHERE). Deterministic by
+        construction. Requires the table to declare a ``SAMPLE BY`` key in its
+        ORDER BY; otherwise ClickHouse rejects the query.
+        """
+        if not (0.0 < sample <= 1.0):
+            raise ValueError(f"sample fraction must be in (0, 1], got {sample!r}")
+        tbl = f"`{table}`"
+        col = f"`{column}`"
+        where_sql = f" WHERE {where}" if where else ""
+        query = f"SELECT {col} FROM {tbl} SAMPLE {float(sample)!r}{where_sql}"
+        return cls(client_or_dsn, query, parameters=parameters, settings=settings)
+
     def __iter__(self) -> Iterator[str]:
         with self._client.query_row_block_stream(
             self._query, parameters=self.parameters, settings=self.settings

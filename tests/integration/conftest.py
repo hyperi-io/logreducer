@@ -185,3 +185,73 @@ def kafka_bootstrap() -> Iterator[str]:
         yield servers
     finally:
         container.stop()  # stop the fallback container as soon as we are done
+
+
+# ---------------------------------------------------------------------------
+# SQL engines (PostgreSQL, MySQL) - throwaway docker containers, seeded once
+# ---------------------------------------------------------------------------
+
+
+def _seed_logs(engine: Any, rows: int) -> None:
+    """Create a `logs` table with `rows` varied lines (read-only for sampling)."""
+    from sqlalchemy import text
+
+    is_mysql = engine.dialect.name in ("mysql", "mariadb")
+    col = "VARCHAR(255)" if is_mysql else "TEXT"
+    with engine.begin() as conn:
+        conn.execute(text(f"CREATE TABLE logs (id INTEGER, line {col})"))
+        conn.execute(
+            text("INSERT INTO logs (id, line) VALUES (:i, :l)"),
+            [{"i": i, "l": f"ERROR shard={i % 8} request failed req={i}"} for i in range(rows)],
+        )
+
+
+@pytest.fixture(scope="session")
+def pg_logs_engine() -> Iterator[Any]:
+    """A PostgreSQL engine with a seeded `logs` table (docker, else skip)."""
+    try:
+        from sqlalchemy import create_engine
+        from testcontainers.postgres import PostgresContainer
+    except ImportError:
+        pytest.skip("PostgreSQL integration deps not installed")
+    try:
+        container = PostgresContainer("postgres:16", driver="psycopg")
+        container.start()
+    except Exception as exc:  # no docker / image pull failed
+        pytest.skip(f"no Docker for PostgreSQL: {exc}")
+    engine = create_engine(container.get_connection_url())
+    try:
+        _seed_logs(engine, 5000)
+        yield engine
+    finally:
+        with contextlib.suppress(Exception):
+            engine.dispose()
+        container.stop()
+
+
+@pytest.fixture(scope="session")
+def mysql_logs_engine() -> Iterator[Any]:
+    """A MySQL engine with a seeded `logs` table (docker, else skip)."""
+    try:
+        from sqlalchemy import create_engine
+        from testcontainers.mysql import MySqlContainer
+    except ImportError:
+        pytest.skip("MySQL integration deps not installed")
+    try:
+        container = MySqlContainer("mysql:8.4")
+        container.start()
+    except Exception as exc:  # no docker / image pull failed
+        pytest.skip(f"no Docker for MySQL: {exc}")
+    # Force the pymysql driver (the bare mysql:// URL defaults to MySQLdb, which
+    # we do not install).
+    url = container.get_connection_url()
+    if url.startswith("mysql://"):
+        url = url.replace("mysql://", "mysql+pymysql://", 1)
+    engine = create_engine(url)
+    try:
+        _seed_logs(engine, 5000)
+        yield engine
+    finally:
+        with contextlib.suppress(Exception):
+            engine.dispose()
+        container.stop()

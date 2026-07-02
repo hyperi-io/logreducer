@@ -112,6 +112,52 @@ class SQLSource:
                 self._engine.dialect.name, query, sample, sample_seed
             )
 
+    @classmethod
+    def from_table(
+        cls,
+        connectable: Engine | str,
+        table: str,
+        column: str,
+        *,
+        sample: float,
+        where: str | None = None,
+        sample_seed: int | None = None,
+        method: str = "system",
+        yield_per: int = 1000,
+        params: dict[str, Any] | None = None,
+    ) -> SQLSource:
+        """Sample a fraction of a table with the engine's NATIVE sampler.
+
+        Unlike ``sample=`` on the constructor (a random predicate over an
+        arbitrary query, which full-scans), this builds ``SELECT column FROM
+        table TABLESAMPLE ...`` so PostgreSQL samples at the page level -
+        genuinely cheap on a large table - with ``REPEATABLE(seed)`` for
+        determinism. MySQL/SQLite have no TABLESAMPLE and fall back to a
+        full-scan predicate. ``method`` is ``system`` (page, fast) or
+        ``bernoulli`` (row, uniform) on PostgreSQL.
+        """
+        try:
+            from sqlalchemy import create_engine
+        except ImportError as exc:  # pragma: no cover - exercised only without the extra
+            raise ImportError(_INSTALL_HINT) from exc
+        from .sampling import build_table_sample_query
+
+        owns = isinstance(connectable, str)
+        engine = create_engine(connectable) if owns else connectable
+        preparer = engine.dialect.identifier_preparer
+        query = build_table_sample_query(
+            engine.dialect.name,
+            preparer.quote(table),
+            preparer.quote(column),
+            fraction=sample,
+            seed=sample_seed,
+            method=method,
+            where=where,
+        )
+        source = cls(engine, query, yield_per=yield_per, params=params)
+        source._owns_engine = owns
+        return source
+
     def __iter__(self) -> Iterator[str]:
         from sqlalchemy import text
 

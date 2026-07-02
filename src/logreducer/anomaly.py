@@ -43,26 +43,31 @@ class AnomalyDetector:
         )
 
         try:
-            X = vectorizer.fit_transform(lines).toarray()
-        except:
+            # Keep the TF-IDF matrix SPARSE - IsolationForest accepts sparse
+            # input directly. Densifying (.toarray()) would allocate
+            # n_lines x n_features x 8 bytes, which dwarfs the sparse matrix and
+            # can blow the memory budget on a large unique-line set.
+            X = vectorizer.fit_transform(lines)
+        except ValueError:
+            # Empty vocabulary (every term filtered by min_df/max_df) - nothing
+            # to score, so treat all lines as normal rather than failing.
             return [], lines
 
-        # Detect anomalies
         iso_forest = IsolationForest(contamination=self.contamination, random_state=42, n_estimators=100)
-
         labels = iso_forest.fit_predict(X)
         scores = iso_forest.score_samples(X)
 
-        # Separate
-        anomalous = [line for line, label in zip(lines, labels, strict=False) if label == -1]
-        normal = [line for line, label in zip(lines, labels, strict=False) if label == 1]
+        # One pass: split normal vs anomalous, collecting scores for the latter.
+        normal: list[str] = []
+        anomaly_with_scores: list[tuple[str, float]] = []
+        for line, label, score in zip(lines, labels, scores, strict=False):
+            if label == -1:
+                anomaly_with_scores.append((line, score))
+            else:
+                normal.append(line)
 
-        # Sort by anomaly score
-        anomaly_with_scores = [
-            (line, score) for line, label, score in zip(lines, labels, scores, strict=False) if label == -1
-        ]
-        anomaly_with_scores.sort(key=lambda x: x[1])
-
+        # Most anomalous first (IsolationForest scores: lower = more anomalous).
+        anomaly_with_scores.sort(key=lambda pair: pair[1])
         anomalous = [line for line, _ in anomaly_with_scores]
 
         logger.info(f"Found {len(anomalous)} anomalies out of {len(lines)} lines")

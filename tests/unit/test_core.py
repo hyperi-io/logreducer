@@ -278,12 +278,13 @@ class TestLogReducerInternalMethods:
 
         with (
             patch.object(reducer.deduplicator, "deduplicate_lines") as mock_dedup,
-            patch.object(reducer.fuzzy_dedup, "deduplicate") as mock_fuzzy,
+            patch.object(reducer.fuzzy_dedup, "deduplicate_stream") as mock_fuzzy,
             patch.object(reducer.pattern_extractor, "extract_patterns") as mock_extract,
         ):
-            # Setup mocks
+            # Setup mocks. Pattern mode now streams: fuzzy dedup is a generator
+            # filter (deduplicate_stream), fed the dedup output directly.
             mock_dedup.return_value = ["line1", "line2", "line3"]
-            mock_fuzzy.return_value = ["line1", "line2"]  # Fuzzy deduplicated
+            mock_fuzzy.return_value = iter(["line1", "line2"])  # Fuzzy deduplicated stream
 
             mock_pattern = Mock()
             mock_pattern.examples = ["example1"]
@@ -291,7 +292,7 @@ class TestLogReducerInternalMethods:
 
             result = reducer._process_pattern_mode(["line1", "line2", "line3"])
 
-            # Verify fuzzy dedup was called
+            # Verify the streaming fuzzy dedup was called with the dedup output
             mock_fuzzy.assert_called_once_with(["line1", "line2", "line3"])
 
             assert result == ["example1"]
@@ -308,6 +309,18 @@ class TestLogReducerInternalMethods:
 
             mock_pattern.assert_called_once_with(str(small_log_file))
             assert result == ["pattern fallback"]
+
+    def test_cap_for_anomaly_reservoir_caps(self):
+        """anomaly_max_rows reservoir-caps the unique lines before detection."""
+        reducer = LogReducer(mode="anomaly", level="standard", anomaly_max_rows=10)
+        capped = reducer._cap_for_anomaly([f"line {i}" for i in range(100)])
+        assert len(capped) == 10
+
+    def test_cap_for_anomaly_no_cap_returns_input(self):
+        """With no cap configured, the unique lines pass through untouched."""
+        reducer = LogReducer(mode="anomaly", level="standard")
+        lines = [f"line {i}" for i in range(50)]
+        assert reducer._cap_for_anomaly(lines) is lines
 
 
 class TestLogReducerStatefulness:

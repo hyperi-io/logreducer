@@ -107,6 +107,52 @@ def build_sample_batch_sql(dialect: str, query: str, n: int) -> str:
     return f"SELECT * FROM ({query}) AS _lr_batch ORDER BY {rand} LIMIT {int(n)}"
 
 
+def build_table_sample_query(
+    dialect: str,
+    table: str,
+    column: str,
+    *,
+    fraction: float,
+    seed: int | None = None,
+    method: str = "system",
+    where: str | None = None,
+) -> str:
+    """Build a native table-sampling query (``table``/``column`` already quoted).
+
+    PostgreSQL uses page-level ``TABLESAMPLE SYSTEM`` (or row-level ``BERNOULLI``)
+    with ``REPEATABLE(seed)`` - genuinely sub-linear, unlike the full-scan random
+    predicate used for arbitrary queries. Engines without TABLESAMPLE (MySQL,
+    SQLite) fall back to a predicate on the table (still a full scan).
+
+    Raises ``SamplingNotSupported`` for a dialect with no table sampler or a seed
+    it cannot honour, and ``ValueError`` for a bad fraction or method.
+    """
+    _check_fraction(fraction)
+    conds = [where] if where else []
+
+    if dialect == "postgresql":
+        m = method.lower()
+        if m not in ("system", "bernoulli"):
+            raise ValueError(f"method must be 'system' or 'bernoulli', got {method!r}")
+        pct = float(fraction) * 100.0
+        repeatable = f" REPEATABLE ({int(seed)})" if seed is not None else ""
+        where_sql = f" WHERE {' AND '.join(conds)}" if conds else ""
+        return f"SELECT {column} FROM {table} TABLESAMPLE {m.upper()} ({pct!r}){repeatable}{where_sql}"
+
+    # No TABLESAMPLE on these - a predicate on the table (full scan, but native).
+    if dialect in ("mysql", "mariadb"):
+        pred = f"rand({int(seed)}) < {float(fraction)!r}" if seed is not None else f"rand() < {float(fraction)!r}"
+    elif dialect == "sqlite":
+        if seed is not None:
+            raise SamplingNotSupported("sqlite has no seedable RNG; seeded table sampling is unsupported")
+        pred = f"(abs(random()) % 1000000) < {int(float(fraction) * 1_000_000)}"
+    else:
+        raise SamplingNotSupported(f"no table sampler for dialect {dialect!r}")
+
+    conds.append(pred)
+    return f"SELECT {column} FROM {table} WHERE {' AND '.join(conds)}"
+
+
 def reservoir_sample(items: Iterable[str], k: int, rng: random.Random) -> list[str]:
     """Uniform sample of ``k`` items from a stream of unknown length (Algorithm L).
 

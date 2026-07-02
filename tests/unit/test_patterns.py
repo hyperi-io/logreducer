@@ -247,3 +247,27 @@ class TestFuzzyDeduplicator:
         # For now, just verify it returns something reasonable
         assert isinstance(result, list)
         assert len(result) <= len(lines)
+
+
+class TestStreamingAndBounds:
+    """Streaming fuzzy dedup and the bounded Drain3 template store."""
+
+    def test_deduplicate_stream_is_a_generator(self):
+        import types
+
+        dedup = FuzzyDeduplicator()
+        out = dedup.deduplicate_stream(iter(["a b c", "a b c", "x y z"]))
+        assert isinstance(out, types.GeneratorType)  # lazy, not a materialised list
+        result = list(out)
+        if dedup.enabled:
+            assert "a b c" in result and "x y z" in result
+        else:
+            assert result == ["a b c", "a b c", "x y z"]  # passthrough when disabled
+
+    def test_max_clusters_bounds_template_store(self):
+        # 50 distinct templates (each twice, to survive the occurrence filter),
+        # but the store is capped at 5 -> Drain3 LRU-evicts down to the cap.
+        extractor = PatternExtractor(BigDialConfig(max_clusters=5))
+        lines = [f"SERVICE{i} started on host node{i} pid={p}" for i in range(50) for p in (1, 2)]
+        extractor.extract_patterns(lines)
+        assert len(extractor.miner.drain.id_to_cluster) <= 5

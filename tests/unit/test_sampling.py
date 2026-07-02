@@ -8,6 +8,7 @@ from logreducer.sampling import (
     SamplingNotSupported,
     build_sample_batch_sql,
     build_sample_sql,
+    build_table_sample_query,
     estimate_batch_rows,
     reservoir_sample,
 )
@@ -70,6 +71,42 @@ class TestBuildSampleBatchSql:
     def test_unknown_dialect_raises(self):
         with pytest.raises(SamplingNotSupported):
             build_sample_batch_sql("nope", "SELECT 1", 10)
+
+
+class TestBuildTableSampleQuery:
+    def test_postgresql_system_with_repeatable(self):
+        sql = build_table_sample_query("postgresql", '"logs"', '"msg"', fraction=0.1, seed=42)
+        assert "TABLESAMPLE SYSTEM (10.0)" in sql
+        assert "REPEATABLE (42)" in sql
+        assert 'FROM "logs"' in sql
+
+    def test_postgresql_bernoulli_method(self):
+        sql = build_table_sample_query("postgresql", '"logs"', '"msg"', fraction=0.25, method="bernoulli")
+        assert "TABLESAMPLE BERNOULLI (25.0)" in sql
+        assert "REPEATABLE" not in sql  # no seed given
+
+    def test_postgresql_where_clause(self):
+        sql = build_table_sample_query("postgresql", '"logs"', '"msg"', fraction=0.1, where="level = 'ERROR'")
+        assert "WHERE level = 'ERROR'" in sql
+
+    def test_postgresql_bad_method_raises(self):
+        with pytest.raises(ValueError, match="method"):
+            build_table_sample_query("postgresql", '"t"', '"c"', fraction=0.1, method="nope")
+
+    def test_mysql_predicate_fallback(self):
+        sql = build_table_sample_query("mysql", "`logs`", "`msg`", fraction=0.1, seed=7)
+        assert "rand(7)" in sql
+        assert "TABLESAMPLE" not in sql
+
+    def test_sqlite_predicate_and_seed_raises(self):
+        sql = build_table_sample_query("sqlite", '"logs"', '"msg"', fraction=0.1)
+        assert "abs(random())" in sql
+        with pytest.raises(SamplingNotSupported):
+            build_table_sample_query("sqlite", '"logs"', '"msg"', fraction=0.1, seed=1)
+
+    def test_unknown_dialect_raises(self):
+        with pytest.raises(SamplingNotSupported):
+            build_table_sample_query("oracle", '"t"', '"c"', fraction=0.1)
 
 
 class TestReservoirSample:
