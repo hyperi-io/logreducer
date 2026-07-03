@@ -94,6 +94,12 @@ logs/
 # Generated reduction output (churns every test run - never track)
 data/output/
 
+# Test-data builder download cache (the gzipped slices are committed, not this)
+tests/testdata/.cache/
+
+# Local-only TLS CA(s) for pointing tests at internal PET services (never shipped)
+.certs/
+
 # Temporary files
 *.tmp
 *.temp

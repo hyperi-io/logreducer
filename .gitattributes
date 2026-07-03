@@ -126,6 +126,11 @@ data/**/*.xml filter=lfs diff=lfs merge=lfs -text
 tests/data/**/*.log filter=lfs diff=lfs merge=lfs -text
 tests/fixtures/**/*.log filter=lfs diff=lfs merge=lfs -text
 
+# logreducer real-log corpora: bounded, write-once, committed in PLAIN git
+# (deliberately NOT LFS - avoids LFS bandwidth/quota and a git-lfs requirement
+# for anyone cloning the public repo). Overrides the *.log.gz LFS rule above.
+tests/testdata/*.log.gz -filter -diff -merge -text
+
 # Track large output files
 output/**/*.log filter=lfs diff=lfs merge=lfs -text
 output/**/*.json filter=lfs diff=lfs merge=lfs -text

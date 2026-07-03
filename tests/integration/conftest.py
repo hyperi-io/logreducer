@@ -34,6 +34,25 @@ def _env_first(*names: str, default: str = "") -> str:
     return default
 
 
+def _keep_containers() -> bool:
+    """LOGREDUCER_KEEP_CONTAINERS=1 leaves docker services RUNNING after the run.
+
+    Default is to stop/remove them. Keeping them lets you re-run fast: grab the
+    printed endpoint and export it (KAFKA_BOOTSTRAP_SERVERS / CLICKHOUSE_* / a
+    DB URL) so the next run takes the env-first path and skips container startup.
+    """
+    return os.environ.get("LOGREDUCER_KEEP_CONTAINERS", "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _stop(container: Any, label: str, endpoint: str) -> None:
+    """Stop a throwaway container, unless the caller asked to keep it running."""
+    if _keep_containers():
+        print(f"\n[keep] {label} left running at {endpoint} (LOGREDUCER_KEEP_CONTAINERS=1)")
+        return
+    with contextlib.suppress(Exception):
+        container.stop()
+
+
 # ---------------------------------------------------------------------------
 # ClickHouse
 # ---------------------------------------------------------------------------
@@ -131,7 +150,8 @@ def clickhouse_client() -> Iterator[Any]:
     finally:
         with contextlib.suppress(Exception):
             client.close()
-        container.stop()  # stop the fallback container as soon as we are done
+        endpoint = f"{container.get_container_host_ip()}:{container.get_exposed_port(8123)}"
+        _stop(container, "ClickHouse", endpoint)
 
 
 # ---------------------------------------------------------------------------
@@ -139,28 +159,60 @@ def clickhouse_client() -> Iterator[Any]:
 # ---------------------------------------------------------------------------
 
 
-def _kafka_from_env() -> str | None:
-    """Return a reachable bootstrap.servers string from env, or None."""
+def _kafka_config_from_env() -> str | dict[str, Any] | None:
+    """Return a reachable Kafka config from env, or None.
+
+    A bare ``KAFKA_BOOTSTRAP_SERVERS`` yields a plain bootstrap string. Adding
+    ``KAFKA_SECURITY_PROTOCOL`` (e.g. SASL_SSL) upgrades it to a full librdkafka
+    config dict (SASL mechanism/username/password + TLS CA) - used to reach the
+    authenticated PET broker. Probed with an AdminClient before use.
+    """
     servers = _env_first("KAFKA_BOOTSTRAP_SERVERS")
     if not servers:
         return None
+    protocol = _env_first("KAFKA_SECURITY_PROTOCOL")
+    config: str | dict[str, Any]
+    if protocol:
+        config = {"bootstrap.servers": servers, "security.protocol": protocol}
+        for env_key, conf_key in (
+            ("KAFKA_SASL_MECHANISM", "sasl.mechanism"),
+            ("KAFKA_SASL_USERNAME", "sasl.username"),
+            ("KAFKA_SASL_PASSWORD", "sasl.password"),
+            ("KAFKA_SSL_CA_LOCATION", "ssl.ca.location"),
+        ):
+            value = _env_first(env_key)
+            if value:
+                config[conf_key] = value
+        # Internal PET broker: skip TLS cert verification (same stance as
+        # CLICKHOUSE_VERIFY=false) - the chain uses an internal, pre-rebrand CA.
+        if not _env_bool("KAFKA_SSL_VERIFY", default=True):
+            config["enable.ssl.certificate.verification"] = "false"
+    else:
+        config = servers
     try:
         from confluent_kafka.admin import AdminClient
 
-        AdminClient({"bootstrap.servers": servers, "socket.timeout.ms": 3000}).list_topics(timeout=5)
-        return servers
+        probe = dict(config) if isinstance(config, dict) else {"bootstrap.servers": config}
+        probe["socket.timeout.ms"] = 6000
+        AdminClient(probe).list_topics(timeout=8)
+        return config
     except Exception:
         return None
 
 
-def _kafka_from_docker() -> tuple[str, Any] | None:
-    """Start a throwaway Kafka container; return (bootstrap, container) or None."""
+def _redpanda_from_docker() -> tuple[str, Any] | None:
+    """Start a throwaway Redpanda container; return (bootstrap, container) or None.
+
+    Redpanda is the docker broker (Kafka-API compatible, single binary, far
+    smaller/faster to start than Apache Kafka) - confluent-kafka talks to it
+    unchanged.
+    """
     try:
-        from testcontainers.kafka import KafkaContainer
+        from testcontainers.kafka import RedpandaContainer
     except ImportError:
         return None
     try:
-        container = KafkaContainer()
+        container = RedpandaContainer()
         container.start()
     except Exception:
         with contextlib.suppress(Exception):
@@ -170,21 +222,26 @@ def _kafka_from_docker() -> tuple[str, Any] | None:
 
 
 @pytest.fixture(scope="session")
-def kafka_bootstrap() -> Iterator[str]:
-    """A Kafka bootstrap string - local if configured, else docker, else skip."""
-    servers = _kafka_from_env()
-    if servers is not None:
-        yield servers
+def kafka_bootstrap() -> Iterator[str | dict[str, Any]]:
+    """A Kafka config - a configured broker (str, or a SASL dict for PET) if
+    reachable, else a Redpanda docker broker (str), else skip.
+
+    The value is accepted directly by KafkaSource/KafkaSink and the corpora
+    loaders (all take a bootstrap string or a full librdkafka config dict).
+    """
+    config = _kafka_config_from_env()
+    if config is not None:
+        yield config
         return
 
-    docker = _kafka_from_docker()
+    docker = _redpanda_from_docker()
     if docker is None:
-        pytest.skip("no Kafka: set KAFKA_BOOTSTRAP_SERVERS, or start Docker")
+        pytest.skip("no Kafka broker: set KAFKA_BOOTSTRAP_SERVERS, or start Docker (Redpanda)")
     servers, container = docker
     try:
         yield servers
     finally:
-        container.stop()  # stop the fallback container as soon as we are done
+        _stop(container, "Redpanda", servers)
 
 
 # ---------------------------------------------------------------------------
@@ -207,8 +264,8 @@ def _seed_logs(engine: Any, rows: int) -> None:
 
 
 @pytest.fixture(scope="session")
-def pg_logs_engine() -> Iterator[Any]:
-    """A PostgreSQL engine with a seeded `logs` table (docker, else skip)."""
+def pg_engine() -> Iterator[Any]:
+    """A bare PostgreSQL engine on a throwaway container (docker, else skip)."""
     try:
         from sqlalchemy import create_engine
         from testcontainers.postgres import PostgresContainer
@@ -221,17 +278,16 @@ def pg_logs_engine() -> Iterator[Any]:
         pytest.skip(f"no Docker for PostgreSQL: {exc}")
     engine = create_engine(container.get_connection_url())
     try:
-        _seed_logs(engine, 5000)
         yield engine
     finally:
         with contextlib.suppress(Exception):
             engine.dispose()
-        container.stop()
+        _stop(container, "PostgreSQL", container.get_connection_url())
 
 
 @pytest.fixture(scope="session")
-def mysql_logs_engine() -> Iterator[Any]:
-    """A MySQL engine with a seeded `logs` table (docker, else skip)."""
+def mysql_engine() -> Iterator[Any]:
+    """A bare MySQL engine on a throwaway container (docker, else skip)."""
     try:
         from sqlalchemy import create_engine
         from testcontainers.mysql import MySqlContainer
@@ -249,9 +305,22 @@ def mysql_logs_engine() -> Iterator[Any]:
         url = url.replace("mysql://", "mysql+pymysql://", 1)
     engine = create_engine(url)
     try:
-        _seed_logs(engine, 5000)
         yield engine
     finally:
         with contextlib.suppress(Exception):
             engine.dispose()
-        container.stop()
+        _stop(container, "MySQL", url)
+
+
+@pytest.fixture(scope="session")
+def pg_logs_engine(pg_engine: Any) -> Any:
+    """PostgreSQL with a seeded synthetic `logs` table (for the sampling tests)."""
+    _seed_logs(pg_engine, 5000)
+    return pg_engine
+
+
+@pytest.fixture(scope="session")
+def mysql_logs_engine(mysql_engine: Any) -> Any:
+    """MySQL with a seeded synthetic `logs` table (for the sampling tests)."""
+    _seed_logs(mysql_engine, 5000)
+    return mysql_engine

@@ -22,3 +22,32 @@ Some LogHub datasets originate from public sources, including the USENIX CFDR
 computer failure data repository (BGL and Thunderbird traces, Sandia National
 Laboratories). The datasets are redistributed here unmodified for demonstration
 and testing. See data/samples/README.md for the per-file mapping.
+
+-------------------------------------------------------------------------------
+Integration-test corpora (tests/testdata/)
+-------------------------------------------------------------------------------
+
+The gzipped log corpora under tests/testdata/ are truncated slices of REAL
+public datasets, PII-cleansed (IPs/IPv6/emails/MAC addresses and specific
+hostnames deterministically rewritten to synthetic values; structure and
+repetition preserved). Each is redistributed under its own licence. See
+tests/testdata/manifest.json for the per-dataset source URL, licence, and
+cleansing status. Sources and licences:
+
+  LogHub (loghub_*): Zhu et al., "Loghub", ISSRE 2023.
+    https://github.com/logpai/loghub - Zenodo 10.5281/zenodo.8196385,
+    CC-BY-4.0. BGL/Thunderbird upstream: Oliner and Stearley, DSN 2007.
+
+  The Internet Traffic Archive (ita_*): NASA-HTTP and Calgary-HTTP web-server
+    access logs. https://ita.ee.lbl.gov/ - per-trace "may be freely
+    redistributed". Use is limited to general traffic-pattern analysis.
+
+  Security Repo (secrepo_*): Security Repo by Mike Sconzo, https://www.secrepo.com/
+    - Creative Commons Attribution 4.0 International (CC-BY-4.0).
+
+  elastic/examples (elastic_*): nginx JSON logs from https://github.com/elastic/examples
+    - Apache License, Version 2.0.
+
+These corpora are used only for testing and are not part of the distributed
+package. The build script tests/testdata/build.py records how each was fetched
+and cleansed.
