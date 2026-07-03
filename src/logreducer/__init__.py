@@ -1,13 +1,11 @@
-"""
-LogReducer - High-performance log analysis and reduction system
+"""LogReducer - reduce large volumes of log lines to a representative sample.
 
-Enterprise-grade log processing module that intelligently reduces large log files while
-preserving critical patterns and anomalies. Features memory-safe streaming, temporal analysis,
-and advanced pattern extraction for operational insights.
+A streaming reduction engine (dedup -> pattern mining -> anomaly/temporal
+analysis) with an IO-agnostic core: any re-iterable stream of str lines is a
+valid Source. Ships as both a library and a `logreducer` CLI.
 
 Copyright 2026 HYPERI PTY LIMITED.
 Licensed under the Apache License, Version 2.0 (see LICENSE).
-Author: Derek <noreply@hyperi.io>
 """
 
 from importlib.metadata import PackageNotFoundError, version
@@ -16,16 +14,6 @@ try:
     __version__ = version("logreducer")
 except PackageNotFoundError:  # running from a source tree that is not installed
     __version__ = "0.0.0+unknown"
-
-__author__ = "Derek"
-__email__ = "noreply@hyperi.io"
-__license__ = "Apache-2.0"
-__copyright__ = "Copyright 2026 HYPERI PTY LIMITED"
-__description__ = (
-    "Reduce GB-scale logs to a representative sample - streaming Python library "
-    "and CLI with pattern mining and anomaly detection"
-)
-__url__ = "https://github.com/hyperi-io/logreducer"
 
 from .config import BigDialConfig, OutputFormat, ProcessingLevel, ProcessingMode
 from .core import LogReducer
@@ -46,11 +34,6 @@ __all__ = [
     "SamplingNotSupported",
     "Sink",
     "Source",
-    "__author__",
-    "__description__",
-    "__email__",
-    "__license__",
-    "__url__",
     "__version__",
     "reduce_to_target",
     "setup_logging",

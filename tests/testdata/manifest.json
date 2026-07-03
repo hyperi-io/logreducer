@@ -8,8 +8,8 @@
     "citation": "LogHub (Zhu et al., ISSRE 2023), Zenodo 10.5281/zenodo.8196385",
     "cleansed": "full",
     "lines": 25000,
-    "bytes_gz": 202502,
-    "sha256": "5b70564b5732f4054f1d4cda6ae631758f9d197f718490ead933f6cd77cc50ae"
+    "bytes_gz": 202538,
+    "sha256": "a39f01c9a8d21d19a6a5f36af7db3c4776ed5d9697dd88b71594e7db062c3800"
   },
   {
     "name": "loghub_mac",
@@ -20,8 +20,8 @@
     "citation": "LogHub (Zhu et al., ISSRE 2023), Zenodo 10.5281/zenodo.8196385",
     "cleansed": "full",
     "lines": 40000,
-    "bytes_gz": 474205,
-    "sha256": "85a901db68c50576711c5d3098c7fa25611722938bd8200b3a5fd3574e59d8fb"
+    "bytes_gz": 475126,
+    "sha256": "1b86f03e298abaeca32d525e6e26d4b21e1eb2d73eaffbe5b3bfe3cd1effe009"
   },
   {
     "name": "loghub_openssh",
@@ -116,8 +116,8 @@
     "citation": "elastic/examples (Apache-2.0)",
     "cleansed": "full",
     "lines": 51000,
-    "bytes_gz": 345111,
-    "sha256": "9a176d4559aceaf4b700b9612587db70d7c26cdd76f43d03335361cbaec6db55"
+    "bytes_gz": 345065,
+    "sha256": "0c5cdf8b7c28cb14a615e038bf25dce5fa50e899c48f02fcf76d7373399cbe66"
   },
   {
     "name": "secrepo_auth",

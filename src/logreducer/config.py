@@ -1,18 +1,17 @@
-"""
-Configuration and tuning parameters for LogReducer
+"""Configuration and tuning parameters for LogReducer."""
 
-This module provides configurable security levels and processing settings.
-"""
-
-import multiprocessing as mp
-from dataclasses import dataclass
+import os
+import types
+import typing
+from dataclasses import dataclass, fields
 from enum import Enum
 
 import psutil
+from loguru import logger
 
 
 class ProcessingLevel(Enum):
-    """Processing level determines speed/quality tradeoff"""
+    """Processing level determines speed/quality tradeoff."""
 
     STANDARD = "standard"  # Fast, 99% reduction
     ENHANCED = "enhanced"  # Balanced, 99.5% reduction
@@ -20,7 +19,7 @@ class ProcessingLevel(Enum):
 
 
 class ProcessingMode(Enum):
-    """Processing mode determines reduction strategy"""
+    """Processing mode determines reduction strategy."""
 
     PATTERN = "pattern"  # Pattern-based reduction (Drain3)
     ANOMALY = "anomaly"  # Anomaly detection focus
@@ -29,7 +28,7 @@ class ProcessingMode(Enum):
 
 
 class OutputFormat(Enum):
-    """Output format for reduced logs"""
+    """Output format for reduced logs."""
 
     LINE = "line"  # Line-by-line text output (default)
     JSON = "json"  # JSON structured output
@@ -38,15 +37,16 @@ class OutputFormat(Enum):
 
 @dataclass
 class BigDialConfig:
-    """Big dial tuning parameters"""
+    """Big dial tuning parameters."""
 
-    # Memory Control
-    max_memory_gb: float = 2.0
-    chunk_size: int = 50000
+    # Memory Control. The engine streams, so this cap mainly sizes the file
+    # read strategy (full/chunked/sampled), the reservoir, and the watchdog -
+    # measured reductions use tens of MB, so the default is deliberately low
+    # and container-friendly.
+    max_memory_gb: float = 1.0
     dedup_cache_size: int = 100000
 
     # Speed Control
-    n_workers: int | None = None
     hash_algorithm: str = "xxhash"
 
     # Quality Control
@@ -80,37 +80,66 @@ class BigDialConfig:
     pretty_json: bool = False  # Pretty print JSON output
 
     def __post_init__(self) -> None:
-        if self.n_workers is None:
-            # Auto-detect CPU cores, especially important in containers
-            cpu_count = mp.cpu_count()
-            # In containers, respect CPU limits if available
-            try:
-                # Try to read container CPU quota (Docker/Kubernetes)
-                with open("/sys/fs/cgroup/cpu/cpu.cfs_quota_us") as f:
-                    quota = int(f.read().strip())
-                with open("/sys/fs/cgroup/cpu/cpu.cfs_period_us") as f:
-                    period = int(f.read().strip())
-                if quota > 0 and period > 0:
-                    container_cpus = max(1, int(quota / period))
-                    cpu_count = min(cpu_count, container_cpus)
-            except (OSError, FileNotFoundError, ValueError):
-                # Not in a container or cgroup not available, use system CPU count
-                pass
-
-            # Set n_workers to CPU count (no arbitrary limit)
-            self.n_workers = cpu_count
-
+        # Never promise more memory than the host can give: clamp to 70% of
+        # what is currently available, and say so rather than silently mutate.
         available_gb = psutil.virtual_memory().available / (1024**3)
         if self.max_memory_gb > available_gb * 0.7:
-            self.max_memory_gb = available_gb * 0.7
+            clamped = available_gb * 0.7
+            logger.warning(
+                f"max_memory_gb={self.max_memory_gb:.1f} exceeds 70% of available RAM; clamped to {clamped:.1f} GB"
+            )
+            self.max_memory_gb = clamped
+
+    @classmethod
+    def from_env(cls, *prefixes: str) -> "BigDialConfig":
+        """Build a config from environment variables, cascade-aware.
+
+        ``from_env()`` reads ``LOGREDUCER_<FIELD>`` (upper-cased field names,
+        e.g. ``LOGREDUCER_MAX_MEMORY_GB=0.5``). Pass explicit prefixes to
+        cascade: ``from_env("DFE", "LOGREDUCER")`` reads ``DFE_<FIELD>`` first,
+        then falls back to ``LOGREDUCER_<FIELD>`` - the same
+        prefixed-overrides-bare convention as the host-app config cascades this
+        is designed to slot under. Unset fields keep their dataclass defaults,
+        so a host can drive only the knobs it cares about.
+        """
+        if not prefixes:
+            prefixes = ("LOGREDUCER",)
+        overrides: dict[str, object] = {}
+        for field in fields(cls):
+            for prefix in prefixes:
+                raw = os.environ.get(f"{prefix.rstrip('_')}_{field.name.upper()}")
+                if raw is not None:
+                    overrides[field.name] = _coerce_env_value(raw, field.name)
+                    break
+        return cls(**overrides)  # type: ignore[arg-type]
+
+
+def _coerce_env_value(raw: str, field_name: str) -> object:
+    """Coerce an env string to the annotated type of a BigDialConfig field."""
+    hints = typing.get_type_hints(BigDialConfig)
+    target = hints[field_name]
+    # Unwrap Optional[X]: 'none'/'null'/'' mean None, otherwise coerce to X.
+    if isinstance(target, types.UnionType):
+        args = [a for a in typing.get_args(target) if a is not type(None)]
+        if raw.strip().lower() in ("", "none", "null"):
+            return None
+        target = args[0]
+    if target is bool:
+        return raw.strip().lower() in ("1", "true", "yes", "on")
+    if target is int:
+        return int(raw)
+    if target is float:
+        return float(raw)
+    if target is OutputFormat:
+        return OutputFormat(raw.strip().lower())
+    return raw
 
 
 def get_preset_config(level: ProcessingLevel) -> BigDialConfig:
-    """Get preset configuration for processing level"""
+    """Get preset configuration for processing level."""
     if level == ProcessingLevel.STANDARD:
         return BigDialConfig(
-            max_memory_gb=1.0,
-            chunk_size=100000,
+            max_memory_gb=0.5,
             dedup_cache_size=50000,
             drain_similarity=0.5,
             fuzzy_threshold=None,  # Disabled for speed
@@ -119,8 +148,7 @@ def get_preset_config(level: ProcessingLevel) -> BigDialConfig:
         )
     elif level == ProcessingLevel.ENHANCED:
         return BigDialConfig(
-            max_memory_gb=2.0,
-            chunk_size=50000,
+            max_memory_gb=1.0,
             dedup_cache_size=100000,
             drain_similarity=0.4,
             fuzzy_threshold=0.8,
@@ -129,8 +157,7 @@ def get_preset_config(level: ProcessingLevel) -> BigDialConfig:
         )
     else:  # MAXIMUM
         return BigDialConfig(
-            max_memory_gb=4.0,
-            chunk_size=25000,
+            max_memory_gb=2.0,
             dedup_cache_size=200000,
             drain_similarity=0.3,
             fuzzy_threshold=0.9,

@@ -6,13 +6,14 @@ import json
 import os
 import random
 import time
+from dataclasses import replace
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any
 
 from .anomaly import AnomalyDetector
-from .config import ProcessingLevel, ProcessingMode, get_preset_config
+from .config import BigDialConfig, OutputFormat, ProcessingLevel, ProcessingMode, get_preset_config
 from .logging_config import get_logger, setup_logging
 from .memory import BoundedDeduplicator, MemoryMonitor
 from .patterns import FuzzyDeduplicator, PatternExtractor
@@ -37,6 +38,7 @@ class LogReducer:
         mode: str | ProcessingMode = "pattern",
         max_memory_gb: float | None = None,
         max_patterns: int | None = None,
+        config: BigDialConfig | None = None,
         **kwargs: Any,
     ) -> None:
         """
@@ -47,6 +49,12 @@ class LogReducer:
             mode: Processing mode (pattern/anomaly/temporal/hybrid)
             max_memory_gb: Memory limit override
             max_patterns: Maximum patterns override
+            config: A fully-built BigDialConfig to use INSTEAD of the level
+                preset - the injection seam for a host application that owns
+                its own config cascade (build the config however you like and
+                hand it over; kwargs still apply on top). Copied, so the
+                caller's object is never mutated. ``level`` then only selects
+                the fuzzy-dedup gate, not preset values.
             **kwargs: Additional config overrides
         """
         # Parse level and mode
@@ -58,8 +66,8 @@ class LogReducer:
         self.level = level
         self.mode = mode
 
-        # Get base config
-        self.config = get_preset_config(level)
+        # Base config: an injected one wins over the level preset.
+        self.config = replace(config) if config is not None else get_preset_config(level)
 
         # Apply overrides BEFORE setting up logging
         if max_memory_gb:
@@ -68,13 +76,14 @@ class LogReducer:
             self.config.max_patterns = max_patterns
 
         for key, value in kwargs.items():
-            if hasattr(self.config, key):
-                # Special handling for output_format to convert string to enum
-                if key == "output_format" and isinstance(value, str):
-                    from .config import OutputFormat
-
-                    value = OutputFormat(value.lower())
-                setattr(self.config, key, value)
+            # Fail fast on typos: silently dropping an unknown override means a
+            # user's tuning quietly does nothing.
+            if not hasattr(self.config, key):
+                raise ValueError(f"Unknown config option {key!r} (see BigDialConfig for valid fields)")
+            # Special handling for output_format to convert string to enum
+            if key == "output_format" and isinstance(value, str):
+                value = OutputFormat(value.lower())
+            setattr(self.config, key, value)
 
         # Setup logging based on config (after overrides applied)
         setup_logging(
@@ -90,20 +99,16 @@ class LogReducer:
         # Initialize components
         self.memory_monitor = MemoryMonitor(self.config.max_memory_gb)
 
-        if mode in [ProcessingMode.TEMPORAL, ProcessingMode.HYBRID]:
-            self.temporal_processor: TemporalProcessor | None = TemporalProcessor(self.config.temporal_window_minutes)
-        else:
-            self.temporal_processor = None
-
         if mode in [ProcessingMode.ANOMALY, ProcessingMode.HYBRID]:
             self.anomaly_detector: AnomalyDetector | None = AnomalyDetector(self.config.anomaly_contamination)
         else:
             self.anomaly_detector = None
 
-        # Stateful analysis components (dedup seen-set, Drain3 miner, fuzzy LSH)
-        # are (re)created per run by _reset_components(), so a reused reducer
-        # never carries one run's accumulated state into the next.
+        # Stateful analysis components (dedup seen-set, Drain3 miners, fuzzy
+        # LSH) are (re)created per run by _reset_components(), so a reused
+        # reducer never carries one run's accumulated state into the next.
         self.fuzzy_dedup: FuzzyDeduplicator | None = None
+        self.temporal_processor: TemporalProcessor | None = None
         self._reset_components()
 
         self.stats: dict[str, Any] = {}
@@ -111,11 +116,12 @@ class LogReducer:
     def _reset_components(self) -> None:
         """Recreate the stateful analysis components for a fresh, isolated run.
 
-        The deduplicator (seen-set), Drain3 miner, and fuzzy-dedup LSH all
-        accumulate per-line state. Recreating them keeps a LogReducer instance
-        reusable across reduce()/process_file() calls, and lets a single run make
-        independent deduplication passes (hybrid mode) without the first pass
-        poisoning the second.
+        The deduplicator (seen-set), Drain3 miners (pattern AND per-window
+        temporal), and fuzzy-dedup LSH all accumulate per-line state.
+        Recreating them keeps a LogReducer instance reusable across
+        reduce()/process_file() calls, and lets a single run make independent
+        deduplication passes (hybrid mode) without the first pass poisoning
+        the second.
         """
         self.deduplicator = BoundedDeduplicator(self.config.dedup_cache_size, self.config.hash_algorithm)
         self.pattern_extractor = PatternExtractor(self.config)
@@ -123,6 +129,10 @@ class LogReducer:
             self.fuzzy_dedup = FuzzyDeduplicator(self.config.fuzzy_threshold)
         else:
             self.fuzzy_dedup = None
+        if self.mode in [ProcessingMode.TEMPORAL, ProcessingMode.HYBRID]:
+            self.temporal_processor = TemporalProcessor(self.config.temporal_window_minutes)
+        else:
+            self.temporal_processor = None
 
     def reduce(
         self,
@@ -261,14 +271,13 @@ class LogReducer:
         independent of how many unique lines the source has.
         """
         if self.config.enable_logging:
-            self.logger.info("Phase 1/2: Streaming dedup")
+            # One message, not phases: dedup and mining run interleaved as a
+            # single generator pipeline, so there is no phase boundary to report.
+            self.logger.info("Streaming pipeline: dedup -> fuzzy dedup -> pattern mining")
 
         unique_stream = self.deduplicator.deduplicate_lines(source)
         if self.fuzzy_dedup:
             unique_stream = self.fuzzy_dedup.deduplicate_stream(unique_stream)
-
-        if self.config.enable_logging:
-            self.logger.info("Phase 2/2: Pattern extraction")
         patterns = self.pattern_extractor.extract_patterns(unique_stream)
 
         # Collect examples
@@ -310,14 +319,12 @@ class LogReducer:
         # Keep all anomalies + sample of normal
         result = anomalous[: self.config.max_patterns // 2]
 
-        # Add some normal for context
+        # Add some normal lines for context. Seeded RNG so a re-run over the
+        # same input yields the same sample (consistent with the reproducibility
+        # guarantees elsewhere); there is no security requirement here.
         normal_sample_size = min(len(normal), self.config.max_patterns // 4)
         if normal_sample_size > 0:
-            import secrets
-
-            # Use cryptographically secure random sampling
-            secure_random = secrets.SystemRandom()
-            result.extend(secure_random.sample(normal, normal_sample_size))
+            result.extend(random.Random(0).sample(normal, normal_sample_size))
 
         return result
 
@@ -394,8 +401,6 @@ class LogReducer:
 
     def _save_output(self, lines: list[str], output_file: str) -> None:
         """Save output to file in specified format"""
-        from .config import OutputFormat
-
         output_path = Path(output_file)
         output_path.parent.mkdir(parents=True, exist_ok=True)
 

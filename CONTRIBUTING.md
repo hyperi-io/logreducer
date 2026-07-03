@@ -9,7 +9,7 @@ logreducer uses [uv](https://docs.astral.sh/uv/) for dependency management.
 ```bash
 git clone https://github.com/hyperi-io/logreducer.git
 cd logreducer
-uv sync --all-extras   # core + enhanced feature deps + the dev group
+uv sync --all-extras   # core + ALL extras (enhanced/sql/clickhouse/kafka) + the dev group
 ```
 
 ## Running the checks
@@ -30,6 +30,30 @@ uv run ty check src/logreducer # Astral type check
 uv run pytest -q               # tests
 uv build                       # build wheel + sdist
 ```
+
+## Tests
+
+- `tests/unit/` - fast, server-free (real SQLite, real corpora, no mocks of
+  internal code). `tests/integration/` - marked `integration`, run against
+  real services. `tests/testdata/` holds gzipped, PII-cleansed slices of REAL
+  public log datasets (see its README for provenance and the rebuild tool).
+- Integration tests find their services env-first, then docker, then skip:
+
+```mermaid
+flowchart TD
+    ENV{"env vars set?<br/>(CLICKHOUSE_* /<br/>KAFKA_BOOTSTRAP_SERVERS)"} -->|yes| PROBE{"endpoint<br/>reachable?"}
+    PROBE -->|yes| USE(["use the configured service<br/>(unique table/topic names,<br/>dropped afterwards)"])
+    PROBE -->|"no (warns why)"| DOCKER
+    ENV -->|no| DOCKER{"Docker<br/>available?"}
+    DOCKER -->|yes| TC(["throwaway testcontainer:<br/>ClickHouse / Redpanda /<br/>PostgreSQL / MySQL"])
+    TC --> STOP(["stopped at session end<br/>(LOGREDUCER_KEEP_CONTAINERS=1<br/>keeps it + prints the endpoint)"])
+    DOCKER -->|no| SKIP([pytest.skip])
+```
+
+- Copy `.env.example` to `.env` to point tests at existing services. CI sets
+  no env vars, so it always takes the docker path.
+- Every test that touches a shared service creates uniquely-named tables and
+  topics and cleans them up, so runs never collide.
 
 ## Commit messages
 

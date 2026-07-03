@@ -20,7 +20,7 @@ class TestLogReducerInitialization:
 
         assert reducer.level == ProcessingLevel.STANDARD
         assert reducer.mode == ProcessingMode.PATTERN
-        assert reducer.config.max_memory_gb == 1.0  # Standard preset
+        assert reducer.config.max_memory_gb == 0.5  # Standard preset
         assert reducer.config.max_patterns == 500  # Standard preset
 
     def test_initialization_with_strings(self):
@@ -29,7 +29,7 @@ class TestLogReducerInitialization:
 
         assert reducer.level == ProcessingLevel.ENHANCED
         assert reducer.mode == ProcessingMode.ANOMALY
-        assert reducer.config.max_memory_gb == 2.0  # Enhanced preset
+        assert reducer.config.max_memory_gb == 1.0  # Enhanced preset
 
     def test_initialization_with_enums(self):
         """Test LogReducer initialization with enum parameters"""
@@ -37,7 +37,7 @@ class TestLogReducerInitialization:
 
         assert reducer.level == ProcessingLevel.MAXIMUM
         assert reducer.mode == ProcessingMode.HYBRID
-        assert reducer.config.max_memory_gb == 4.0  # Maximum preset
+        assert reducer.config.max_memory_gb == 2.0  # Maximum preset
 
     def test_initialization_with_overrides(self):
         """Test LogReducer initialization with parameter overrides"""
@@ -50,9 +50,9 @@ class TestLogReducerInitialization:
 
     def test_initialization_with_kwargs(self):
         """Test LogReducer initialization with additional kwargs"""
-        reducer = LogReducer(level="enhanced", chunk_size=75000, drain_similarity=0.3)
+        reducer = LogReducer(level="enhanced", dedup_cache_size=75000, drain_similarity=0.3)
 
-        assert reducer.config.chunk_size == 75000
+        assert reducer.config.dedup_cache_size == 75000
         assert reducer.config.drain_similarity == 0.3
 
     def test_component_initialization(self):

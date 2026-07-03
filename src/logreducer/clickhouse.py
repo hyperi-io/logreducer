@@ -19,6 +19,7 @@ Install: ``pip install 'logreducer[clickhouse]'``.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any
 
@@ -79,8 +80,18 @@ class ClickHouseSource:
                 f"client_or_dsn must be a clickhouse-connect Client or a DSN string, got {type(client_or_dsn).__name__}"
             )
 
-        if sample is not None and not (0.0 < sample <= 1.0):
-            raise ValueError(f"sample fraction must be in (0, 1], got {sample!r}")
+        if sample is not None:
+            if not (0.0 < sample <= 1.0):
+                raise ValueError(f"sample fraction must be in (0, 1], got {sample!r}")
+            # SAMPLE must sit after the table, BEFORE any WHERE/GROUP/ORDER -
+            # appending it to a query with those clauses builds invalid SQL, so
+            # fail fast and point at the alternatives.
+            if re.search(r"\b(WHERE|GROUP\s+BY|ORDER\s+BY|LIMIT)\b", query, re.IGNORECASE):
+                raise ValueError(
+                    "sample= only supports a plain 'SELECT ... FROM table' query "
+                    "(ClickHouse SAMPLE goes before WHERE/GROUP/ORDER); use "
+                    "from_table(..., where=...) or put SAMPLE in your own query"
+                )
 
         self.query = query
         self.parameters = parameters
@@ -109,24 +120,22 @@ class ClickHouseSource:
         """
         if not (0.0 < sample <= 1.0):
             raise ValueError(f"sample fraction must be in (0, 1], got {sample!r}")
-        tbl = f"`{table}`"
-        col = f"`{column}`"
+        # Backtick-quote identifiers, doubling any embedded backtick so a name
+        # can never break out of its quoting.
+        tbl = "`" + table.replace("`", "``") + "`"
+        col = "`" + column.replace("`", "``") + "`"
         where_sql = f" WHERE {where}" if where else ""
         query = f"SELECT {col} FROM {tbl} SAMPLE {float(sample)!r}{where_sql}"
         return cls(client_or_dsn, query, parameters=parameters, settings=settings)
 
     def __iter__(self) -> Iterator[str]:
+        from .sources import rows_to_lines
+
         with self._client.query_row_block_stream(
             self._query, parameters=self.parameters, settings=self.settings
         ) as stream:
             for block in stream:
-                for row in block:
-                    value = row[0]
-                    if value is None:
-                        continue
-                    line = str(value).strip()
-                    if line:
-                        yield line
+                yield from rows_to_lines(block)
 
     def sample_batch(self, n: int) -> list[str]:
         """Return one fresh random batch of up to ``n`` log lines.
@@ -134,20 +143,17 @@ class ClickHouseSource:
         Runs ``... ORDER BY rand() LIMIT n`` over the query, so successive calls
         draw different rows (with-replacement) - the primitive the
         ``reduce_to_target`` loop pulls from. A one-off list, not a stream.
+        Deliberately samples the FULL query population, ignoring any constructor
+        ``sample=`` fraction - the target loop wants fresh draws from everything.
         """
         from .sampling import build_sample_batch_sql
+        from .sources import rows_to_lines
 
         sql = build_sample_batch_sql("clickhouse", self.query, n)
         out: list[str] = []
         with self._client.query_row_block_stream(sql, parameters=self.parameters, settings=self.settings) as stream:
             for block in stream:
-                for row in block:
-                    value = row[0]
-                    if value is None:
-                        continue
-                    line = str(value).strip()
-                    if line:
-                        out.append(line)
+                out.extend(rows_to_lines(block))
         return out
 
     def close(self) -> None:

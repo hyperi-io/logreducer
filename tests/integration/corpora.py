@@ -130,7 +130,12 @@ def load_into_kafka(config: str | dict[str, Any], topic: str, name: str, *, limi
         produced += 1
         if produced % 10000 == 0:
             producer.poll(0)
-    producer.flush(60)
+    # flush() returns the number of messages STILL undelivered - a non-zero
+    # value means silent data loss, so fail loudly rather than let the caller
+    # count produce() calls as deliveries.
+    undelivered = producer.flush(60)
+    if undelivered:
+        raise RuntimeError(f"{undelivered} of {produced} messages not delivered to {topic} within 60s")
     return produced
 
 

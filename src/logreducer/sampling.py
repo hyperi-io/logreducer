@@ -38,7 +38,10 @@ RANDOM_FN: dict[str, str] = {
 def _pg_sample(query: str, fraction: float, seed: int | None) -> tuple[str | None, str]:
     # setseed makes random() deterministic for the rest of the connection; it
     # takes a value in [-1, 1]. Each pass opens a fresh connection and re-seeds,
-    # so the sample is identical across passes (re-iterable).
+    # so the sample is identical across passes (re-iterable). Caveat: strict
+    # identity also depends on PostgreSQL visiting rows in the same order -
+    # synchronized_seqscans on a busy table can rotate the scan start; ORDER BY
+    # in the query if bit-exact re-reads matter.
     setup = None
     if seed is not None:
         s = ((seed % 2_000_000) / 1_000_000.0) - 1.0
@@ -202,7 +205,7 @@ def estimate_batch_rows(
     avg_bytes = sum(len(s.encode("utf-8")) for s in sample_lines) / len(sample_lines)
     per_row = max(1.0, avg_bytes * overhead)
     rows = int(budget_bytes / per_row)
-    rows = max(floor, min(ceil, rows))
     if align > 1:
-        rows = max(align, (rows // align) * align)
-    return rows
+        rows = (rows // align) * align
+    # Clamp LAST so alignment can never push the result outside [floor, ceil].
+    return max(floor, min(ceil, rows))

@@ -18,10 +18,26 @@ and kafka submodules).
 from __future__ import annotations
 
 import os
-from collections.abc import Iterator
-from typing import Protocol, runtime_checkable
+from collections.abc import Iterable, Iterator, Sequence
+from typing import Any, Protocol, runtime_checkable
 
 from .memory import MemoryMonitor, StreamingProcessor
+
+
+def rows_to_lines(rows: Iterable[Sequence[Any]]) -> Iterator[str]:
+    """Yield the first column of each row as a stripped, non-empty line.
+
+    The shared row -> line convention for the DB adapters (SQL, ClickHouse):
+    NULLs and blank lines are skipped, matching FileSource semantics, so the
+    same data reduces identically whichever source it arrives through.
+    """
+    for row in rows:
+        value = row[0]
+        if value is None:
+            continue
+        line = str(value).strip()
+        if line:
+            yield line
 
 
 @runtime_checkable
@@ -43,7 +59,7 @@ class FileSource:
     by size), so the reducer can make multiple passes without loading the file.
     """
 
-    def __init__(self, path: str | os.PathLike[str], *, max_memory_gb: float = 2.0) -> None:
+    def __init__(self, path: str | os.PathLike[str], *, max_memory_gb: float = 1.0) -> None:
         self.path = os.fspath(path)
         self._processor = StreamingProcessor(MemoryMonitor(max_memory_gb))
 

@@ -103,3 +103,34 @@ def test_adaptive_batch_sizing_records_final_batch():
 def test_invalid_target_raises():
     with pytest.raises(ValueError, match="target_rows"):
         reduce_to_target(EmptySource(), _reducer(), target_rows=0)
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "match"),
+    [
+        ({"max_fetches": 0}, "max_fetches"),
+        ({"batch_rows": 0}, "batch_rows"),
+        ({"plateau_rounds": 0}, "plateau_rounds"),
+    ],
+)
+def test_invalid_loop_params_raise(kwargs, match):
+    with pytest.raises(ValueError, match=match):
+        reduce_to_target(EmptySource(), _reducer(), target_rows=5, **kwargs)
+
+
+def test_fixed_batch_rows_disables_adaptive_sizing():
+    source = ManyTemplateSource(n_templates=40)
+    result = reduce_to_target(
+        source, _reducer(), target_rows=10, max_fetches=5, batch_rows=123, max_batch_memory_gb=0.5
+    )
+    # batch_rows pins the batch size; the adaptive sizer must not change it.
+    assert result["stats"]["final_batch_rows"] == 123
+
+
+def test_seed_makes_reservoir_fallback_deterministic():
+    # A plain list uses the client-side reservoir; the same seed must pull the
+    # same batches and therefore collect the same representatives.
+    lines = [f"SHAPE{i} log variant value={v}" for i in range(40) for v in range(3)]
+    a = reduce_to_target(lines, _reducer(), target_rows=8, max_fetches=3, batch_rows=50, seed=7)
+    b = reduce_to_target(lines, _reducer(), target_rows=8, max_fetches=3, batch_rows=50, seed=7)
+    assert a["lines"] == b["lines"]

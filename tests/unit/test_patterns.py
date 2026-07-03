@@ -136,32 +136,6 @@ class TestPatternExtractor:
         # ERROR should have higher priority than INFO (count * 100 vs count * 1)
         assert error_pattern.priority > info_pattern.priority
 
-    @patch("logreducer.patterns.SCIPY_AVAILABLE", True)
-    @patch("logreducer.patterns.entropy")
-    def test_entropy_filter(self, mock_entropy):
-        """Test entropy-based filtering"""
-        mock_entropy.return_value = 1.5
-
-        config = BigDialConfig()
-        config.entropy_threshold = 1.0
-        extractor = PatternExtractor(config)
-
-        patterns = [
-            LogPattern(template="User <*> logged in", count=10),
-            LogPattern(template="System started", count=5),
-        ]
-
-        result = extractor._entropy_filter(patterns)
-
-        # Should add entropy metadata
-        for pattern in result:
-            assert "entropy" in pattern.metadata
-
-
-class TestFuzzyDeduplicator:
-    """Test cases for FuzzyDeduplicator"""
-
-    @patch("logreducer.patterns.MINHASH_AVAILABLE", True)
     def test_initialization_default(self):
         """Test fuzzy deduplicator initialization with defaults"""
         dedup = FuzzyDeduplicator()

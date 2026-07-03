@@ -1,122 +1,33 @@
-# LogReducer Examples
+# LogReducer examples
 
-This directory contains real-world examples and tutorials for using LogReducer effectively.
+Runnable examples and copy-paste integration recipes. The [README](../README.md)
+is the full API and CLI reference; this directory shows LogReducer in context.
 
-## Quick Examples
-
-### Basic Usage
-
-```python
-from logreducer import LogReducer
-
-# Create a reducer with default settings
-reducer = LogReducer()
-
-# Process a log file
-reduced_lines = reducer.process_file("app.log")
-print(f"Reduced {len(reduced_lines)} lines")
-
-# Save to file
-reducer.process_file("app.log", "reduced.log")
-```
-
-### Advanced Configuration
-
-```python
-from logreducer import LogReducer
-
-# High-performance processing
-reducer = LogReducer(
-    level="enhanced",       # Better accuracy
-    mode="hybrid",          # Use all algorithms  
-    max_memory_gb=4.0,      # Allow more memory
-    enable_logging=True     # Enable processing logs
-)
-
-# Process with metadata
-result = reducer.process_file("large.log", "output.log", return_metadata=True)
-print(f"Reduction: {result['stats']['reduction_percent']:.1f}%")
-```
-
-## Command Line Examples
-
-### Basic Processing
-```bash
-# Simple reduction
-logreducer app.log -o reduced.log
-
-# With statistics
-logreducer app.log -o reduced.log --stats
-```
-
-### Advanced Processing
-```bash
-# Enhanced processing with JSON output
-logreducer app.log -l enhanced -m hybrid --format json -o result.json
-
-# Estimate processing requirements
-logreducer large.log --estimate
-
-# Maximum quality with logging
-logreducer app.log -l maximum --log --log-file processing.log
-```
-
-## Use Case Examples
-
-### 1. Development Log Analysis
-Process development logs to find errors and important events:
-
-```python
-reducer = LogReducer(
-    level="enhanced",
-    mode="anomaly",         # Focus on unusual events
-    enable_logging=True
-)
-
-# Process and find anomalies
-result = reducer.process_file("dev.log", "important-events.log")
-```
-
-### 2. Production Log Monitoring
-Reduce production logs while preserving critical information:
+## Run the example script
 
 ```bash
-# Process hourly with hybrid approach
-logreducer /var/log/app/$(date +%Y%m%d_%H).log \
-    -l maximum \
-    -m hybrid \
-    --format jsonl \
-    -o /var/log/reduced/$(date +%Y%m%d_%H).jsonl
+uv run python examples/basic_usage.py
 ```
 
-### 3. Historical Log Analysis
-Process large historical logs efficiently:
+[basic_usage.py](basic_usage.py) walks through file reduction, metadata output,
+logging, all four processing modes, and error handling against a generated
+sample log.
 
-```python
-# Memory-constrained processing for large files
-reducer = LogReducer(
-    level="standard",
-    mode="temporal",        # Time-based sampling
-    max_memory_gb=1.0       # Limit memory usage
-)
+## Integration recipes
 
-for log_file in historical_logs:
-    reducer.process_file(log_file, f"reduced_{log_file}")
-```
+### Docker container
 
-## Integration Examples
-
-### 1. Docker Container
 ```dockerfile
 FROM python:3.12-slim
 
 RUN pip install logreducer
 
-# Process logs during container startup
+# Reduce logs during container startup
 CMD ["logreducer", "/app/logs/app.log", "-o", "/app/logs/reduced.log", "--stats"]
 ```
 
-### 2. Kubernetes Job
+### Kubernetes job
+
 ```yaml
 apiVersion: batch/v1
 kind: Job
@@ -135,14 +46,18 @@ spec:
           logreducer /logs/app.log -l enhanced -m hybrid -o /output/reduced.log
         resources:
           limits:
-            memory: "2Gi"
+            memory: "1Gi"
             cpu: "1000m"
       restartPolicy: Never
 ```
 
-### 3. CI/CD Pipeline
+Memory note: the `standard`/`enhanced`/`maximum` levels cap engine memory at
+0.5/1/2 GB respectively (and clamp to 70% of what the container actually has),
+so a 1Gi limit comfortably fits the enhanced level.
+
+### CI pipeline (GitHub Actions)
+
 ```yaml
-# GitHub Actions example
 - name: Reduce Test Logs
   run: |
     pip install logreducer
@@ -156,116 +71,20 @@ spec:
   uses: actions/upload-artifact@v4
   with:
     name: reduced-logs
-    path: test-summary.json
+    path: test-summary/
 ```
 
-## Performance Tuning Examples
+### Scheduled production reduction
 
-### Memory-Constrained Environment
-```python
-# Optimize for low memory usage
-reducer = LogReducer(
-    level="standard",       # Faster processing
-    mode="pattern",         # Less memory intensive
-    max_memory_gb=0.5,      # Strict limit
-    chunk_size=10000        # Smaller chunks
-)
-```
-
-### High-Performance Processing
-```python
-# Optimize for speed
-reducer = LogReducer(
-    level="enhanced",       # Better algorithms
-    mode="hybrid",          # All techniques
-    max_memory_gb=8.0,      # Allow more memory
-    hash_algorithm="xxhash" # Faster hashing (needs the 'enhanced' extra)
-)
-```
-
-### Container-Optimized
-```python
-# Auto-detects container CPU limits
-reducer = LogReducer()  # Uses all available cores
-
-# Check detected configuration
-print(f"Using {reducer.config.n_workers} worker threads")
-print(f"Memory limit: {reducer.config.max_memory_gb} GB")
-```
-
-## Output Format Examples
-
-### Line-by-Line (Default)
 ```bash
-logreducer app.log -o reduced.log
+# Reduce the previous hour's log with maximum quality, JSONL out
+logreducer /var/log/app/$(date +%Y%m%d_%H).log \
+    -l maximum -m hybrid --format jsonl \
+    -o /var/log/reduced/$(date +%Y%m%d_%H).jsonl
 ```
 
-### JSON Format
-```bash
-logreducer app.log --format json --pretty-json -o result.json
-```
+## More material
 
-### JSON Lines Format
-```bash
-logreducer app.log --format jsonl -o result.jsonl
-```
-
-## Error Handling Examples
-
-### Graceful Failure
-```python
-try:
-    reducer = LogReducer(enable_logging=True)
-    result = reducer.process_file("app.log", "reduced.log")
-    print(f"Successfully reduced to {len(result)} lines")
-except FileNotFoundError:
-    print("Log file not found")
-except MemoryError:
-    print("Insufficient memory - try reducing max_memory_gb")
-except Exception as e:
-    print(f"Processing failed: {e}")
-```
-
-### Memory Limit Handling
-```python
-# Automatic degradation under memory pressure
-reducer = LogReducer(max_memory_gb=1.0)
-
-# Large inputs automatically switch to reservoir sampling to stay in budget
-result = reducer.process_file("huge.log")
-```
-
-## Monitoring Examples
-
-### Processing Statistics
-```python
-reducer = LogReducer(enable_logging=True)
-result = reducer.process_file("app.log")
-
-stats = reducer.stats
-print(f"Input: {stats['input_lines']:,} lines ({stats['input_size_mb']:.1f} MB)")
-print(f"Output: {stats['output_lines']:,} lines")
-print(f"Reduction: {stats['reduction_percent']:.1f}%")
-print(f"Processing time: {stats['processing_time_seconds']:.2f}s")
-print(f"Throughput: {stats['processing_rate_mb_per_sec']:.1f} MB/sec")
-```
-
-### Memory Usage Monitoring
-```python
-import psutil
-
-process = psutil.Process()
-initial_memory = process.memory_info().rss / (1024**2)  # MB
-
-reducer = LogReducer(max_memory_gb=2.0)
-result = reducer.process_file("large.log")
-
-final_memory = process.memory_info().rss / (1024**2)  # MB
-print(f"Memory used: {final_memory - initial_memory:.1f} MB")
-```
-
-## Next Steps
-
-- See the [README](../README.md) for the full API and CLI reference
-- Check `tests/` for more usage examples
-- Use `logreducer --help` for all CLI options
+- Real-world sample logs to try: [data/samples/](../data/samples/) (public LogHub datasets)
+- The test suite doubles as usage documentation: [tests/](../tests/)
+- All CLI options: `logreducer --help`

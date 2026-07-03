@@ -81,8 +81,12 @@ def test_reduce_from_clickhouse(clickhouse_client):
         corpora.drop_clickhouse_table(clickhouse_client, table)
 
 
-def test_reduce_from_redpanda(kafka_bootstrap):
-    """A dataset produced to a Redpanda topic reduces via KafkaSource."""
+def test_reduce_from_kafka(kafka_bootstrap):
+    """A dataset produced to a Kafka topic reduces via KafkaSource.
+
+    Runs against whatever broker the fixture resolves: a configured broker
+    from the env (possibly SASL-authenticated) or the docker Redpanda fallback.
+    """
     pytest.importorskip("confluent_kafka")
     from logreducer.kafka import KafkaSource
 

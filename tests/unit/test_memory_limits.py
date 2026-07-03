@@ -83,23 +83,6 @@ class TestMemoryLimits:
         finally:
             os.unlink(temp_file)
 
-    def test_chunk_size_adapts_to_memory_limit(self):
-        """Test that chunk size is adjusted based on memory limits"""
-        # Small memory limit should result in small chunks
-        reducer_small = LogReducer(level="standard", max_memory_gb=0.1)
-
-        # Large memory limit should allow larger chunks
-        reducer_large = LogReducer(level="standard", max_memory_gb=4.0)
-
-        # Chunk size should adapt (this is implementation-dependent)
-        # At minimum, both should have valid chunk sizes
-        assert reducer_small.config.chunk_size > 0
-        assert reducer_large.config.chunk_size > 0
-
-        # Generally expect larger memory limits to allow larger chunks
-        # (though this may not always hold due to other constraints)
-        assert reducer_small.config.chunk_size <= reducer_large.config.chunk_size * 2
-
     def test_memory_exhaustion_graceful_degradation(self):
         """Test graceful behavior when approaching memory limits"""
 

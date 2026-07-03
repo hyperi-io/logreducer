@@ -102,6 +102,7 @@ def setup_logging(
     log_level: str = "INFO",
     log_format: str = "text",
     console: bool = False,
+    own_sinks: bool = True,
 ) -> None:
     """Configure logreducer's own logging sinks.
 
@@ -111,6 +112,12 @@ def setup_logging(
         log_level: Threshold level (overridden by ``LOG_LEVEL``).
         log_format: ``text`` (human) or ``json`` (overridden by ``LOG_FORMAT``).
         console: Also log to the console (stderr, or ``LOG_OUTPUT=stdout``).
+        own_sinks: When False, register NO handlers - just enable the package
+            and let logreducer's records flow through the HOST application's
+            loguru handlers. This is the embedding seam: a host app that owns
+            logging calls ``setup_logging(enable=True, own_sinks=False)`` and
+            logreducer's output lands in the host's sinks, formatted by the
+            host's standard.
     """
     # Env beats caller, so a deployment can retune logging without code changes.
     log_level = os.environ.get("LOG_LEVEL", log_level).upper()
@@ -128,6 +135,11 @@ def setup_logging(
 
     if not enable:
         logger.disable("logreducer")
+        return
+
+    if not own_sinks:
+        # Host-owned logging: enable the package, register nothing.
+        logger.enable("logreducer")
         return
 
     ci = _is_ci()

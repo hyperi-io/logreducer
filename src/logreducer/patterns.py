@@ -1,19 +1,18 @@
-"""
-Pattern extraction and clustering utilities
-"""
+"""Pattern extraction (Drain3 template mining) and fuzzy deduplication."""
 
-from collections import Counter
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from drain3 import TemplateMiner
 from drain3.template_miner_config import TemplateMinerConfig
+from loguru import logger
 
 if TYPE_CHECKING:
     from .config import BigDialConfig
 
-# Try optional imports
+# datasketch powers fuzzy dedup and ships in the optional `enhanced` extra;
+# without it FuzzyDeduplicator degrades to a pass-through (with a warning).
 try:
     from datasketch import MinHash, MinHashLSH
 
@@ -21,18 +20,10 @@ try:
 except ImportError:
     MINHASH_AVAILABLE = False
 
-try:
-    import numpy as np
-    from scipy.stats import entropy
-
-    SCIPY_AVAILABLE = True
-except ImportError:
-    SCIPY_AVAILABLE = False
-
 
 @dataclass
 class LogPattern:
-    """Represents a unique log pattern"""
+    """Represents a unique log pattern."""
 
     template: str
     examples: list[str] = field(default_factory=list)
@@ -43,14 +34,14 @@ class LogPattern:
 
 
 class PatternExtractor:
-    """Extract patterns using Drain3 and other methods"""
+    """Extract patterns using Drain3's online template miner."""
 
     def __init__(self, config: "BigDialConfig") -> None:
         self.config = config
         self.setup_drain3()
 
     def setup_drain3(self) -> None:
-        """Configure Drain3"""
+        """Configure Drain3."""
         drain_config = TemplateMinerConfig()
         drain_config.profiling_enabled = False
         drain_config.drain_sim_th = self.config.drain_similarity
@@ -92,30 +83,30 @@ class PatternExtractor:
         patterns = self._filter_by_occurrence(patterns)
         patterns = self._calculate_priority(patterns)
 
-        if SCIPY_AVAILABLE and hasattr(self.config, "entropy_threshold"):
-            patterns = self._entropy_filter(patterns)
-
         # Sort by priority and limit
         patterns.sort(key=lambda p: p.priority, reverse=True)
         return patterns[: self.config.max_patterns]
 
     def _filter_by_occurrence(self, patterns: list[LogPattern]) -> list[LogPattern]:
-        """Filter patterns by minimum occurrence"""
+        """Filter patterns by minimum occurrence."""
         return [p for p in patterns if p.count >= self.config.min_pattern_occurrences]
 
     def _calculate_priority(self, patterns: list[LogPattern]) -> list[LogPattern]:
-        """Calculate priority scores"""
+        """Calculate priority scores.
+
+        Severity boosts are checked highest-first so a template containing both
+        (e.g. "CRITICAL: write FAILED") scores as critical, not merely error.
+        """
         for pattern in patterns:
             priority: float = pattern.count
 
-            # Boost errors and warnings
             template_upper = pattern.template.upper()
-            if "ERROR" in template_upper or "FAIL" in template_upper:
+            if "CRITICAL" in template_upper or "FATAL" in template_upper:
+                priority *= 200
+            elif "ERROR" in template_upper or "FAIL" in template_upper:
                 priority *= 100
             elif "WARN" in template_upper:
                 priority *= 50
-            elif "CRITICAL" in template_upper or "FATAL" in template_upper:
-                priority *= 200
 
             # Boost complex patterns
             priority *= 1 + pattern.template.count("<*>") * 0.5
@@ -125,26 +116,9 @@ class PatternExtractor:
 
         return patterns
 
-    def _entropy_filter(self, patterns: list[LogPattern]) -> list[LogPattern]:
-        """Filter by information entropy"""
-        if not SCIPY_AVAILABLE:
-            return patterns
-
-        for pattern in patterns:
-            template_tokens = pattern.template.split()
-            token_counts = Counter(template_tokens)
-            probs = np.array(list(token_counts.values())) / len(template_tokens)
-            pattern.metadata["entropy"] = entropy(probs)
-
-        # Filter by entropy threshold
-        if hasattr(self.config, "entropy_threshold"):
-            patterns = [p for p in patterns if p.metadata.get("entropy", 1) > self.config.entropy_threshold]
-
-        return patterns
-
 
 class FuzzyDeduplicator:
-    """Fuzzy deduplication using MinHash"""
+    """Fuzzy (near-duplicate) deduplication using MinHash LSH."""
 
     def __init__(self, threshold: float = 0.8):
         self.threshold = threshold
@@ -152,6 +126,8 @@ class FuzzyDeduplicator:
 
         if self.enabled:
             self.lsh = MinHashLSH(threshold=threshold, num_perm=64)
+        else:
+            logger.warning("datasketch not installed - fuzzy dedup disabled (pip install 'logreducer[enhanced]')")
 
     def deduplicate_stream(self, lines: Iterable[str]) -> Iterator[str]:
         """Yield near-unique lines as they arrive (streaming near-dup filter).

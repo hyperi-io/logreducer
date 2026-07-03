@@ -15,7 +15,7 @@ import psutil
 class MemoryMonitor:
     """Monitor and control memory usage during processing"""
 
-    def __init__(self, max_memory_gb: float = 2.0):
+    def __init__(self, max_memory_gb: float = 1.0):
         self.max_memory_gb = max_memory_gb
         self.max_memory_bytes = max_memory_gb * 1024 * 1024 * 1024
         self.effective_limit = self.max_memory_bytes * 0.8  # 80% safety margin
@@ -33,7 +33,13 @@ class MemoryMonitor:
         self.safe_chunk_size = max(1000, self.max_lines_in_memory // 10)
 
     def check_memory(self) -> tuple[float, bool]:
-        """Check current memory usage"""
+        """Return (current_gb, is_safe) against the SOFT 80% threshold.
+
+        Not a pure getter: when the soft threshold is crossed this runs a
+        gc.collect() and re-tests, so transient garbage does not trigger
+        degradation. Callers use this as the soft tier and
+        ``is_limit_exceeded`` (the full limit) as the hard tier.
+        """
         current = self.process.memory_info().rss
         current_gb = current / (1024**3)
         is_safe = current < self.effective_limit
@@ -67,9 +73,15 @@ class MemoryMonitor:
         return self.peak_usage_bytes / (1024**3)
 
     def is_limit_exceeded(self) -> bool:
-        """Check if memory limit is exceeded"""
+        """True when RSS exceeds the FULL configured limit (the hard tier).
+
+        Deliberately compares against ``max_memory_bytes``, not the 80%
+        ``effective_limit`` used by ``check_memory`` - the gap between the two
+        is what gives callers room to soft-degrade (shrink batches, sample)
+        before the hard stop fires.
+        """
         current = self.process.memory_info().rss
-        return bool(current > self.effective_limit)
+        return bool(current > self.max_memory_bytes)
 
     def reset(self) -> None:
         """Reset peak memory tracking"""
@@ -114,26 +126,34 @@ class StreamingProcessor:
             yield from self._read_sampled(file_path)
 
     def _read_chunked(self, file_path: str) -> Iterator[str]:
-        """Read file in chunks"""
-        chunk = []
+        """Read file in chunks, degrading to sampling under memory pressure.
+
+        The memory check runs on its own line counter, NOT on chunk-flush
+        boundaries - a flush count and a line count almost never coincide, so
+        gating the check on both used to make this fallback effectively dead.
+        """
+        chunk: list[str] = []
+        check_every = 100_000
+        next_check = check_every
 
         with open(file_path, encoding="utf-8", errors="ignore") as f:
-            for line_num, line in enumerate(f):
-                line = line.strip()
-                if not line:
+            for line_num, raw in enumerate(line.strip() for line in f):
+                if not raw:
                     continue
 
-                chunk.append(line)
+                chunk.append(raw)
 
                 if len(chunk) >= self.chunk_size:
                     yield from chunk
                     chunk = []
 
-                    if line_num % 100000 == 0:
-                        current_gb, is_safe = self.memory_monitor.check_memory()
-                        if not is_safe:
-                            yield from self._read_sampled_remainder(f)
-                            return
+                if line_num >= next_check:
+                    next_check += check_every
+                    _, is_safe = self.memory_monitor.check_memory()
+                    if not is_safe:
+                        yield from chunk
+                        yield from self._read_sampled_remainder(f)
+                        return
 
             if chunk:
                 yield from chunk
@@ -173,7 +193,12 @@ class StreamingProcessor:
 
 
 class BoundedDeduplicator:
-    """Memory-bounded deduplication"""
+    """Memory-bounded exact deduplication (sliding-window semantics).
+
+    The seen-set is capped at ``max_cache_size`` hashes with FIFO eviction, so
+    on very high-cardinality input a line can re-emit after its hash has been
+    evicted - bounded memory is traded for global dedup guarantees.
+    """
 
     def __init__(self, max_cache_size: int = 100000, hash_algorithm: str = "xxhash"):
         self.max_cache_size = max_cache_size

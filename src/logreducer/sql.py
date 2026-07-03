@@ -161,6 +161,8 @@ class SQLSource:
     def __iter__(self) -> Iterator[str]:
         from sqlalchemy import text
 
+        from .sources import rows_to_lines
+
         stmt = text(self._sample_sql if self._sample_sql is not None else self.query)
         with self._engine.connect() as conn:
             # A deterministic sample (PostgreSQL) needs its per-connection seed
@@ -171,13 +173,7 @@ class SQLSource:
             # `yield_per` rows per round trip, so memory does not grow with the
             # result size.
             result = conn.execution_options(yield_per=self.yield_per).execute(stmt, self.params or {})
-            for row in result:
-                value = row[0]
-                if value is None:
-                    continue
-                line = str(value).strip()
-                if line:
-                    yield line
+            yield from rows_to_lines(result)
 
     def sample_batch(self, n: int) -> list[str]:
         """Return one fresh random batch of up to ``n`` log lines.
@@ -185,23 +181,18 @@ class SQLSource:
         Each call runs ``ORDER BY <rand> LIMIT n`` over the query, so successive
         calls draw different rows (with-replacement) - the primitive the
         ``reduce_to_target`` loop pulls batches from. Not re-iterable; a one-off
-        list, not a streaming pass.
+        list, not a streaming pass. Deliberately samples the FULL query
+        population, ignoring any constructor ``sample=`` fraction - the target
+        loop wants fresh draws from everything, not a sample of a sample.
         """
         from sqlalchemy import text
 
         from .sampling import build_sample_batch_sql
+        from .sources import rows_to_lines
 
         sql = build_sample_batch_sql(self._engine.dialect.name, self.query, n)
-        out: list[str] = []
         with self._engine.connect() as conn:
-            for row in conn.execute(text(sql), self.params or {}):
-                value = row[0]
-                if value is None:
-                    continue
-                line = str(value).strip()
-                if line:
-                    out.append(line)
-        return out
+            return list(rows_to_lines(conn.execute(text(sql), self.params or {})))
 
     def close(self) -> None:
         """Dispose the engine, but only if this source created it."""

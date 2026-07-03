@@ -3,10 +3,7 @@
 .env.local
 .env.*.local
 
-# Development tools and AI assistant configurations
-STATE.md
-END_OF_DAY.md
-
+# Local editor / assistant working files (never committed)
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -62,7 +59,6 @@ coverage.xml
 cover/
 
 # Virtual environments
-.env
 .venv
 env/
 venv/
@@ -128,7 +124,6 @@ profile_default/
 ipython_config.py
 
 # Environments
-.env.local
 .env.development
 .env.test
 .env.production
@@ -175,12 +170,8 @@ docs/build/
 # Test files in root only (not in scripts/)
 /test_*.py
 .coverage*
-coverage.xml
-htmlcov/
 
 # Temporary files
-.tmp/
-*.tmp
 
 # Bandit security scan results
 bandit-report.json
@@ -206,22 +197,10 @@ act-*
 # Local environment files (never commit -- contain secrets)
 !.env.example.*
 
-# Local working files (not committed)
-#
-# Authoritative protection for hyperi-ai content is .git/info/exclude
-# (per-repo, never committed). The entries below ALSO appear there;
-# duplicating them in .gitignore is belt-and-braces -- if a developer
-# uses a tool that doesn't respect .git/info/exclude (unusual), the
-# .gitignore still catches it. We do not RELY on these being committed
-# in .gitignore -- attach surgically appends them if missing, leaves
-# them alone if already present.
+# Local-only working notes and per-tool context files
 docs/superpowers/
 .mcp.json
 .ai-version
-
-# hyperi-ai per-project context + tool-specific equivalents.
-# all load these from project root natively). Local-only, never
-# committed -- mirrored in .git/info/exclude.
 TODO.md
 
 # Git worktrees (local dev convenience)

@@ -33,6 +33,11 @@ class TestBuildSampleSql:
         assert setup is None
         assert "rand(7)" in sql
 
+    def test_fraction_one_is_valid(self):
+        # 1.0 is the inclusive upper bound: sample everything.
+        _, sql = build_sample_sql("postgresql", "SELECT msg FROM logs", 1.0)
+        assert "random() <" in sql
+
     def test_sqlite_unseeded_ok(self):
         setup, sql = build_sample_sql("sqlite", "SELECT msg FROM logs", 0.1)
         assert setup is None
@@ -58,6 +63,16 @@ class TestBuildSampleBatchSql:
         assert "ORDER BY random()" in sql
         assert "LIMIT 500" in sql
         assert "_lr_batch" in sql
+
+    def test_postgresql_uses_random(self):
+        sql = build_sample_batch_sql("postgresql", "SELECT msg FROM logs", 200)
+        assert "ORDER BY random()" in sql
+        assert "LIMIT 200" in sql
+
+    @pytest.mark.parametrize("dialect", ["mysql", "mariadb"])
+    def test_mysql_family_uses_rand(self, dialect):
+        sql = build_sample_batch_sql(dialect, "SELECT msg FROM logs", 50)
+        assert "ORDER BY rand()" in sql
 
     def test_clickhouse_uses_rand(self):
         sql = build_sample_batch_sql("clickhouse", "SELECT msg FROM logs", 100)

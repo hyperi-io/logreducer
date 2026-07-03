@@ -1,11 +1,11 @@
-"""Integration-test fixtures: real services, local-network first, docker fallback.
+"""Integration-test fixtures: real services, env-first, docker fallback.
 
-Each service fixture prefers a configured local/network endpoint (env vars,
-typically loaded from the project ``.env`` - see .env.example). If none is
-configured or reachable, it starts a throwaway docker container via
-testcontainers and stops it the moment the session ends - nothing is left
-running. If neither a local endpoint nor docker is available, dependent tests
-skip rather than fail.
+The ClickHouse and Kafka fixtures prefer a configured endpoint (env vars,
+typically loaded from the project ``.env`` - see .env.example) and fall back to
+a throwaway docker container; PostgreSQL and MySQL are docker-only (they exist
+solely to exercise per-dialect sampling). Containers are stopped the moment the
+session ends unless LOGREDUCER_KEEP_CONTAINERS=1. If neither an endpoint nor
+docker is available, dependent tests skip rather than fail.
 """
 
 from __future__ import annotations
@@ -19,15 +19,34 @@ from typing import Any
 import pytest
 
 
+def _prefixed(names: tuple[str, ...]) -> tuple[str, ...]:
+    """Expand names with the optional env-prefix cascade.
+
+    LOGREDUCER_ENV_PREFIX="DFE" makes DFE_CLICKHOUSE_HOST win over
+    CLICKHOUSE_HOST (prefixed first, bare fallback) - the scalo config-cascade
+    convention, so a .env written for another project (e.g. dfe-engine's
+    DFE_* names) drops in without renaming.
+    """
+    prefix = os.environ.get("LOGREDUCER_ENV_PREFIX", "").strip().rstrip("_")
+    if not prefix:
+        return names
+    expanded: list[str] = []
+    for name in names:
+        expanded.append(f"{prefix}_{name}")
+        expanded.append(name)
+    return tuple(expanded)
+
+
 def _env_bool(name: str, default: bool = False) -> bool:
-    value = os.environ.get(name)
-    if value is None:
-        return default
-    return value.strip().lower() in ("1", "true", "yes", "on")
+    for candidate in _prefixed((name,)):
+        value = os.environ.get(candidate)
+        if value is not None:
+            return value.strip().lower() in ("1", "true", "yes", "on")
+    return default
 
 
 def _env_first(*names: str, default: str = "") -> str:
-    for name in names:
+    for name in _prefixed(names):
         value = os.environ.get(name)
         if value:
             return value
@@ -82,7 +101,10 @@ def _clickhouse_from_env() -> Any | None:
         )
         client.command("SELECT 1")
         return client
-    except Exception:
+    except Exception as exc:
+        # Say WHY the configured endpoint was skipped - a typo'd password
+        # silently falling back to docker is painful to debug.
+        print(f"\n[env] CLICKHOUSE_HOST={host} configured but unusable ({exc}); falling back to docker")
         return None
 
 
@@ -116,16 +138,18 @@ def _clickhouse_from_docker() -> tuple[Any, Any] | None:
     except ImportError:
         return None
     try:
-        container = DockerContainer("clickhouse/clickhouse-server:24.8").with_exposed_ports(8123)
+        container = DockerContainer("clickhouse/clickhouse-server:24.8.14").with_exposed_ports(8123)
         container.start()
         wait_for_logs(container, "Ready for connections", timeout=60)
+        # Inside the try: if the HTTP probe times out, the container must
+        # still be stopped rather than leaked as a fixture ERROR.
+        host = container.get_container_host_ip()
+        port = int(container.get_exposed_port(8123))
+        client = _await_clickhouse_http(host, port)
     except Exception:
         with contextlib.suppress(Exception):
             container.stop()
         return None
-    host = container.get_container_host_ip()
-    port = int(container.get_exposed_port(8123))
-    client = _await_clickhouse_http(host, port)
     return client, container
 
 
@@ -196,7 +220,10 @@ def _kafka_config_from_env() -> str | dict[str, Any] | None:
         probe["socket.timeout.ms"] = 6000
         AdminClient(probe).list_topics(timeout=8)
         return config
-    except Exception:
+    except Exception as exc:
+        # Say WHY the configured broker was skipped rather than silently
+        # falling back to docker (bad SASL creds look identical otherwise).
+        print(f"\n[env] KAFKA_BOOTSTRAP_SERVERS={servers} configured but unusable ({exc}); falling back to docker")
         return None
 
 
@@ -272,7 +299,7 @@ def pg_engine() -> Iterator[Any]:
     except ImportError:
         pytest.skip("PostgreSQL integration deps not installed")
     try:
-        container = PostgresContainer("postgres:16", driver="psycopg")
+        container = PostgresContainer("postgres:16.6", driver="psycopg")
         container.start()
     except Exception as exc:  # no docker / image pull failed
         pytest.skip(f"no Docker for PostgreSQL: {exc}")
@@ -294,7 +321,7 @@ def mysql_engine() -> Iterator[Any]:
     except ImportError:
         pytest.skip("MySQL integration deps not installed")
     try:
-        container = MySqlContainer("mysql:8.4")
+        container = MySqlContainer("mysql:8.4.5")
         container.start()
     except Exception as exc:  # no docker / image pull failed
         pytest.skip(f"no Docker for MySQL: {exc}")

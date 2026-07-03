@@ -46,8 +46,7 @@ class TestBigDialConfig:
         """Test default configuration values"""
         config = BigDialConfig()
 
-        assert config.max_memory_gb == 2.0
-        assert config.chunk_size == 50000
+        assert config.max_memory_gb == 1.0
         assert config.dedup_cache_size == 100000
         assert config.hash_algorithm == "xxhash"
         assert config.drain_similarity == 0.4
@@ -55,10 +54,9 @@ class TestBigDialConfig:
 
     def test_custom_config(self):
         """Test custom configuration values"""
-        config = BigDialConfig(max_memory_gb=4.0, chunk_size=100000, drain_similarity=0.3)
+        config = BigDialConfig(max_memory_gb=2.0, drain_similarity=0.3)
 
-        assert config.max_memory_gb == 4.0
-        assert config.chunk_size == 100000
+        assert config.max_memory_gb == 2.0
         assert config.drain_similarity == 0.3
         # Default values should still be present
         assert config.examples_per_pattern == 3
@@ -71,18 +69,6 @@ class TestBigDialConfig:
         # Should be adjusted down based on available memory
         assert config.max_memory_gb < 999999.0
 
-    def test_post_init_workers(self):
-        """Test that __post_init__ sets n_workers if None"""
-        config = BigDialConfig(n_workers=None)
-
-        assert config.n_workers is not None
-        assert isinstance(config.n_workers, int)
-        assert config.n_workers > 0
-        # Should be set to actual CPU count (no arbitrary limit)
-        import multiprocessing as mp
-
-        assert config.n_workers <= mp.cpu_count()
-
 
 class TestGetPresetConfig:
     """Test get_preset_config function"""
@@ -92,8 +78,7 @@ class TestGetPresetConfig:
         config = get_preset_config(ProcessingLevel.STANDARD)
 
         assert isinstance(config, BigDialConfig)
-        assert config.max_memory_gb == 1.0
-        assert config.chunk_size == 100000
+        assert config.max_memory_gb == 0.5
         assert config.max_patterns == 500
         assert config.examples_per_pattern == 2
         assert config.fuzzy_threshold is None  # Disabled for speed
@@ -103,8 +88,7 @@ class TestGetPresetConfig:
         config = get_preset_config(ProcessingLevel.ENHANCED)
 
         assert isinstance(config, BigDialConfig)
-        assert config.max_memory_gb == 2.0
-        assert config.chunk_size == 50000
+        assert config.max_memory_gb == 1.0
         assert config.max_patterns == 1000
         assert config.examples_per_pattern == 3
         assert config.fuzzy_threshold == 0.8
@@ -114,8 +98,7 @@ class TestGetPresetConfig:
         config = get_preset_config(ProcessingLevel.MAXIMUM)
 
         assert isinstance(config, BigDialConfig)
-        assert config.max_memory_gb == 4.0
-        assert config.chunk_size == 25000
+        assert config.max_memory_gb == 2.0
         assert config.max_patterns == 2000
         assert config.examples_per_pattern == 5
         assert config.fuzzy_threshold == 0.9
@@ -128,9 +111,6 @@ class TestGetPresetConfig:
 
         # Memory should increase
         assert standard.max_memory_gb < enhanced.max_memory_gb < maximum.max_memory_gb
-
-        # Chunk size should decrease (more thorough processing)
-        assert standard.chunk_size > enhanced.chunk_size > maximum.chunk_size
 
         # Pattern count should increase
         assert standard.max_patterns < enhanced.max_patterns < maximum.max_patterns

@@ -15,12 +15,11 @@ nothing. Built on typer.
 
 import json
 import sys
-from importlib.metadata import PackageNotFoundError
-from importlib.metadata import version as _pkg_version
 from typing import Any
 
 import typer
 
+from . import __version__
 from .core import LogReducer
 from .logging_config import setup_logging
 from .sources import Source
@@ -34,11 +33,7 @@ def _err(message: str) -> None:
 def _version_callback(value: bool) -> None:
     """Eager --version handler: print version and exit."""
     if value:
-        try:
-            ver = _pkg_version("logreducer")
-        except PackageNotFoundError:
-            ver = "unknown"
-        print(f"logreducer version {ver}")
+        print(f"logreducer version {__version__}")
         raise typer.Exit(0)
 
 
@@ -186,6 +181,10 @@ def _reduce(
                 if callable(close):
                     close()
         elif input_file:
+            if sample is not None or sample_seed is not None:
+                # Same treatment as the kafka:// rejection: fail loudly rather
+                # than silently ignore a flag that only applies to DB sources.
+                raise typer.BadParameter("--sample/--sample-seed apply to SQL/ClickHouse sources, not files")
             result = reducer.process_file(input_file, output, return_metadata=metadata)
         else:
             _err("Error: provide a log file, or --dsn with --query (SQL/ClickHouse) or --topic/--group (Kafka)")
@@ -331,8 +330,8 @@ def _emit_result(
             for line in result["lines"]:
                 print(line)
     elif isinstance(result, list):
-        for line in result:
-            print(line)
+        # Honour --format on stdout the same way the --target-rows path does.
+        _emit_lines(result, None, output_format, pretty_json)
 
 
 def _print_stats(stats: dict) -> None:

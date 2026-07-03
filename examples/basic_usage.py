@@ -166,14 +166,13 @@ def example_with_statistics():
         print(f"   Processing time: {stats.get('processing_time_seconds', 'N/A'):.2f}s")
         print(f"   Throughput:      {stats.get('processing_rate_mb_per_sec', 'N/A')} MB/sec")
 
-        # Show configuration used
+        # Show configuration used (level/mode live on the reducer, not the config)
         config = reducer.config
         logger.info("Configuration:")
-        print(f"   Processing level: {getattr(config, 'level', 'N/A')}")
-        print(f"   Processing mode:  {getattr(config, 'mode', 'N/A')}")
-        print(f"   Worker threads:   {config.n_workers}")
+        print(f"   Processing level: {reducer.level.value}")
+        print(f"   Processing mode:  {reducer.mode.value}")
         print(f"   Memory limit:     {config.max_memory_gb} GB")
-        print(f"   Chunk size:       {config.chunk_size:,}")
+        print(f"   Dedup cache:      {config.dedup_cache_size:,}")
 
     finally:
         Path(log_file).unlink()
@@ -281,7 +280,7 @@ def main():
     print("- Try with your own log files")
     print("- Experiment with different processing levels and modes")
     print("- Use the command line interface: logreducer --help")
-    print("- Check out the full documentation in docs/")
+    print("- Check out the full documentation in README.md")
 
 
 if __name__ == "__main__":

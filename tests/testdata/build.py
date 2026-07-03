@@ -29,6 +29,7 @@ import argparse
 import gzip
 import hashlib
 import io
+import ipaddress
 import json
 import re
 import sys
@@ -197,9 +198,14 @@ DATASETS: list[dict] = [
 # ---------------------------------------------------------------------------
 
 _IPV4 = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
-_IPV6 = re.compile(r"\b(?:[0-9A-Fa-f]{1,4}:){2,7}[0-9A-Fa-f]{1,4}\b")
+# Candidate hex-colon runs, validated with ipaddress in the callback. A loose
+# regex + strict parse catches COMPRESSED forms (2603:1036::2) that a
+# groups-count regex misses, while the parse rejects clock times (09:00:55).
+# The lookarounds stop mid-word matches (C++ "Type2::prePCIWake" scope tokens).
+_IPV6_CANDIDATE = re.compile(r"(?<![\w.:])[0-9A-Fa-f:]{3,45}(?![\w.:])")
 _EMAIL = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
-_MAC = re.compile(r"\b(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}\b")
+# Colon AND dash separated MACs (Mac system logs use 84-41-67-32-db-e1).
+_MAC = re.compile(r"\b(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}\b|\b(?:[0-9A-Fa-f]{2}-){5}[0-9A-Fa-f]{2}\b")
 # A leading FQDN host token (start of a web-access-log line): word.word.tld<space>.
 _LEADING_HOST = re.compile(r"^([A-Za-z][A-Za-z0-9.-]*\.[A-Za-z]{2,})(\s)")
 
@@ -231,9 +237,15 @@ class Cleanser:
 
     def _ipv6(self, m: re.Match[str]) -> str:
         real = m.group(0)
-        # Guard against matching clock times (HH:MM:SS) and other decimal
-        # colon-groups: a real IPv6 address has a '::' or a hex letter.
-        if "::" not in real and not re.search(r"[a-fA-F]", real):
+        # Strict validation: only rewrite genuine IPv6 addresses. This rejects
+        # clock times (09:00:55 - not parseable), bare '::' noise, and anything
+        # the loose candidate regex over-matched.
+        if ":" not in real:
+            return real
+        try:
+            if not isinstance(ipaddress.ip_address(real), ipaddress.IPv6Address):
+                return real
+        except ValueError:
             return real
         if real not in self._ip6:
             self._ip6[real] = f"2001:db8::{len(self._ip6) + 1:x}"
@@ -263,9 +275,9 @@ class Cleanser:
         # first, anchored, so it never touches domains inside request URLs.
         if hosts:
             line = _LEADING_HOST.sub(self._host_sub, line, count=1)
-        # MAC before IPv6 (both use hex-colon shapes); IPv4/email are unambiguous.
+        # MAC before IPv6 (both use hex/colon shapes); IPv4/email are unambiguous.
         line = _MAC.sub(self._mac_sub, line)
-        line = _IPV6.sub(self._ipv6, line)
+        line = _IPV6_CANDIDATE.sub(self._ipv6, line)
         line = _IPV4.sub(self._ipv4, line)
         line = _EMAIL.sub(self._email_sub, line)
         for pattern, repl in extra:
@@ -279,12 +291,22 @@ class Cleanser:
 
 
 def _download(url: str, dest: Path) -> None:
+    """Download to a temp name and rename on success (atomic).
+
+    A dropped connection must not leave a truncated blob that the next run
+    treats as a valid cache hit.
+    """
     dest.parent.mkdir(parents=True, exist_ok=True)
+    partial = dest.with_suffix(dest.suffix + ".part")
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})  # noqa: S310 - trusted dataset hosts
     print(f"  downloading {url}")
-    with urllib.request.urlopen(req, timeout=120) as resp, open(dest, "wb") as out:  # noqa: S310 - trusted hosts
-        while chunk := resp.read(1 << 20):
-            out.write(chunk)
+    try:
+        with urllib.request.urlopen(req, timeout=120) as resp, open(partial, "wb") as out:  # noqa: S310 - trusted hosts
+            while chunk := resp.read(1 << 20):
+                out.write(chunk)
+        partial.replace(dest)
+    finally:
+        partial.unlink(missing_ok=True)
 
 
 def _raw_lines(spec: dict, blob: Path) -> Iterator[str]:
@@ -363,19 +385,27 @@ def _build_one(spec: dict, force: bool) -> dict:
     cleanser = Cleanser()
     target = spec["target_lines"]
 
+    # Write to a temp name and rename on success, so a mid-build failure never
+    # clobbers a previously good committed slice (leaving file and manifest
+    # silently disagreeing).
     kept = 0
     hasher = hashlib.sha256()
-    with gzip.open(out_path, "wb", compresslevel=9) as gz:
-        for line in _slice(_raw_lines(spec, blob), target):
-            if cleanse == "full":
-                line = cleanser.clean(line, extra, hosts=hosts)
-            elif cleanse == "light":
-                for pattern, repl in extra:
-                    line = pattern.sub(repl, line)
-            data = (line + "\n").encode("utf-8")
-            gz.write(data)
-            hasher.update(data)
-            kept += 1
+    tmp_path = out_path.with_suffix(".gz.tmp")
+    try:
+        with gzip.open(tmp_path, "wb", compresslevel=9) as gz:
+            for line in _slice(_raw_lines(spec, blob), target):
+                if cleanse == "full":
+                    line = cleanser.clean(line, extra, hosts=hosts)
+                elif cleanse == "light":
+                    for pattern, repl in extra:
+                        line = pattern.sub(repl, line)
+                data = (line + "\n").encode("utf-8")
+                gz.write(data)
+                hasher.update(data)
+                kept += 1
+        tmp_path.replace(out_path)
+    finally:
+        tmp_path.unlink(missing_ok=True)
 
     size = out_path.stat().st_size
     print(f"  {name}: {kept} lines -> {out_path.name} ({size / 1024:.0f} KiB)")
@@ -411,11 +441,13 @@ def main() -> int:
         specs = [s for s in DATASETS if s["name"] in set(args.only)]
 
     manifest = []
+    failures = 0
     for spec in specs:
         print(f"[{spec['name']}]")
         try:
             manifest.append(_build_one(spec, args.force))
-        except Exception as exc:  # keep going; report the failure
+        except Exception as exc:  # keep going; report the failure at exit
+            failures += 1
             print(f"  FAILED: {exc}", file=sys.stderr)
 
     # Merge with any existing manifest entries not rebuilt this run.
@@ -428,7 +460,9 @@ def main() -> int:
     ordered = [existing[s["name"]] for s in DATASETS if s["name"] in existing]
     manifest_path.write_text(json.dumps(ordered, indent=2) + "\n")
     print(f"\nwrote {manifest_path} ({len(ordered)} datasets)")
-    return 0
+    if failures:
+        print(f"{failures} dataset(s) FAILED to build", file=sys.stderr)
+    return 1 if failures else 0
 
 
 if __name__ == "__main__":

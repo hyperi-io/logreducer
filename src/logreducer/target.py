@@ -94,9 +94,14 @@ def reduce_to_target(
         raise ValueError(f"max_fetches must be positive, got {max_fetches!r}")
     if batch_rows is not None and batch_rows <= 0:
         raise ValueError(f"batch_rows must be positive, got {batch_rows!r}")
+    if plateau_rounds <= 0:
+        raise ValueError(f"plateau_rounds must be positive, got {plateau_rounds!r}")
 
-    monitor = MemoryMonitor(max_batch_memory_gb if max_batch_memory_gb is not None else reducer.config.max_memory_gb)
-    budget_bytes = int(max_batch_memory_gb * 1024**3) if max_batch_memory_gb is not None else 0
+    # As documented: the byte budget defaults to the reducer's own memory cap,
+    # so adaptive batch sizing is on by default (pass batch_rows to fix it).
+    budget_gb = max_batch_memory_gb if max_batch_memory_gb is not None else reducer.config.max_memory_gb
+    monitor = MemoryMonitor(budget_gb)
+    budget_bytes = int(budget_gb * 1024**3)
     rng = random.Random(seed)
 
     seen: dict[str, None] = {}
