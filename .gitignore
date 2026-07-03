@@ -3,7 +3,7 @@
 .env.local
 .env.*.local
 
-# Local editor / assistant working files (never committed)
+# Local editor / tool working files (never committed)
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -197,10 +197,7 @@ act-*
 # Local environment files (never commit -- contain secrets)
 !.env.example.*
 
-# Local-only working notes and per-tool context files
-docs/superpowers/
-.mcp.json
-.ai-version
+# Local-only working notes (never committed)
 TODO.md
 
 # Git worktrees (local dev convenience)
