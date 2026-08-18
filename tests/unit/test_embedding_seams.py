@@ -64,6 +64,11 @@ class TestFromEnv:
         cfg = BigDialConfig.from_env()
         assert cfg.max_clusters == 5000
 
+    def test_bool_field_typed_masking_coerces(self, monkeypatch):
+        monkeypatch.setenv("LOGREDUCER_TYPED_MASKING", "true")
+        cfg = BigDialConfig.from_env()
+        assert cfg.typed_masking is True
+
     def test_unset_fields_keep_defaults(self):
         cfg = BigDialConfig.from_env()
         assert cfg.max_patterns == BigDialConfig().max_patterns

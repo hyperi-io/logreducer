@@ -61,6 +61,10 @@ class TestBigDialConfig:
         # Default values should still be present
         assert config.examples_per_pattern == 3
 
+    def test_typed_masking_defaults_off(self):
+        """Typed masking is opt-in; default behaviour stays unmasked."""
+        assert BigDialConfig().typed_masking is False
+
     def test_post_init_memory_adjustment(self):
         """Test that __post_init__ adjusts memory if too high"""
         # This will depend on system memory, so we test behavior

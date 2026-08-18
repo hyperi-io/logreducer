@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from drain3 import TemplateMiner
+from drain3.masking import MaskingInstruction
 from drain3.template_miner_config import TemplateMinerConfig
 from loguru import logger
 
@@ -33,6 +34,45 @@ class LogPattern:
     metadata: dict = field(default_factory=dict)
 
 
+def _typed_masking_instructions() -> list[MaskingInstruction]:
+    """Build the curated masking set for typed template slots.
+
+    Drain3 applies these to each line before clustering, so masked values
+    become literal typed tokens (``<IP>``, ``<NUM>``, ...) rather than
+    collapsing to the bare ``<*>`` wildcard. Instructions run sequentially
+    over already-masked text, so the specific shapes (IP, UUID, MAC, IPv6)
+    precede the greedy catch-alls (HEX, NUM).
+    """
+    # Zero-width token boundaries (drain3's documented idiom): mask a value
+    # delimited by non-alphanumerics, never a substring of a word.
+    start = r"(?:(?<=[^A-Za-z0-9])|^)"
+    end = r"(?:(?=[^A-Za-z0-9])|$)"
+    hex4 = r"[0-9A-Fa-f]{1,4}"
+    shapes = [
+        # IPv4 dotted quad.
+        (r"\d{1,3}(?:\.\d{1,3}){3}", "IP"),
+        # UUID before HEX, which would otherwise eat its 8/12-char runs.
+        (r"[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}", "UUID"),
+        # MAC (colon or dash separated) before IPv6, whose colon-hex shape overlaps.
+        (r"[0-9A-Fa-f]{2}(?:[:-][0-9A-Fa-f]{2}){5}", "MAC"),
+        # IPv6, best-effort: the full 8-group form, a '::'-compressed form
+        # (middle or trailing), then a leading-'::' form. Plain colon runs
+        # without '::' stay unmasked - that shape also matches timestamps.
+        (
+            rf"(?:{hex4}:){{7}}{hex4}"
+            rf"|(?:{hex4}:){{1,6}}:(?:{hex4}(?::{hex4}){{0,5}})?"
+            rf"|::(?:{hex4}(?::{hex4}){{0,6}})?",
+            "IPV6",
+        ),
+        # Hex token of >= 8 hex chars: 0x-prefixed, or containing at least
+        # one a-f letter so a long pure-decimal token stays NUM.
+        (r"0[xX][0-9A-Fa-f]{8,}|(?=\d*[A-Fa-f])[0-9A-Fa-f]{8,}", "HEX"),
+        # Integer (drain3's documented NUM example).
+        (r"[-+]?\d+", "NUM"),
+    ]
+    return [MaskingInstruction(f"{start}(?:{pattern}){end}", name) for pattern, name in shapes]
+
+
 class PatternExtractor:
     """Extract patterns using Drain3's online template miner."""
 
@@ -51,6 +91,10 @@ class PatternExtractor:
         # Bound the template store when configured: Drain3 LRU-evicts beyond
         # drain_max_clusters, keeping memory flat on high-cardinality logs.
         drain_config.drain_max_clusters = self.config.max_clusters
+        # Opt-in typed masking: pre-cluster masking of well-known value shapes
+        # so templates carry typed slots (<IP>, <NUM>, ...) instead of <*>.
+        if self.config.typed_masking:
+            drain_config.masking_instructions = _typed_masking_instructions()
         self.miner = TemplateMiner(config=drain_config)
 
     def extract_patterns(self, lines: Iterable[str]) -> list[LogPattern]:

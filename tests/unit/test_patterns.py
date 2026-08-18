@@ -245,3 +245,82 @@ class TestStreamingAndBounds:
         lines = [f"SERVICE{i} started on host node{i} pid={p}" for i in range(50) for p in (1, 2)]
         extractor.extract_patterns(lines)
         assert len(extractor.miner.drain.id_to_cluster) <= 5
+
+
+class TestTypedMasking:
+    """Opt-in typed Drain3 masking (config.typed_masking)."""
+
+    IP_LINES = [
+        "Accepted connection from 192.168.1.10 port 22",
+        "Accepted connection from 10.0.0.7 port 22",
+        "Accepted connection from 172.16.31.5 port 22",
+    ]
+    NUM_LINES = [
+        "Task finished in 123 ms",
+        "Task finished in 45678 ms",
+        "Task finished in 9 ms",
+    ]
+
+    def test_default_ip_lines_use_bare_wildcard(self):
+        """Off by default: the IP slot is a bare <*>, never a typed mask.
+
+        Asserted on the live Drain cluster template - LogPattern.template is a
+        first-seen snapshot, taken before later lines widen any slot to <*>.
+        """
+        extractor = PatternExtractor(BigDialConfig())
+        extractor.extract_patterns(self.IP_LINES)
+        clusters = list(extractor.miner.drain.clusters)
+        assert len(clusters) == 1
+        template = clusters[0].get_template()
+        assert "<*>" in template
+        assert "<IP>" not in template
+
+    def test_default_configures_no_masking_instructions(self):
+        """Off by default: the miner carries zero masking instructions."""
+        extractor = PatternExtractor(BigDialConfig())
+        assert list(extractor.miner.masker.masking_instructions) == []
+
+    def test_typed_masking_ip(self):
+        """IP-bearing lines yield a typed <IP> slot, no bare wildcard."""
+        extractor = PatternExtractor(BigDialConfig(typed_masking=True))
+        patterns = extractor.extract_patterns(self.IP_LINES)
+        assert len(patterns) == 1
+        assert "<IP>" in patterns[0].template
+        assert "<*>" not in patterns[0].template
+
+    def test_typed_masking_num(self):
+        """Number-bearing lines yield a typed <NUM> slot."""
+        extractor = PatternExtractor(BigDialConfig(typed_masking=True))
+        patterns = extractor.extract_patterns(self.NUM_LINES)
+        assert len(patterns) == 1
+        assert "<NUM>" in patterns[0].template
+        assert "<*>" not in patterns[0].template
+
+    def test_examples_keep_original_unmasked_lines(self):
+        """Masking shapes templates only - examples stay the raw lines."""
+        extractor = PatternExtractor(BigDialConfig(typed_masking=True))
+        patterns = extractor.extract_patterns(self.IP_LINES)
+        assert patterns[0].examples == self.IP_LINES
+
+    def test_typed_masking_uuid_mac_ipv6_hex(self):
+        """The remaining curated shapes each land as their own typed slot."""
+        extractor = PatternExtractor(BigDialConfig(typed_masking=True))
+        lines = [
+            "session 123e4567-e89b-12d3-a456-426614174000 from aa:bb:cc:dd:ee:01 via fe80::1 commit deadbeefcafe",
+            "session 00000000-0000-4000-8000-000000000000 from 00:11:22:33:44:55"
+            " via 2001:db8::8a2e:370:7334 commit 0123456789abcdef",
+        ]
+        patterns = extractor.extract_patterns(lines)
+        assert len(patterns) == 1
+        template = patterns[0].template
+        for slot in ("<UUID>", "<MAC>", "<IPV6>", "<HEX>"):
+            assert slot in template
+
+    def test_long_decimal_is_num_not_hex(self):
+        """A pure-decimal token is NUM even at hex-plausible length."""
+        extractor = PatternExtractor(BigDialConfig(typed_masking=True))
+        lines = ["request took 12345678 ns", "request took 987654321 ns"]
+        patterns = extractor.extract_patterns(lines)
+        assert len(patterns) == 1
+        assert "<NUM>" in patterns[0].template
+        assert "<HEX>" not in patterns[0].template
