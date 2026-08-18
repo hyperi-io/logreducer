@@ -15,3 +15,11 @@ paths = [
     '''data/samples/.*''',
     '''tests/.*''',
 ]
+
+# docs/JIRA_OAUTH_SETUP.md shows a curl example with the literal placeholder
+# ACCESS_TOKEN in an Authorization header - documentation, not a credential.
+[[allowlists]]
+description = "doc placeholder tokens in curl examples"
+paths = [
+    '''docs/JIRA_OAUTH_SETUP\.md''',
+]
