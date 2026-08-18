@@ -61,6 +61,12 @@ class BigDialConfig:
     # TF-IDF matrix on a huge unique-line set, at the cost of anomaly recall
     # (rare lines may be sampled out). None = no cap (use every unique line).
     anomaly_max_rows: int | None = None
+    # Typed Drain3 masking: replace well-known value shapes (IPv4/IPv6, MAC,
+    # UUID, hex tokens, numbers) with typed template slots (<IP>, <NUM>, ...)
+    # before clustering, instead of the bare <*>. Opt-in: masking normalises
+    # lines before Drain3 sees them, so clustering can differ from the
+    # unmasked default - off keeps behaviour byte-identical.
+    typed_masking: bool = False
 
     # Temporal Control
     temporal_window_minutes: int = 60
@@ -104,14 +110,14 @@ class BigDialConfig:
         """
         if not prefixes:
             prefixes = ("LOGREDUCER",)
-        overrides: dict[str, object] = {}
+        overrides: dict[str, typing.Any] = {}
         for field in fields(cls):
             for prefix in prefixes:
                 raw = os.environ.get(f"{prefix.rstrip('_')}_{field.name.upper()}")
                 if raw is not None:
                     overrides[field.name] = _coerce_env_value(raw, field.name)
                     break
-        return cls(**overrides)  # type: ignore[arg-type]
+        return cls(**overrides)
 
 
 def _coerce_env_value(raw: str, field_name: str) -> object:
