@@ -234,7 +234,8 @@ class TestStreamingAndBounds:
         assert isinstance(out, types.GeneratorType)  # lazy, not a materialised list
         result = list(out)
         if dedup.enabled:
-            assert "a b c" in result and "x y z" in result
+            assert "a b c" in result
+            assert "x y z" in result
         else:
             assert result == ["a b c", "a b c", "x y z"]  # passthrough when disabled
 
