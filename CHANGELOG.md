@@ -1,5 +1,12 @@
 # Changelog
 
+Rendered by CI and committed back at the end of a release -- do not edit by
+hand. Release notes also appear on the GitHub Releases page, one per tag.
+
+## [3.5.0](https://github.com/hyperi-io/logreducer/compare/v3.4.0...v3.5.0) (2026-08-18)
+
+# Changelog
+
 All notable changes to logreducer are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project adheres to
 [Semantic Versioning](https://semver.org/). Entries from here on are generated
