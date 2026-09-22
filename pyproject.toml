@@ -15,7 +15,7 @@ description = "Reduce GB-scale logs to a representative sample - streaming Pytho
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 # Python version policy: requires-python enforces the minimum. Do NOT add
 # version-specific classifiers (3.12, 3.13, ...) - "3 :: Only" avoids churn
 # on every new Python release.
@@ -131,7 +131,7 @@ line-ending = "auto"
 # (drain3, datasketch, ...); our own code stays fully typed via
 # disallow_untyped_defs below.
 [tool.mypy]
-python_version = "3.12"  # Matches minimum supported version
+python_version = "3.12"  # Held below requires-python with ruff; see target-version
 ignore_missing_imports = true
 warn_return_any = true
 warn_unused_configs = true
