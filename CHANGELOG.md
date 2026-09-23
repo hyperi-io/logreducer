@@ -3,6 +3,14 @@
 Rendered by CI and committed back at the end of a release -- do not edit by
 hand. Release notes also appear on the GitHub Releases page, one per tag.
 
+## [3.5.1](https://github.com/hyperi-io/logreducer/compare/v3.5.0...v3.5.1) (2026-09-23)
+
+### Bug Fixes
+
+* **deps:** take pip past PYSEC-2026-3721 ([#8](https://github.com/hyperi-io/logreducer/issues/8)) ([8ecf7c4](https://github.com/hyperi-io/logreducer/commit/8ecf7c482d316d7959fe2370cd65c4f16ef8bfda))
+* **docs:** give the README a Context section and write the architecture doc ([#7](https://github.com/hyperi-io/logreducer/issues/7)) ([9d6a2aa](https://github.com/hyperi-io/logreducer/commit/9d6a2aaf8563bf4422256fcbe53811ff64913261))
+* raise the Python floor to 3.14 ([#9](https://github.com/hyperi-io/logreducer/issues/9)) ([8dd2ce9](https://github.com/hyperi-io/logreducer/commit/8dd2ce9e3a254639b4ca4fbd4ecdc169a77ddc1a))
+
 ## [3.5.0](https://github.com/hyperi-io/logreducer/compare/v3.4.0...v3.5.0) (2026-08-18)
 
 # Changelog
