@@ -3,10 +3,7 @@
 
 license: Apache-2.0
 
-build:
-  type: package
-
-publish:
+release:
   enabled: true
 
 test:
