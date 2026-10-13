@@ -3,7 +3,16 @@
 .env.local
 .env.*.local
 
-# Local editor / tool working files (never committed)
+# Local working files (not committed)
+.claude/
+.codex/
+.cursor/
+.gemini/
+.superpowers/
+.playwright-mcp/
+.mcp.json
+.hyperi-ai
+.kube/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -151,7 +160,7 @@ yarn.lock
 *.key
 *.pem
 .env.*
-!.env.example
+!.env*.example
 
 # Build artifacts
 *.whl
