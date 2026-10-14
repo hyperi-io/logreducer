@@ -3,6 +3,13 @@
 Rendered by CI and committed back at the end of a release -- do not edit by
 hand. Release notes also appear on the GitHub Releases page, one per tag.
 
+## [3.5.2](https://github.com/hyperi-io/logreducer/compare/v3.5.1...v3.5.2) (2026-10-14)
+
+### Bug Fixes
+
+* bump urllib3 to 2.8.0 (GHSA-8988-9cw3-xx77, GHSA-vxq7-64xx-v4gw, GHSA-gh4c-6fx4-qh6g) ([#10](https://github.com/hyperi-io/logreducer/issues/10)) ([4f05897](https://github.com/hyperi-io/logreducer/commit/4f05897486f05ad866c3c16f9ff25a3356096fc2))
+* store the final Drain3 template, not the first line a cluster saw ([#14](https://github.com/hyperi-io/logreducer/issues/14)) ([8aef23d](https://github.com/hyperi-io/logreducer/commit/8aef23d1601c901e3bae33cd403edb477e82d3bd)), closes [#5](https://github.com/hyperi-io/logreducer/issues/5)
+
 ## [3.5.1](https://github.com/hyperi-io/logreducer/compare/v3.5.0...v3.5.1) (2026-09-23)
 
 ### Bug Fixes
