@@ -30,6 +30,10 @@ template counts from a handful to well over a thousand.
 | `elastic_nginx_json` | structured | one JSON object per line |
 | `secrepo_auth` | security | auth.log SSH failures |
 
+## Template-mining golden
+
+`template_mining_golden.json.gz` is the template-mining output drain3 0.9.11 produced on the first 3000 lines of each corpus, under five miner configurations. `tests/integration/test_template_equivalence.py` holds `logreducer.template_mining` to it. Rebuilding a corpus invalidates that corpus's entries.
+
 ## PII cleansing
 
 `build.py` rewrites IPs (-> `10.x`), IPv6 (-> `2001:db8::`), emails

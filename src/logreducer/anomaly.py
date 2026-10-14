@@ -1,6 +1,8 @@
 """Anomaly detection utilities."""
 
-from loguru import logger
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Try optional imports
 try:

@@ -75,25 +75,33 @@ class TestFromEnv:
 
 
 class TestHostOwnedLogging:
-    def test_own_sinks_false_flows_records_to_host_handlers(self):
-        """The embedding seam: logreducer registers nothing; the host's own
-        loguru handler receives logreducer's records (which are filtered by
-        the caller's module name, so they must originate inside the package -
-        drive them via a real reduce())."""
-        from loguru import logger
+    def test_own_sinks_false_flows_records_to_host_handlers(self, caplog, tmp_path):
+        """The embedding seam: logreducer attaches nothing; the host's own root
+        handler (caplog's, at the host's INFO level) receives logreducer's
+        records - driven via a real reduce() so they originate in the package."""
+        import logging
 
         from logreducer import logging_config
 
+        log_file = tmp_path / "ignored-when-host-owned.log"
         reducer = LogReducer(level="standard", mode="pattern", enable_logging=True)
-        setup_logging(enable=True, own_sinks=False, console=True, log_file="ignored-when-host-owned.log")
+        setup_logging(enable=True, own_sinks=False, console=True, log_file=str(log_file))
         try:
-            assert logging_config._HANDLER_IDS == []  # nothing registered by us
-            captured: list[str] = []
-            host_id = logger.add(lambda m: captured.append(str(m)), filter="logreducer")
-            try:
-                reducer.reduce(["ERROR a", "ERROR a", "INFO b"])
-            finally:
-                logger.remove(host_id)
-            assert captured, "logreducer records did not reach the host handler"
+            assert logging_config._HANDLERS == []  # nothing attached by us
+            assert logging.getLogger("logreducer").handlers == []
+            caplog.set_level(logging.INFO)
+            reducer.reduce(["ERROR a", "ERROR a", "INFO b"])
+            ours = [r for r in caplog.records if r.name.startswith("logreducer.")]
+            assert ours, "logreducer records did not reach the host handler"
+            assert not log_file.exists()
         finally:
             setup_logging(enable=False)  # restore the library default
+
+    def test_disabled_logging_reaches_no_host_handler(self, caplog):
+        """Disabled (the default) means silent, even with a host handler at DEBUG."""
+        import logging
+
+        caplog.set_level(logging.DEBUG)
+        reducer = LogReducer(level="standard", mode="pattern")
+        reducer.reduce(["ERROR a", "ERROR a", "INFO b"])
+        assert [r for r in caplog.records if r.name.startswith("logreducer")] == []

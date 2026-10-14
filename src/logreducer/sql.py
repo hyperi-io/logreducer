@@ -143,7 +143,7 @@ class SQLSource:
         from .sampling import build_table_sample_query
 
         owns = isinstance(connectable, str)
-        engine = create_engine(connectable) if owns else connectable
+        engine = create_engine(connectable) if isinstance(connectable, str) else connectable
         preparer = engine.dialect.identifier_preparer
         query = build_table_sample_query(
             engine.dialect.name,

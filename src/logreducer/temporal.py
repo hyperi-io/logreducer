@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from drain3 import TemplateMiner
+from .template_mining import TemplateMiner
 
 
 @dataclass
@@ -102,21 +102,16 @@ class TemporalProcessor:
         # Process each window
         for window_key, window_entries in windows.items():
             if window_key not in self.miners_by_window:
-                from drain3.template_miner_config import TemplateMinerConfig
-
-                config = TemplateMinerConfig()
-                config.snapshot_interval_minutes = 0  # Disable snapshots
-                config.snapshot_compress_state = False
-                self.miners_by_window[window_key] = TemplateMiner(config=config)
+                self.miners_by_window[window_key] = TemplateMiner()
 
             miner = self.miners_by_window[window_key]
-            cluster_ids = [miner.add_log_message(entry.raw_line)["cluster_id"] for entry in window_entries]
+            clusters = [miner.add_log_message(entry.raw_line) for entry in window_entries]
 
             # Templates are read once the window is fed, after later lines have widened their slots.
-            for entry, cluster_id in zip(window_entries, cluster_ids, strict=True):
+            for entry, cluster in zip(window_entries, clusters, strict=True):
                 patterns.append(
                     {
-                        "template": miner.drain.id_to_cluster[cluster_id].get_template(),
+                        "template": cluster.get_template(),
                         "window": window_key,
                         "count": 1,
                         "example": entry.raw_line,
@@ -127,21 +122,16 @@ class TemporalProcessor:
 
     def _extract_timeless_patterns(self, entries: list[LogEntry]) -> list[dict]:
         """Extract patterns without timestamps."""
-        from drain3.template_miner_config import TemplateMinerConfig
-
-        config = TemplateMinerConfig()
-        config.snapshot_interval_minutes = 0  # Disable snapshots
-        config.snapshot_compress_state = False
-        miner = TemplateMiner(config=config)
-        cluster_ids = [miner.add_log_message(entry.raw_line)["cluster_id"] for entry in entries]
+        miner = TemplateMiner()
+        clusters = [miner.add_log_message(entry.raw_line) for entry in entries]
 
         # Templates are read once every entry is fed, after later lines have widened their slots.
         return [
             {
-                "template": miner.drain.id_to_cluster[cluster_id].get_template(),
+                "template": cluster.get_template(),
                 "example": entry.raw_line,
             }
-            for entry, cluster_id in zip(entries, cluster_ids, strict=True)
+            for entry, cluster in zip(entries, clusters, strict=True)
         ]
 
     def _analyze_distribution(self, entries: list[LogEntry]) -> dict:
