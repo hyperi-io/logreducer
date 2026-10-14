@@ -3,6 +3,12 @@
 Rendered by CI and committed back at the end of a release -- do not edit by
 hand. Release notes also appear on the GitHub Releases page, one per tag.
 
+## [3.5.3](https://github.com/hyperi-io/logreducer/compare/v3.5.2...v3.5.3) (2026-10-14)
+
+### Bug Fixes
+
+* vendor drain3's template miner and drop loguru ([8a07906](https://github.com/hyperi-io/logreducer/commit/8a079063a6573fcc3dfc4428f3818c14509f78ed))
+
 ## [3.5.2](https://github.com/hyperi-io/logreducer/compare/v3.5.1...v3.5.2) (2026-10-14)
 
 ### Bug Fixes
