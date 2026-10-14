@@ -40,8 +40,8 @@
 Derived from Drain3 at commit 0fb6d6e1828838fa05c8f6fa5cda878e02ea79c7. It keeps
 only the streaming path logreducer drives: mask a line, route it through a
 fixed-depth prefix tree, and merge it into the most similar cluster of the same
-token count, widening differing tokens to ``<*>``. NOTICE lists what changed
-from upstream.
+token count, widening differing tokens to ``<*>``. Drain3's copyright and MIT
+licence notice are in the header above; the README credits Drain3 and logparser.
 """
 
 import re
