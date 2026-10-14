@@ -1,6 +1,4 @@
-"""
-Core LogReducer implementation
-"""
+"""Core LogReducer implementation."""
 
 import json
 import os
@@ -10,7 +8,7 @@ from dataclasses import replace
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, overload
 
 from .anomaly import AnomalyDetector
 from .config import BigDialConfig, OutputFormat, ProcessingLevel, ProcessingMode, get_preset_config
@@ -24,8 +22,7 @@ from .temporal import TemporalProcessor
 
 
 class LogReducer:
-    """
-    Main log reduction class
+    """Main log reduction class.
 
     Example:
         reducer = LogReducer(level="enhanced")
@@ -41,8 +38,7 @@ class LogReducer:
         config: BigDialConfig | None = None,
         **kwargs: Any,
     ) -> None:
-        """
-        Initialize LogReducer
+        """Initialize LogReducer.
 
         Args:
             level: Processing level (standard/enhanced/maximum)
@@ -134,13 +130,41 @@ class LogReducer:
         else:
             self.temporal_processor = None
 
+    @overload
+    def reduce(
+        self,
+        source: Source,
+        output_file: str | None = None,
+        return_metadata: Literal[False] = False,
+        sink: Sink | None = None,
+    ) -> list[str]: ...
+
+    @overload
+    def reduce(
+        self,
+        source: Source,
+        output_file: str | None = None,
+        *,
+        return_metadata: Literal[True],
+        sink: Sink | None = None,
+    ) -> dict[str, Any]: ...
+
+    @overload
     def reduce(
         self,
         source: Source,
         output_file: str | None = None,
         return_metadata: bool = False,
         sink: Sink | None = None,
-    ) -> list[str] | dict:
+    ) -> list[str] | dict[str, Any]: ...
+
+    def reduce(
+        self,
+        source: Source,
+        output_file: str | None = None,
+        return_metadata: bool = False,
+        sink: Sink | None = None,
+    ) -> list[str] | dict[str, Any]:
         """Reduce a source of log lines to a representative sample.
 
         This is the core entry point: it operates on an abstraction, not on IO.
@@ -241,12 +265,37 @@ class LogReducer:
             }
         return result_lines
 
+    @overload
+    def process_file(
+        self,
+        input_file: str,
+        output_file: str | None = None,
+        return_metadata: Literal[False] = False,
+    ) -> list[str]: ...
+
+    @overload
+    def process_file(
+        self,
+        input_file: str,
+        output_file: str | None = None,
+        *,
+        return_metadata: Literal[True],
+    ) -> dict[str, Any]: ...
+
+    @overload
     def process_file(
         self,
         input_file: str,
         output_file: str | None = None,
         return_metadata: bool = False,
-    ) -> list[str] | dict:
+    ) -> list[str] | dict[str, Any]: ...
+
+    def process_file(
+        self,
+        input_file: str,
+        output_file: str | None = None,
+        return_metadata: bool = False,
+    ) -> list[str] | dict[str, Any]:
         """Reduce a log file - convenience wrapper over reduce() + FileSource.
 
         Args:
@@ -302,7 +351,7 @@ class LogReducer:
         return unique_lines
 
     def _process_anomaly_mode(self, source: Source) -> list[str]:
-        """Process using anomaly detection"""
+        """Process using anomaly detection."""
         if not self.anomaly_detector:
             if self.config.enable_logging:
                 self.logger.warning("Anomaly detector not available, falling back to pattern mode")
@@ -329,7 +378,7 @@ class LogReducer:
         return result
 
     def _process_temporal_mode(self, source: Source) -> list[str]:
-        """Process using temporal analysis"""
+        """Process using temporal analysis."""
         if not self.temporal_processor:
             if self.config.enable_logging:
                 self.logger.warning("Temporal processor not available, falling back to pattern mode")
@@ -356,7 +405,7 @@ class LogReducer:
         return result
 
     def _process_hybrid_mode(self, source: Source) -> list[str]:
-        """Process using combined approach"""
+        """Process using combined approach."""
         if self.config.enable_logging:
             self.logger.info("Hybrid mode: combining pattern and anomaly detection")
 
@@ -400,7 +449,7 @@ class LogReducer:
         }
 
     def _save_output(self, lines: list[str], output_file: str) -> None:
-        """Save output to file in specified format"""
+        """Save output to file in specified format."""
         output_path = Path(output_file)
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -453,7 +502,7 @@ class LogReducer:
                 self.logger.info(f"Metadata saved to {meta_file}")
 
     def _print_summary(self) -> None:
-        """Log processing summary"""
+        """Log processing summary."""
         self.logger.info("\n" + "=" * 60)
         self.logger.info("LOG REDUCTION SUMMARY")
         self.logger.info("=" * 60)
@@ -474,7 +523,7 @@ class LogReducer:
         self.logger.info("=" * 60)
 
     def estimate_processing(self, file_path: str) -> dict:
-        """Estimate processing requirements before running"""
+        """Estimate processing requirements before running."""
         file_size = os.path.getsize(file_path)
         file_size_gb = file_size / (1024**3)
 

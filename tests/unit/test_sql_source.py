@@ -66,7 +66,7 @@ def test_reduce_over_sqlsource(sqlite_url):
 
 def test_sqlsource_rejects_bad_connectable():
     with pytest.raises(TypeError):
-        SQLSource(1234, "SELECT 1")  # not an Engine or URL string
+        SQLSource(1234, "SELECT 1")  # ty: ignore[invalid-argument-type]  # not an Engine or URL string
 
 
 def test_sqlsource_sample_returns_subset(sqlite_url):

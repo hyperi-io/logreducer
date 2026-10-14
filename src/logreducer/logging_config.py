@@ -26,7 +26,8 @@ from typing import TYPE_CHECKING
 from loguru import logger
 
 if TYPE_CHECKING:
-    from loguru import Logger
+    # Read by get_logger's quoted return annotation, which vulture does not parse.
+    from loguru import Logger  # noqa: V104
 
 # Solarized palette (https://ethanschoonover.com/solarized/) for the console
 # sink - readable on both light and dark terminal backgrounds.

@@ -1,6 +1,4 @@
-"""
-Memory management and monitoring utilities
-"""
+"""Memory management and monitoring utilities."""
 
 import gc
 import os
@@ -13,7 +11,7 @@ import psutil
 
 
 class MemoryMonitor:
-    """Monitor and control memory usage during processing"""
+    """Monitor and control memory usage during processing."""
 
     def __init__(self, max_memory_gb: float = 1.0):
         self.max_memory_gb = max_memory_gb
@@ -57,7 +55,7 @@ class MemoryMonitor:
         return current_gb, is_safe
 
     def get_current_usage_gb(self) -> float:
-        """Get current memory usage in GB"""
+        """Get current memory usage in GB."""
         current = self.process.memory_info().rss
         # Update peak usage
         if current > self.peak_usage_bytes:
@@ -65,7 +63,7 @@ class MemoryMonitor:
         return float(current / (1024**3))
 
     def get_peak_usage_gb(self) -> float:
-        """Get peak memory usage in GB"""
+        """Get peak memory usage in GB."""
         # Update current peak if needed
         current = self.process.memory_info().rss
         if current > self.peak_usage_bytes:
@@ -84,12 +82,12 @@ class MemoryMonitor:
         return bool(current > self.max_memory_bytes)
 
     def reset(self) -> None:
-        """Reset peak memory tracking"""
+        """Reset peak memory tracking."""
         current_usage = self.process.memory_info().rss
         self.peak_usage_bytes = current_usage
 
     def estimate_file_strategy(self, file_size_bytes: int) -> str:
-        """Determine processing strategy"""
+        """Determine processing strategy."""
         file_size_gb = file_size_bytes / (1024**3)
 
         if file_size_gb < self.max_memory_gb * 0.2:
@@ -101,14 +99,14 @@ class MemoryMonitor:
 
 
 class StreamingProcessor:
-    """Process large files with constant memory usage"""
+    """Process large files with constant memory usage."""
 
     def __init__(self, memory_monitor: MemoryMonitor):
         self.memory_monitor = memory_monitor
         self.chunk_size = memory_monitor.safe_chunk_size
 
     def read_file_streaming(self, file_path: str) -> Iterator[str]:
-        """Read file with minimal memory usage"""
+        """Read file with minimal memory usage."""
         file_size = os.path.getsize(file_path)
         strategy = self.memory_monitor.estimate_file_strategy(file_size)
 
@@ -223,7 +221,7 @@ class BoundedDeduplicator:
         self.stats = {"total": 0, "unique": 0, "duplicates": 0}
 
     def is_duplicate(self, line: str) -> bool:
-        """Check if line is duplicate"""
+        """Check if line is duplicate."""
         self.stats["total"] += 1
         line_hash = self.hash_func(line)
 
@@ -241,7 +239,7 @@ class BoundedDeduplicator:
         return False
 
     def deduplicate_lines(self, lines: Iterable[str]) -> Iterator[str]:
-        """Deduplicate a stream of lines"""
+        """Deduplicate a stream of lines."""
         for line in lines:
             if not self.is_duplicate(line):
                 yield line

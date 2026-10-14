@@ -121,6 +121,14 @@ class PatternExtractor:
             if len(pattern.examples) < self.config.examples_per_pattern:
                 pattern.examples.append(line)
 
+        # Later lines widen a cluster's slots to <*>, so the stored template is
+        # re-read once the feed ends; an LRU-evicted cluster keeps its snapshot.
+        clusters = self.miner.drain.id_to_cluster
+        for cluster_id, pattern in pattern_map.items():
+            cluster = clusters.get(cluster_id)
+            if cluster is not None:
+                pattern.template = cluster.get_template()
+
         patterns = list(pattern_map.values())
 
         # Apply filters

@@ -3,6 +3,7 @@ End-to-end integration tests for LogReducer using real sample datasets
 """
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -293,7 +294,7 @@ class TestProcessingLevelIntegration:
             ("hdfs_system.log", "distributed_system"),
         ]
 
-        benchmark_results = []
+        benchmark_results: list[dict[str, Any]] = []
 
         for sample_file, log_type in test_files:
             input_file = samples_dir / sample_file

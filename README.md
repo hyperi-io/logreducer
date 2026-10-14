@@ -394,7 +394,7 @@ Individually: `uv run ruff format`, `uv run ruff check --fix`,
 | Assume a reused `LogReducer` starts clean | Nothing -- `_reset_components()` rebuilds them per run | The dedup seen-set, both Drain3 miners and the fuzzy LSH accumulate per line. Carried into the next run they drop every line as already-seen and return empty (`core.py`) |
 | Share one deduplicator across hybrid's two passes | Rebuild it before the anomaly pass | The pattern pass consumes the seen-set, so the anomaly pass sees everything as seen and no anomalies survive. Hybrid silently degrades to pattern-only (`core.py`) |
 | Assume an unknown config keyword is ignored | Read the `ValueError` and fix the name | A silently dropped override means a user's tuning quietly does nothing (`core.py`) |
-| Read `LogPattern.template` as the final Drain3 template | Treat it as a first-seen snapshot until #5 lands | `extract_patterns` captures `cluster.get_template()` when a cluster FIRST appears, before later lines widen slots to `<*>`, so a varying cluster stores its raw first line. The `<*>`-count priority boost then runs on that stale snapshot (#5, open) |
+| Assume every template is the final Drain3 one | Allow for a cluster the `max_clusters` cap evicted | `extract_patterns` re-reads each template from the live cluster once the feed ends, so a varying cluster carries its `<*>` slots and the priority boost counts them. A cluster LRU-evicted mid-feed is gone by then and keeps the template it had when first seen (`patterns.py`) |
 | Hand-edit the version | Land a conventional commit and let semantic-release do it | The old regime wrote `VERSION` by hand and took five commits to get tagging working. CONTRIBUTING makes it a standing rule |
 
 ### Where this sits

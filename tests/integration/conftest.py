@@ -134,13 +134,16 @@ def _clickhouse_from_docker() -> tuple[Any, Any] | None:
     """
     try:
         from testcontainers.core.container import DockerContainer
-        from testcontainers.core.waiting_utils import wait_for_logs
+        from testcontainers.core.wait_strategies import LogMessageWaitStrategy
     except ImportError:
         return None
     try:
-        container = DockerContainer("clickhouse/clickhouse-server:24.8.14").with_exposed_ports(8123)
+        container = (
+            DockerContainer("clickhouse/clickhouse-server:24.8.14")
+            .with_exposed_ports(8123)
+            .waiting_for(LogMessageWaitStrategy("Ready for connections").with_startup_timeout(60))
+        )
         container.start()
-        wait_for_logs(container, "Ready for connections", timeout=60)
         # Inside the try: if the HTTP probe times out, the container must
         # still be stopped rather than leaked as a fixture ERROR.
         host = container.get_container_host_ip()
@@ -235,7 +238,7 @@ def _redpanda_from_docker() -> tuple[str, Any] | None:
     unchanged.
     """
     try:
-        from testcontainers.kafka import RedpandaContainer
+        from testcontainers.community.kafka import RedpandaContainer
     except ImportError:
         return None
     try:
@@ -295,7 +298,7 @@ def pg_engine() -> Iterator[Any]:
     """A bare PostgreSQL engine on a throwaway container (docker, else skip)."""
     try:
         from sqlalchemy import create_engine
-        from testcontainers.postgres import PostgresContainer
+        from testcontainers.community.postgres import PostgresContainer
     except ImportError:
         pytest.skip("PostgreSQL integration deps not installed")
     try:
@@ -317,7 +320,7 @@ def mysql_engine() -> Iterator[Any]:
     """A bare MySQL engine on a throwaway container (docker, else skip)."""
     try:
         from sqlalchemy import create_engine
-        from testcontainers.mysql import MySqlContainer
+        from testcontainers.community.mysql import MySqlContainer
     except ImportError:
         pytest.skip("MySQL integration deps not installed")
     try:

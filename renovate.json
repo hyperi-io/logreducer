@@ -5,12 +5,14 @@
     {
       "description": "pytest and its plugins version together to avoid plugin/core API mismatches.",
       "matchPackageNames": ["pytest", "/^pytest-/"],
-      "groupName": "pytest"
+      "groupName": "pytest",
+      "minimumReleaseAge": "7 days"
     },
     {
       "description": "Scientific stack (numpy, scipy, scikit-learn) tends to move together; group to catch ABI mismatches in one PR.",
       "matchPackageNames": ["numpy", "scipy", "scikit-learn"],
-      "groupName": "scientific"
+      "groupName": "scientific",
+      "minimumReleaseAge": "7 days"
     }
   ]
 }

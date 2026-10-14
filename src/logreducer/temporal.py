@@ -1,6 +1,4 @@
-"""
-Temporal processing and time-aware pattern extraction
-"""
+"""Temporal processing and time-aware pattern extraction."""
 
 import re
 from collections import defaultdict
@@ -13,7 +11,7 @@ from drain3 import TemplateMiner
 
 @dataclass
 class LogEntry:
-    """Parsed log entry with timestamp"""
+    """Parsed log entry with timestamp."""
 
     raw_line: str
     timestamp: datetime | None = None
@@ -22,7 +20,7 @@ class LogEntry:
 
 
 class TimestampParser:
-    """Parse timestamps from various formats"""
+    """Parse timestamps from various formats."""
 
     PATTERNS = [
         (r"\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}:\d{2}", "%Y-%m-%d %H:%M:%S"),
@@ -34,7 +32,7 @@ class TimestampParser:
     LEVEL_PATTERN = re.compile(r"\b(DEBUG|INFO|WARN|ERROR|CRITICAL)\b", re.I)
 
     def parse_line(self, line: str, line_number: int = 0) -> LogEntry:
-        """Parse log line"""
+        """Parse log line."""
         entry = LogEntry(raw_line=line.strip(), line_number=line_number)
 
         # Extract timestamp
@@ -61,7 +59,7 @@ class TimestampParser:
 
 
 class TemporalProcessor:
-    """Time-aware log processing"""
+    """Time-aware log processing."""
 
     def __init__(self, window_minutes: int = 60):
         self.window_minutes = window_minutes
@@ -69,7 +67,7 @@ class TemporalProcessor:
         self.miners_by_window: dict[int, TemplateMiner] = {}
 
     def process_temporal(self, lines: list[str]) -> dict:
-        """Process with temporal awareness"""
+        """Process with temporal awareness."""
         entries = [self.parser.parse_line(line, i) for i, line in enumerate(lines)]
 
         timed = [e for e in entries if e.timestamp]
@@ -91,7 +89,7 @@ class TemporalProcessor:
         return results
 
     def _extract_temporal_patterns(self, entries: list[LogEntry]) -> list[dict]:
-        """Extract patterns with time context"""
+        """Extract patterns with time context."""
         patterns = []
         windows = defaultdict(list)
 
@@ -112,11 +110,10 @@ class TemporalProcessor:
                 self.miners_by_window[window_key] = TemplateMiner(config=config)
 
             miner = self.miners_by_window[window_key]
+            cluster_ids = [miner.add_log_message(entry.raw_line)["cluster_id"] for entry in window_entries]
 
-            for entry in window_entries:
-                result = miner.add_log_message(entry.raw_line)
-                cluster_id = result["cluster_id"]
-
+            # Templates are read once the window is fed, after later lines have widened their slots.
+            for entry, cluster_id in zip(window_entries, cluster_ids, strict=True):
                 patterns.append(
                     {
                         "template": miner.drain.id_to_cluster[cluster_id].get_template(),
@@ -129,29 +126,26 @@ class TemporalProcessor:
         return patterns
 
     def _extract_timeless_patterns(self, entries: list[LogEntry]) -> list[dict]:
-        """Extract patterns without timestamps"""
+        """Extract patterns without timestamps."""
         from drain3.template_miner_config import TemplateMinerConfig
 
         config = TemplateMinerConfig()
         config.snapshot_interval_minutes = 0  # Disable snapshots
         config.snapshot_compress_state = False
         miner = TemplateMiner(config=config)
-        patterns = []
+        cluster_ids = [miner.add_log_message(entry.raw_line)["cluster_id"] for entry in entries]
 
-        for entry in entries:
-            result = miner.add_log_message(entry.raw_line)
-            cluster_id = result["cluster_id"]
-            patterns.append(
-                {
-                    "template": miner.drain.id_to_cluster[cluster_id].get_template(),
-                    "example": entry.raw_line,
-                }
-            )
-
-        return patterns
+        # Templates are read once every entry is fed, after later lines have widened their slots.
+        return [
+            {
+                "template": miner.drain.id_to_cluster[cluster_id].get_template(),
+                "example": entry.raw_line,
+            }
+            for entry, cluster_id in zip(entries, cluster_ids, strict=True)
+        ]
 
     def _analyze_distribution(self, entries: list[LogEntry]) -> dict:
-        """Analyze time distribution"""
+        """Analyze time distribution."""
         dist: dict[str, Any] = {"hourly": defaultdict(int), "levels": defaultdict(int)}
 
         for entry in entries:

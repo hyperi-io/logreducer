@@ -341,7 +341,7 @@ class TestLogReducerStatefulness:
         assert first  # non-empty
         assert second == first  # reuse yields the same result, not an empty one
 
-    def test_hybrid_anomaly_pass_sees_deduped_input(self):
+    def test_hybrid_anomaly_pass_sees_deduped_input(self, monkeypatch):
         """Hybrid's anomaly pass must get a fresh dedup, not an exhausted one.
 
         Regression: the pattern pass populated the shared deduplicator's
@@ -351,14 +351,16 @@ class TestLogReducerStatefulness:
         reducer = LogReducer(level="enhanced", mode="hybrid")
         lines = [f"INFO request {i} handled in 12ms" for i in range(60)] + ["FATAL kernel panic"]
 
+        detector = reducer.anomaly_detector
+        assert detector is not None  # hybrid mode always builds one
         seen_counts = []
-        real_detect = reducer.anomaly_detector.detect_anomalies
+        real_detect = detector.detect_anomalies
 
         def spy(unique_lines):
             seen_counts.append(len(unique_lines))
             return real_detect(unique_lines)
 
-        reducer.anomaly_detector.detect_anomalies = spy
+        monkeypatch.setattr(detector, "detect_anomalies", spy)
         reducer.reduce(lines)
 
         assert seen_counts  # the anomaly pass ran

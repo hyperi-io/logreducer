@@ -11,7 +11,7 @@ demonstration and testing. If you use them, cite LogHub:
 
 > Jieming Zhu, Shilin He, Pinjia He, Jinyang Liu, Michael R. Lyu. "Loghub: A
 > Large Collection of System Log Datasets for AI-driven Log Analytics." ISSRE
-> 2023. https://github.com/logpai/loghub
+> 2023. <https://github.com/logpai/loghub>
 
 Some datasets originate from public sources - the BGL and Thunderbird traces
 come from the USENIX CFDR computer failure data repository (Sandia National
