@@ -32,11 +32,9 @@ classifiers = [
 ]
 keywords = ["log", "logging", "reduction", "analysis", "pattern-extraction", "memory-efficient", "streaming", "anomaly-detection"]
 dependencies = [
-    "drain3>=0.9.0",
-    "psutil>=7.2.0",        # memory monitoring (MemoryMonitor)
-    "loguru>=0.7.3",
-    "numpy>=2.0.0",
-    "scikit-learn>=1.5.0",  # imports as sklearn; >=1.5 for numpy 2 support
+    "psutil>=7.2.2",        # memory monitoring (MemoryMonitor)
+    "numpy>=2.5.3",
+    "scikit-learn>=1.9.1",  # imports as sklearn
     "typer>=0.27.3",        # CLI
 ]
 
@@ -51,13 +49,13 @@ enhanced = [
 # wants a ready-made source/sink. Each needs its own running service, so they
 # are covered by docker-gated integration tests.
 sql = [
-    "sqlalchemy>=2.0.30",         # cross-DB server-side-cursor streaming (SQLSource)
+    "sqlalchemy>=2.1.3",          # cross-DB server-side-cursor streaming (SQLSource)
 ]
 clickhouse = [
-    "clickhouse-connect>=1.0",    # native block streaming (ClickHouseSource); 1.0 was breaking
+    "clickhouse-connect>=1.9.0",  # native block streaming (ClickHouseSource)
 ]
 kafka = [
-    "confluent-kafka>=2.14.0",    # librdkafka client (KafkaSource/Sink)
+    "confluent-kafka>=2.15.1",    # librdkafka client (KafkaSource/Sink)
 ]
 [project.urls]
 Homepage = "https://github.com/hyperi-io/logreducer"
@@ -142,7 +140,7 @@ line-ending = "auto"
 
 # MyPy: KEPT STRICT (logreducer is small and already clean-typed).
 # ignore_missing_imports only silences third-party libs without stubs
-# (drain3, datasketch, ...); our own code stays fully typed via
+# (datasketch, ...); our own code stays fully typed via
 # disallow_untyped_defs below.
 [tool.mypy]
 python_version = "3.12"  # Held below requires-python with ruff; see target-version
@@ -265,9 +263,9 @@ dev = [
     "vermin>=1.6.0",         # Python version-compat detection
     # Adapter + integration test deps (TEST ONLY - never in the published
     # wheel; these mirror the optional extras so the adapters can be exercised).
-    "sqlalchemy>=2.0.30",         # SQLSource against SQLite (real, no server)
-    "clickhouse-connect>=1.0",    # ClickHouseSource (local cluster or docker)
-    "confluent-kafka>=2.14.0",    # KafkaSource/KafkaSink
+    "sqlalchemy>=2.1.3",          # SQLSource against SQLite (real, no server)
+    "clickhouse-connect>=1.9.0",  # ClickHouseSource (local cluster or docker)
+    "confluent-kafka>=2.15.1",    # KafkaSource/KafkaSink
     "testcontainers[clickhouse,kafka,postgres,mysql]>=4.15.0",  # docker fallback; modules under testcontainers.community
     "psycopg[binary]>=3.2",       # PostgreSQL driver (real TABLESAMPLE/setseed sampling tests)
     "pymysql>=1.1.0",             # MySQL driver (real RAND(seed) sampling tests)

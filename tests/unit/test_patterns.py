@@ -56,44 +56,36 @@ class TestPatternExtractor:
         assert extractor.config == config
         assert hasattr(extractor, "miner")
 
-    @patch("logreducer.patterns.TemplateMiner")
-    def test_extract_patterns_empty_input(self, mock_template_miner):
-        """Test pattern extraction with empty input"""
-        config = BigDialConfig()
-        extractor = PatternExtractor(config)
+    def test_extract_patterns_empty_input(self):
+        """Empty input yields no patterns."""
+        extractor = PatternExtractor(BigDialConfig())
 
-        result = extractor.extract_patterns([])
+        assert extractor.extract_patterns([]) == []
 
-        assert result == []
-
-    @patch("logreducer.patterns.TemplateMiner")
-    def test_extract_patterns_basic(self, mock_template_miner):
-        """Test basic pattern extraction"""
+    def test_extract_patterns_basic(self):
+        """Lines differing in one token merge into one widened pattern."""
         config = BigDialConfig(max_patterns=10, examples_per_pattern=2)
-
-        # Mock the miner and cluster
-        mock_cluster = Mock()
-        mock_cluster.get_template.return_value = "User <*> logged in"
-
-        mock_miner = Mock()
-        mock_miner.add_log_message.return_value = {"cluster_id": 1}
-        mock_miner.drain.id_to_cluster = {1: mock_cluster}
-        mock_template_miner.return_value = mock_miner
-
         extractor = PatternExtractor(config)
-        extractor.miner = mock_miner
-
         lines = ["User alice logged in", "User bob logged in", "User charlie logged in"]
 
         result = extractor.extract_patterns(lines)
 
-        # Should have processed lines
-        assert mock_miner.add_log_message.call_count == len(lines)
+        assert len(result) == 1
+        assert result[0].template == "User <*> logged in"
+        assert result[0].count == 3
+        assert result[0].examples == lines[:2]
 
-        # Should return patterns
-        assert isinstance(result, list)
-        if len(result) > 0:
-            assert isinstance(result[0], LogPattern)
+    def test_evicted_cluster_keeps_its_first_template(self):
+        """A cluster LRU-evicted mid-feed keeps the template it had when first seen."""
+        extractor = PatternExtractor(BigDialConfig(max_clusters=1, min_pattern_occurrences=1))
+        lines = ["alpha one x", "alpha two x", "beta gamma delta epsilon"]
+
+        result = extractor.extract_patterns(lines)
+
+        templates = {p.template: p.count for p in result}
+        # "alpha" was evicted by "beta" before the feed ended, so its widened
+        # "alpha <*> x" is never re-read; it keeps the first line's template.
+        assert templates == {"alpha one x": 2, "beta gamma delta epsilon": 1}
 
     def test_filter_by_occurrence(self):
         """Test filtering patterns by minimum occurrence"""
@@ -293,7 +285,7 @@ class TestTypedMasking:
     def test_default_configures_no_masking_instructions(self):
         """Off by default: the miner carries zero masking instructions."""
         extractor = PatternExtractor(BigDialConfig())
-        assert list(extractor.miner.masker.masking_instructions) == []
+        assert extractor.miner.config.masking_instructions == ()
 
     def test_typed_masking_ip(self):
         """IP-bearing lines yield a typed <IP> slot, no bare wildcard."""

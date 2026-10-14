@@ -293,8 +293,9 @@ reducer = logreducer.LogReducer(mode="hybrid", config=cfg)
 # ...or let logreducer read your env cascade directly: prefixed beats bare.
 cfg = logreducer.BigDialConfig.from_env("MYAPP", "LOGREDUCER")   # MYAPP_MAX_MEMORY_GB wins
 
-# 2. Logging: your app owns the loguru sinks; logreducer registers nothing and
-#    its records flow through YOUR handlers, formatted by YOUR standard.
+# 2. Logging: your app owns the stdlib logging handlers; logreducer attaches
+#    nothing and its records flow through YOUR handlers, at YOUR level,
+#    formatted by YOUR standard.
 logreducer.setup_logging(enable=True, own_sinks=False)
 ```
 
@@ -324,7 +325,7 @@ Logging is off by default. Enable it and pick a format via env vars:
 LOG_LEVEL=DEBUG LOG_FORMAT=json logreducer app.log --log
 ```
 
-`LOG_FORMAT=json` emits one JSON object per line for log aggregators; the default is human-readable (coloured in a terminal, plain in CI/containers). Embedding? See `own_sinks=False` above.
+Logging is the standard library `logging` module, under the `logreducer` logger. `LOG_FORMAT=json` emits one JSON object per line for log aggregators (keys `timestamp`, `level`, `target`, `function`, `line_number`, `message`, `fields`); the default is human-readable (coloured in a terminal, plain in CI/containers). Embedding? See `own_sinks=False` above.
 
 ## Development
 
@@ -341,6 +342,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the toolchain, test layout (including
 [Apache-2.0](LICENSE). Third-party attributions are recorded in [NOTICE](NOTICE).
 
 Copyright 2026 HYPERI PTY LIMITED.
+
+Credits: template mining (`src/logreducer/template_mining.py`) is derived from [Drain3](https://github.com/logpai/Drain3), Copyright (c) 2020-2022 International Business Machines and the Drain3 project contributors, MIT licence. Drain3 builds on the Drain parser in LogPAI's [logparser](https://github.com/logpai/logparser). The module header carries Drain3's licence text in full.
 
 ## Context
 
@@ -362,6 +365,7 @@ it is given and drops the rest.
 | `src/logreducer/sources.py`, `sinks.py` | the two structural protocols that ARE the integration surface, plus `FileSource` and `FileSink` |
 | `src/logreducer/sql.py`, `clickhouse.py`, `kafka.py` | the optional adapters, one extra each |
 | `src/logreducer/patterns.py`, `anomaly.py`, `temporal.py` | Drain3 mining and fuzzy dedup, Isolation Forest, time-window grouping |
+| `src/logreducer/template_mining.py` | the Drain template miner, derived from Drain3 (credited under License) |
 | `src/logreducer/memory.py` | `MemoryMonitor`, `BoundedDeduplicator`, the file read strategies |
 | `src/logreducer/sampling.py`, `target.py` | dialect-aware SQL sampling, and the `reduce_to_target` batch loop |
 | `src/logreducer/config.py` | `BigDialConfig`, the level presets, the `from_env` cascade |
@@ -407,7 +411,7 @@ One declared edge in `dfe-infra/suite.yaml`, and it runs the surprising way.
 
 `dfe-stack suite --consumer logreducer` returns an empty edge list: no repo in
 that graph is something this library depends on. The runtime dependencies
-(drain3, psutil, loguru, numpy, scikit-learn, typer) are packages, declared in
+(psutil, numpy, scikit-learn, typer) are packages, declared in
 `pyproject.toml`, which is where they belong.
 
 The reason dfe-engine gives for not declaring the dependency -- pin it "once it

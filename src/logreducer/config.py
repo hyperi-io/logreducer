@@ -1,5 +1,6 @@
 """Configuration and tuning parameters for LogReducer."""
 
+import logging
 import os
 import types
 import typing
@@ -7,7 +8,8 @@ from dataclasses import dataclass, fields
 from enum import Enum
 
 import psutil
-from loguru import logger
+
+logger = logging.getLogger(__name__)
 
 
 class ProcessingLevel(Enum):

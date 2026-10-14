@@ -1,16 +1,16 @@
 """Pattern extraction (Drain3 template mining) and fuzzy deduplication."""
 
+import logging
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from drain3 import TemplateMiner
-from drain3.masking import MaskingInstruction
-from drain3.template_miner_config import TemplateMinerConfig
-from loguru import logger
+from .template_mining import MaskingInstruction, TemplateMiner, TemplateMinerConfig
 
 if TYPE_CHECKING:
     from .config import BigDialConfig
+
+logger = logging.getLogger(__name__)
 
 # datasketch powers fuzzy dedup and ships in the optional `enhanced` extra;
 # without it FuzzyDeduplicator degrades to a pass-through (with a warning).
@@ -34,10 +34,10 @@ class LogPattern:
     metadata: dict = field(default_factory=dict)
 
 
-def _typed_masking_instructions() -> list[MaskingInstruction]:
+def _typed_masking_instructions() -> tuple[MaskingInstruction, ...]:
     """Build the curated masking set for typed template slots.
 
-    Drain3 applies these to each line before clustering, so masked values
+    The miner applies these to each line before clustering, so masked values
     become literal typed tokens (``<IP>``, ``<NUM>``, ...) rather than
     collapsing to the bare ``<*>`` wildcard. Instructions run sequentially
     over already-masked text, so the specific shapes (IP, UUID, MAC, IPv6)
@@ -70,52 +70,47 @@ def _typed_masking_instructions() -> list[MaskingInstruction]:
         # Integer (drain3's documented NUM example).
         (r"[-+]?\d+", "NUM"),
     ]
-    return [MaskingInstruction(f"{start}(?:{pattern}){end}", name) for pattern, name in shapes]
+    return tuple(MaskingInstruction(f"{start}(?:{pattern}){end}", name) for pattern, name in shapes)
 
 
 class PatternExtractor:
-    """Extract patterns using Drain3's online template miner."""
+    """Extract patterns using the online template miner (see template_mining)."""
 
     def __init__(self, config: "BigDialConfig") -> None:
         self.config = config
         self.setup_drain3()
 
     def setup_drain3(self) -> None:
-        """Configure Drain3."""
-        drain_config = TemplateMinerConfig()
-        drain_config.profiling_enabled = False
-        drain_config.drain_sim_th = self.config.drain_similarity
-        drain_config.drain_depth = 4
-        drain_config.snapshot_interval_minutes = 0  # Disable snapshots
-        drain_config.snapshot_compress_state = False
-        # Bound the template store when configured: Drain3 LRU-evicts beyond
-        # drain_max_clusters, keeping memory flat on high-cardinality logs.
-        drain_config.drain_max_clusters = self.config.max_clusters
+        """Configure the template miner."""
         # Opt-in typed masking: pre-cluster masking of well-known value shapes
         # so templates carry typed slots (<IP>, <NUM>, ...) instead of <*>.
-        if self.config.typed_masking:
-            drain_config.masking_instructions = _typed_masking_instructions()
-        self.miner = TemplateMiner(config=drain_config)
+        masking = _typed_masking_instructions() if self.config.typed_masking else ()
+        drain_config = TemplateMinerConfig(
+            drain_sim_th=self.config.drain_similarity,
+            drain_depth=4,
+            # Bound the template store when configured: the miner LRU-evicts beyond
+            # drain_max_clusters, keeping memory flat on high-cardinality logs.
+            drain_max_clusters=self.config.max_clusters,
+            masking_instructions=masking,
+        )
+        self.miner = TemplateMiner(drain_config)
 
     def extract_patterns(self, lines: Iterable[str]) -> list[LogPattern]:
         """Extract patterns from lines (accepts a stream; only clusters are held).
 
-        Feeds each line into Drain3's online miner, so the caller can pass a
+        Feeds each line into the online miner, so the caller can pass a
         generator - no need to materialise the whole line set. Memory is bounded
         by the number of clusters (see ``max_clusters``), not the line count.
         """
-        pattern_map = {}
+        pattern_map: dict[int, LogPattern] = {}
 
         for line in lines:
-            result = self.miner.add_log_message(line)
-            cluster_id = result["cluster_id"]
-
-            if cluster_id not in pattern_map:
-                cluster = self.miner.drain.id_to_cluster[cluster_id]
+            cluster = self.miner.add_log_message(line)
+            pattern = pattern_map.get(cluster.cluster_id)
+            if pattern is None:
                 pattern = LogPattern(template=cluster.get_template(), count=0)
-                pattern_map[cluster_id] = pattern
+                pattern_map[cluster.cluster_id] = pattern
 
-            pattern = pattern_map[cluster_id]
             pattern.count += 1
 
             if len(pattern.examples) < self.config.examples_per_pattern:
@@ -123,11 +118,10 @@ class PatternExtractor:
 
         # Later lines widen a cluster's slots to <*>, so the stored template is
         # re-read once the feed ends; an LRU-evicted cluster keeps its snapshot.
-        clusters = self.miner.drain.id_to_cluster
         for cluster_id, pattern in pattern_map.items():
-            cluster = clusters.get(cluster_id)
-            if cluster is not None:
-                pattern.template = cluster.get_template()
+            live_cluster = self.miner.get_cluster(cluster_id)
+            if live_cluster is not None:
+                pattern.template = live_cluster.get_template()
 
         patterns = list(pattern_map.values())
 
