@@ -28,7 +28,6 @@ from __future__ import annotations
 import argparse
 import gzip
 import hashlib
-import io
 import ipaddress
 import json
 import re
@@ -339,8 +338,8 @@ def _raw_lines(spec: dict, blob: Path) -> Iterator[str]:
             yield from _decode(fh)
 
 
-def _decode(fh: io.BufferedReader | object) -> Iterator[str]:
-    for raw in fh:  # type: ignore[union-attr]
+def _decode(fh: Iterable[bytes]) -> Iterator[str]:
+    for raw in fh:
         # errors="replace": keep the line even if the source has bad bytes -
         # that messiness is exactly what we want the reducer to survive.
         yield raw.decode("utf-8", errors="replace").rstrip("\n").rstrip("\r")

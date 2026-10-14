@@ -1,6 +1,4 @@
-"""
-Anomaly detection utilities
-"""
+"""Anomaly detection utilities."""
 
 from loguru import logger
 
@@ -15,7 +13,7 @@ except ImportError:
 
 
 class AnomalyDetector:
-    """Detect anomalous log lines"""
+    """Detect anomalous log lines."""
 
     def __init__(self, contamination: float = 0.1):
         self.contamination = contamination
@@ -25,8 +23,7 @@ class AnomalyDetector:
             logger.warning("scikit-learn not available, anomaly detection disabled")
 
     def detect_anomalies(self, lines: list[str]) -> tuple[list[str], list[str]]:
-        """
-        Separate anomalous and normal lines
+        """Separate anomalous and normal lines.
 
         Returns:
             (anomalous_lines, normal_lines)

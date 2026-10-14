@@ -180,3 +180,22 @@ class TestTemporalProcessor:
 
         # Should not have temporal patterns
         assert len(result["temporal_patterns"]) == 0
+
+    def test_timeless_entries_carry_the_final_template(self):
+        """Every entry of one cluster reports the template its window ends on."""
+        processor = TemporalProcessor()
+        result = processor.process_temporal(["user alice logged in", "user bob logged in"])
+        templates = [p["template"] for p in result["timeless_patterns"]]
+        assert templates == ["user <*> logged in", "user <*> logged in"]
+
+    def test_timed_entries_carry_the_final_template(self):
+        """The first entry of a window is not left with its pre-widening template."""
+        processor = TemporalProcessor()
+        lines = [
+            "2024-01-15 14:30:25 INFO user alice logged in",
+            "2024-01-15 14:30:26 INFO user bob logged in",
+        ]
+        result = processor.process_temporal(lines)
+        templates = {p["template"] for p in result["temporal_patterns"]}
+        assert len(templates) == 1
+        assert "<*>" in templates.pop()

@@ -37,13 +37,13 @@ dependencies = [
     "loguru>=0.7.3",
     "numpy>=2.0.0",
     "scikit-learn>=1.5.0",  # imports as sklearn; >=1.5 for numpy 2 support
-    "typer>=0.25.0",        # CLI
+    "typer>=0.27.3",        # CLI
 ]
 
 [project.optional-dependencies]
 enhanced = [
-    "xxhash>=3.0.0",      # Fast xxh64 dedup hashing (memory.BoundedDeduplicator)
-    "datasketch>=1.5.0",  # MinHash/LSH similarity in fuzzy dedup
+    "xxhash>=4.0.1",      # Fast xxh64 dedup hashing (memory.BoundedDeduplicator)
+    "datasketch>=2.0.0",  # MinHash/LSH similarity in fuzzy dedup
 ]
 
 # IO adapters - thin OPTIONAL conveniences over the Source/Sink abstraction.
@@ -110,12 +110,26 @@ ignore = [
 fixable = ["ALL"]
 unfixable = []
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+# vulture's own codes, which it reads from `# noqa`.
+external = ["V"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = [
     "S101", "S105", "S106", "S108", "F541", "RUF013",
     "PT017", "PT011", "PT012", "RUF043",
 ]
+# The quality gate's S and D passes select their rules on the command line,
+# which drops the ignore list above, so their exemptions live here.
+# The class docstring documents construction and the dunder protocol methods.
+"src/**" = ["D105", "D107"]
+# The samplers wrap SQL the caller wrote, by design: identifiers are quoted and
+# every interpolated number goes through int() or float().
+"src/logreducer/sampling.py" = ["S608"]
+"src/logreducer/clickhouse.py" = ["S608"]
+# Sampling and jitter, never anything secret.
+"src/logreducer/core.py" = ["S311"]
+"src/logreducer/memory.py" = ["S311"]
+"src/logreducer/target.py" = ["S311"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
@@ -201,6 +215,10 @@ skips = ["B101", "B603"]
 # when transitive deps pin older lower bounds; revisit each /deps pass.
 [tool.uv]
 index-strategy = "unsafe-best-match"
+# Supply-chain cooldown (standards/universal/ci.md): never resolve a package
+# version published in the last 7 days. A CVE fix bypasses it through a
+# temporary per-package exclude-newer-package entry, not by lowering this.
+exclude-newer = "7 days"
 override-dependencies = []
 
 [[tool.uv.index]]
@@ -214,6 +232,11 @@ python-version = "3.12"
 
 [tool.ty.src]
 exclude = ["examples/", "docs/", "scripts/"]
+
+# Below 80 vulture reports the library's public API and attributes set on
+# third-party config objects, which buries a real leftover.
+[tool.vulture]
+min_confidence = 80
 
 # vermin: verify no syntax/features newer than the minimum Python.
 [tool.vermin]
@@ -233,7 +256,7 @@ skips = ["*test*.py", "*tests*.py"]
 dev = [
     "pytest>=9.0.0",         # Test framework (9.0 changed warning/path semantics)
     "pytest-cov>=7.0.0",     # Coverage reporting
-    "ruff>=0.15.0",          # Lint + format (replaces black/flake8/isort)
+    "ruff>=0.16.10",         # Lint + format (replaces black/flake8/isort)
     "ty>=0.0.34",            # Astral type checker (runs alongside mypy)
     "mypy>=2.0",             # Static type checking (strict; 2.0 flipped defaults)
     "bandit[toml]>=1.7.0",   # Security linting
@@ -245,7 +268,7 @@ dev = [
     "sqlalchemy>=2.0.30",         # SQLSource against SQLite (real, no server)
     "clickhouse-connect>=1.0",    # ClickHouseSource (local cluster or docker)
     "confluent-kafka>=2.14.0",    # KafkaSource/KafkaSink
-    "testcontainers[clickhouse,kafka,postgres,mysql]>=4.14.0",  # docker fallback (Redpanda module ships in base)
+    "testcontainers[clickhouse,kafka,postgres,mysql]>=4.15.0",  # docker fallback; modules under testcontainers.community
     "psycopg[binary]>=3.2",       # PostgreSQL driver (real TABLESAMPLE/setseed sampling tests)
     "pymysql>=1.1.0",             # MySQL driver (real RAND(seed) sampling tests)
     "python-dotenv>=1.0.0",       # load the local .env (CLICKHOUSE_*) in tests

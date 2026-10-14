@@ -4,6 +4,8 @@ Unit tests for pattern extraction module
 
 from unittest.mock import Mock, patch
 
+import pytest
+
 from logreducer.config import BigDialConfig
 from logreducer.patterns import FuzzyDeduplicator, LogPattern, PatternExtractor
 
@@ -263,18 +265,30 @@ class TestTypedMasking:
     ]
 
     def test_default_ip_lines_use_bare_wildcard(self):
-        """Off by default: the IP slot is a bare <*>, never a typed mask.
-
-        Asserted on the live Drain cluster template - LogPattern.template is a
-        first-seen snapshot, taken before later lines widen any slot to <*>.
-        """
+        """Off by default: the IP slot is a bare <*>, never a typed mask."""
         extractor = PatternExtractor(BigDialConfig())
-        extractor.extract_patterns(self.IP_LINES)
-        clusters = list(extractor.miner.drain.clusters)
-        assert len(clusters) == 1
-        template = clusters[0].get_template()
+        patterns = extractor.extract_patterns(self.IP_LINES)
+        assert len(patterns) == 1
+        template = patterns[0].template
         assert "<*>" in template
         assert "<IP>" not in template
+
+    def test_template_is_the_final_cluster_template(self):
+        """The stored template is the one Drain3 ends on, not the first line seen."""
+        extractor = PatternExtractor(BigDialConfig())
+        patterns = extractor.extract_patterns(self.IP_LINES)
+        clusters = list(extractor.miner.drain.clusters)
+        assert len(patterns) == 1
+        assert len(clusters) == 1
+        assert patterns[0].template == clusters[0].get_template()
+        assert patterns[0].template == "Accepted connection from <*> port 22"
+
+    def test_priority_reads_the_final_template(self):
+        """The <*> boost counts the widened slot, which the first line lacks."""
+        extractor = PatternExtractor(BigDialConfig())
+        patterns = extractor.extract_patterns(self.IP_LINES)
+        # 3 lines; one <*> slot boosts x1.5; six words boost x1.6.
+        assert patterns[0].priority == pytest.approx(3 * 1.5 * 1.6)
 
     def test_default_configures_no_masking_instructions(self):
         """Off by default: the miner carries zero masking instructions."""

@@ -30,7 +30,8 @@ class Sink(Protocol):
     iterate lazily rather than materialising the whole batch.
     """
 
-    def write(self, lines: Iterable[str]) -> int: ...
+    def write(self, lines: Iterable[str]) -> int:
+        """Write ``lines`` to the destination and return how many were written."""
 
 
 class FileSink:
@@ -54,6 +55,14 @@ class FileSink:
         self.output_format = fmt
 
     def write(self, lines: Iterable[str]) -> int:
+        """Write ``lines`` to ``path`` in the configured format, replacing the file.
+
+        Args:
+            lines: The reduced lines, consumed once.
+
+        Returns:
+            The number of lines written.
+        """
         output_path = Path(self.path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
