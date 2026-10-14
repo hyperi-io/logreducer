@@ -146,6 +146,7 @@ class Drain:
     holds the clusters a line is scored against.
 
     Attributes:
+        max_node_depth: Depth of the leaf nodes, counting the token-count level as 1.
         sim_th: Minimum share of matching tokens to join an existing cluster.
         max_children: Children a tree node holds before new tokens share ``<*>``.
         root_node: Root of the prefix tree.
