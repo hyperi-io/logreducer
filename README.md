@@ -403,11 +403,11 @@ Individually: `uv run ruff format`, `uv run ruff check --fix`,
 
 ### Where this sits
 
-One declared edge in `dfe-infra/suite.yaml`, and it runs the surprising way.
+One declared edge in `dfe-infra/suite.yaml`.
 
 | Repo | Direction | Kind | Mechanism |
 |---|---|---|---|
-| dfe-engine | outbound | `python-dep-undeclared` | dfe-engine imports this library at runtime and declares NO dependency on it, deliberately. `from logreducer import LogReducer` at `sampling/service.py:200`, `from logreducer.clickhouse import ClickHouseSource` at `:236`, and `from logreducer.kafka import KafkaSource` at `sampling/kafka_reader.py:134`. All three are lazy, inside the gated `smart` and `anomaly` sampler modes, and an `ImportError` is turned into an error telling the caller to use `mode=recent` or `mode=random` instead. There is no version range to test -- install a new version alongside dfe-engine and run the tests that exercise those three sites |
+| dfe-engine | outbound | `python-dep` | dfe-engine declares `logreducer[enhanced]` by range in its `pyproject.toml` and imports it lazily, inside the `smart` and `anomaly` sampler modes: `LogReducer` and `logreducer.clickhouse` in `sampling/service.py`, `logreducer.kafka` in `sampling/kafka_reader.py`. A new release is checked against that range, then taken with `uv lock --upgrade-package logreducer` and the engine's tests |
 
 `dfe-stack suite --consumer logreducer` returns an empty edge list: no repo in
 that graph is something this library depends on. The runtime dependencies
