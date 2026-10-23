@@ -217,6 +217,9 @@ index-strategy = "unsafe-best-match"
 # version published in the last 7 days. A CVE fix bypasses it through a
 # temporary per-package exclude-newer-package entry, not by lowering this.
 exclude-newer = "7 days"
+# certifi PYSEC-2026-4320 is fixed in 2026.10.19. A per-package entry replaces the
+# global span rather than widening it, so remove this one on 2026-10-28.
+exclude-newer-package = { certifi = "2026-10-21T00:00:00Z" }
 override-dependencies = []
 
 [[tool.uv.index]]
