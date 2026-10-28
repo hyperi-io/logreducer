@@ -9,6 +9,8 @@ release:
 
 test:
   min_coverage: 75  # currently 80%; ratchet up as coverage improves
+  python:
+    parallel: auto
 
 quality:
   # examples/ are illustrative snippets, not scanned code

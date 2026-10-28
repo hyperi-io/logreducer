@@ -257,6 +257,7 @@ skips = ["*test*.py", "*tests*.py"]
 dev = [
     "pytest>=9.0.0",         # Test framework (9.0 changed warning/path semantics)
     "pytest-cov>=7.0.0",     # Coverage reporting
+    "pytest-xdist>=3.8.0",   # Parallel test workers (hyperi-ci adds -n)
     "ruff>=0.16.10",         # Lint + format (replaces black/flake8/isort)
     "ty>=0.0.34",            # Astral type checker (runs alongside mypy)
     "mypy>=2.0",             # Static type checking (strict; 2.0 flipped defaults)
@@ -266,6 +267,8 @@ dev = [
     "vermin>=1.6.0",         # Python version-compat detection
     # Adapter + integration test deps (TEST ONLY - never in the published
     # wheel; these mirror the optional extras so the adapters can be exercised).
+    "xxhash>=4.0.2",              # enhanced extra: xxh64 dedup hashing
+    "datasketch>=2.0.0",          # enhanced extra: MinHash/LSH fuzzy dedup
     "sqlalchemy>=2.1.3",          # SQLSource against SQLite (real, no server)
     "clickhouse-connect>=1.9.0",  # ClickHouseSource (local cluster or docker)
     "confluent-kafka>=2.15.1",    # KafkaSource/KafkaSink
