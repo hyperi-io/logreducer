@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import math
 import random
-import re
 from collections.abc import Iterable
 from itertools import islice
 
@@ -36,8 +35,43 @@ RANDOM_FN: dict[str, str] = {
 }
 
 
-# A statement terminator that is followed only by whitespace and comments.
-_TRAILING_TERMINATOR = re.compile(r";(?:\s|--[^\n]*|/\*.*?\*/)*\Z", re.DOTALL)
+def _terminator_index(query: str) -> int | None:
+    """Index of a ``;`` followed only by whitespace and comments, else None.
+
+    One forward pass in linear time that skips quoted text and comments, so a
+    ``;`` or ``--`` inside a string literal is never mistaken for syntax.
+    """
+    end = len(query)
+    last_semicolon: int | None = None
+    i = 0
+    while i < end:
+        char = query[i]
+        if char == ";":
+            last_semicolon = i
+            i += 1
+        elif char.isspace():
+            i += 1
+        elif query.startswith("--", i):
+            newline = query.find("\n", i)
+            i = end if newline < 0 else newline + 1
+        elif query.startswith("/*", i):
+            close = query.find("*/", i + 2)
+            i = end if close < 0 else close + 2
+        elif char in "'\"`":
+            i += 1
+            while i < end:
+                if query[i] == char:
+                    if query.startswith(char, i + 1):  # a doubled quote is an escaped quote
+                        i += 2
+                        continue
+                    break
+                i += 1
+            i += 1
+            last_semicolon = None
+        else:
+            last_semicolon = None
+            i += 1
+    return last_semicolon
 
 
 def wrap_subquery(query: str) -> str:
@@ -47,7 +81,11 @@ def wrap_subquery(query: str) -> str:
     comment swallows the closing parenthesis, so the terminator is dropped and
     the text ends on a newline.
     """
-    return _TRAILING_TERMINATOR.sub("", query.strip()).rstrip() + "\n"
+    query = query.strip()
+    terminator = _terminator_index(query)
+    if terminator is not None:
+        query = query[:terminator]
+    return query.rstrip() + "\n"
 
 
 def _pg_sample(query: str, fraction: float, seed: int | None) -> tuple[str | None, str]:
