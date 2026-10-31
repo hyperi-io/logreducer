@@ -100,6 +100,15 @@ class KafkaConsumerError(Exception):
         super().__init__(message)
 
 
+class KafkaDeliveryError(Exception):
+    """One or more produced messages were not delivered to the broker."""
+
+    def __init__(self, message: str, failed: int, undelivered: int) -> None:
+        self.failed = failed
+        self.undelivered = undelivered
+        super().__init__(message)
+
+
 def _normalise_config(config: str | dict[str, Any]) -> dict[str, Any]:
     """A bare string is treated as ``bootstrap.servers``; a dict is copied."""
     if isinstance(config, str):
@@ -267,20 +276,37 @@ class KafkaSink:
         self._producer = Producer(self._config)
 
     def write(self, lines: Iterable[str]) -> int:
-        """Produce each line to the topic and flush; return the number produced.
+        """Produce each line to the topic and flush; return the number delivered.
 
         With the default ``flush_timeout=None`` the final flush blocks until the
-        queue drains, so the count is effectively a delivery count. With a finite
-        ``flush_timeout`` some messages may still be in flight when flush returns.
+        queue drains.
+
+        Raises:
+            KafkaDeliveryError: A message was rejected by the broker, expired
+                before delivery, or was still queued when a finite
+                ``flush_timeout`` ran out.
         """
         key_bytes = self.key.encode(self.encoding) if self.key is not None else None
-        count = 0
+        produced = 0
+        errors: list[str] = []
+
+        def on_delivery(err: Any, _msg: Any) -> None:
+            if err is not None:
+                errors.append(str(err))
+
         for line in lines:
-            self._producer.produce(self.topic, value=line.encode(self.encoding), key=key_bytes)
+            self._producer.produce(self.topic, value=line.encode(self.encoding), key=key_bytes, on_delivery=on_delivery)
             self._producer.poll(0)  # Trigger delivery callbacks (non-blocking)
-            count += 1
-        self.flush()
-        return count
+            produced += 1
+        undelivered = self.flush()
+        if errors or undelivered:
+            raise KafkaDeliveryError(
+                f"{len(errors)} of {produced} messages failed and {undelivered} were still queued "
+                f"for topic {self.topic!r}" + (f" (first error: {errors[0]})" if errors else ""),
+                failed=len(errors),
+                undelivered=undelivered,
+            )
+        return produced
 
     def flush(self) -> int:
         """Wait for outstanding messages; return the count still in queue."""

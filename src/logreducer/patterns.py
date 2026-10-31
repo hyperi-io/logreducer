@@ -189,7 +189,7 @@ class FuzzyDeduplicator:
         for i, line in enumerate(lines):
             m = MinHash(num_perm=64)
             for word in line.split():
-                m.update(word.encode("utf8"))
+                m.update(word.encode("utf-8", "surrogatepass"))
 
             if not self.lsh.query(m):
                 self.lsh.insert(f"line_{i}", m)

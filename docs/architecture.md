@@ -64,10 +64,19 @@ than pass one, and the reducer would be comparing two populations.
 
 ## What streams, and what cannot
 
-Pattern and temporal modes stream end to end. Exact dedup, optional fuzzy dedup
-and Drain3 mining run as one generator pipeline, so the unique-line set is never
-collected into a list. Peak memory is the bounded dedup cache plus the Drain3
-template store, and neither grows with the number of unique lines the source has.
+Pattern mode streams end to end. Exact dedup, optional fuzzy dedup and Drain3
+mining run as one generator pipeline, so the unique-line set is never collected
+into a list. Peak memory is the bounded dedup cache plus the Drain3 template
+store, and neither grows with the number of unique lines the source has.
+
+Drain3 compares each line with every template stored at the leaf it reaches, so
+time grows with the square of the template count when lines share no tokens.
+Measured on 16,000 lines that share nothing, 86 s unbounded and 4.6 s with
+`max_clusters=500`. Set `max_clusters` for high-cardinality sources.
+
+Temporal mode does not stream. It reads every line and a parsed entry per line
+into memory before grouping, so it ignores `max_memory_gb`. Measured on an 80 MB
+file, 832 MB peak against 156 MB for pattern mode.
 
 Anomaly mode cannot stream. Isolation Forest over a TF-IDF matrix is batch ML and
 needs its rows at once. That is the one place a hard memory ceiling needs an

@@ -3,7 +3,7 @@
 import re
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from .template_mining import TemplateMiner
@@ -62,6 +62,8 @@ class TemporalProcessor:
     """Time-aware log processing."""
 
     def __init__(self, window_minutes: int = 60):
+        if window_minutes < 1:
+            raise ValueError(f"window_minutes must be at least 1, got {window_minutes!r}")
         self.window_minutes = window_minutes
         self.parser = TimestampParser()
         self.miners_by_window: dict[int, TemplateMiner] = {}
@@ -96,7 +98,10 @@ class TemporalProcessor:
         # Group by time window
         for entry in entries:
             if entry.timestamp:
-                window_key = int(entry.timestamp.timestamp() // (self.window_minutes * 60))
+                # Read the naive timestamp as UTC: local-time conversion raises on
+                # sentinels like 0001-01-01 and 9999-12-31 and shifts with DST.
+                epoch_seconds = entry.timestamp.replace(tzinfo=UTC).timestamp()
+                window_key = int(epoch_seconds // (self.window_minutes * 60))
                 windows[window_key].append(entry)
 
         # Process each window

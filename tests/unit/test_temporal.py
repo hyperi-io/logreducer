@@ -2,7 +2,10 @@
 Unit tests for temporal processing module
 """
 
+import time
 from datetime import datetime
+
+import pytest
 
 from logreducer.temporal import LogEntry, TemporalProcessor, TimestampParser
 
@@ -199,3 +202,32 @@ class TestTemporalProcessor:
         templates = {p["template"] for p in result["temporal_patterns"]}
         assert len(templates) == 1
         assert "<*>" in templates.pop()
+
+
+class TestBoundaryInputs:
+    """Timestamps and windows at the edge of what the processor accepts."""
+
+    @pytest.mark.parametrize("stamp", ["0001-01-01 00:00:00", "9999-12-31 23:59:59"])
+    def test_sentinel_timestamps_do_not_crash(self, stamp):
+        result = TemporalProcessor().process_temporal([f"{stamp} ERROR sentinel row {i}" for i in range(3)])
+
+        assert len(result["temporal_patterns"]) == 3
+        assert len({p["window"] for p in result["temporal_patterns"]}) == 1
+
+    def test_window_is_independent_of_local_timezone(self, monkeypatch):
+        # 01:30 does not exist in London on 2024-03-31 (clocks jump to 02:00).
+        lines = ["2024-03-31 01:30:00 INFO a", "2024-03-31 03:30:00 INFO b"]
+        monkeypatch.setenv("TZ", "Europe/London")
+        time.tzset()
+        try:
+            windows = [p["window"] for p in TemporalProcessor(60).process_temporal(lines)["temporal_patterns"]]
+        finally:
+            monkeypatch.undo()
+            time.tzset()
+
+        assert windows[1] - windows[0] == 2
+
+    @pytest.mark.parametrize("minutes", [0, -5])
+    def test_non_positive_window_rejected(self, minutes):
+        with pytest.raises(ValueError, match="window_minutes"):
+            TemporalProcessor(window_minutes=minutes)

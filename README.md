@@ -1,7 +1,7 @@
 # LogReducer
 
 [![PyPI](https://img.shields.io/pypi/v/logreducer?logo=pypi)](https://pypi.org/project/logreducer/)
-[![Python Version](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/)
+[![Python Version](https://img.shields.io/badge/python-3.14%2B-blue)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
 
 Reduce gigabytes of logs to a small, representative sample - keeping the patterns and anomalies that matter and dropping the repetition that does not. Memory-safe streaming, temporal awareness, and ML-based anomaly detection.
@@ -24,7 +24,7 @@ Reduce gigabytes of logs to a small, representative sample - keeping the pattern
 
 ### As a CLI tool
 
-Install it as an isolated tool so its dependencies never clash with your other Python projects (needs Python 3.12+):
+Install it as an isolated tool so its dependencies never clash with your other Python projects (needs Python 3.14+):
 
 ```bash
 uv tool install logreducer     # recommended (uv)
@@ -89,7 +89,7 @@ reduced = reducer.reduce(lines)
 
 ## How it works
 
-Everything streams: lines flow through dedup and template mining as one generator pipeline, so the unique-line set is never materialised. Memory stays near-constant regardless of input size.
+Pattern mode streams: lines flow through dedup and template mining as one generator pipeline, so the unique-line set is never materialised and memory stays near-constant regardless of input size.
 
 ```mermaid
 flowchart LR
@@ -224,10 +224,10 @@ logreducer --dsn postgresql://user@host/db --query "SELECT msg FROM logs" \
 
 ## Bounding memory
 
-The core streams, so pattern/temporal modes run in near-constant memory. The knobs:
+Pattern mode streams and runs in near-constant memory. Temporal mode holds the whole source in memory, and anomaly mode holds its unique lines. The knobs:
 
 - `max_memory_gb` - the overall cap (also sizes file read strategy and the watchdog). Presets: 0.5 / 1 / 2 GB by level; values above 70% of available RAM are clamped with a warning.
-- `max_clusters` - LRU-bound the Drain3 template store (unbounded by default).
+- `max_clusters` - LRU-bound the Drain3 template store (unbounded by default). Also caps the time on high-cardinality sources, where unbounded mining grows with the square of the template count.
 - `anomaly_max_rows` - reservoir-cap the rows fed to anomaly detection (off by default; trades anomaly recall for a bounded matrix).
 
 ```python

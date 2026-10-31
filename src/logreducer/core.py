@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Literal, overload
 
 from .anomaly import AnomalyDetector
-from .config import BigDialConfig, OutputFormat, ProcessingLevel, ProcessingMode, get_preset_config
+from .config import BigDialConfig, OutputFormat, ProcessingLevel, ProcessingMode, get_preset_config, validate_config
 from .logging_config import get_logger, setup_logging
 from .memory import BoundedDeduplicator, MemoryMonitor
 from .patterns import FuzzyDeduplicator, PatternExtractor
@@ -66,9 +66,9 @@ class LogReducer:
         self.config = replace(config) if config is not None else get_preset_config(level)
 
         # Apply overrides BEFORE setting up logging
-        if max_memory_gb:
+        if max_memory_gb is not None:
             self.config.max_memory_gb = max_memory_gb
-        if max_patterns:
+        if max_patterns is not None:
             self.config.max_patterns = max_patterns
 
         for key, value in kwargs.items():
@@ -80,6 +80,7 @@ class LogReducer:
             if key == "output_format" and isinstance(value, str):
                 value = OutputFormat(value.lower())
             setattr(self.config, key, value)
+        validate_config(self.config)
 
         # Setup logging based on config (after overrides applied)
         setup_logging(
@@ -191,6 +192,11 @@ class LogReducer:
         # re-reads the source to process it (hybrid re-reads again). A one-shot
         # iterator (a bare generator) would be drained by the count and leave
         # nothing to process - fail loudly rather than return an empty result.
+        if isinstance(source, str | bytes):
+            raise TypeError(
+                f"source must be an iterable of lines, got a single {type(source).__name__}; "
+                "use process_file() for a path, or pass a list of lines."
+            )
         if iter(source) is source:
             raise TypeError(
                 "source must be re-iterable (a fresh iterator on each pass); got a "

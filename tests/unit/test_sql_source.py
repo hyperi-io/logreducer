@@ -111,3 +111,14 @@ def test_reduce_to_target_over_sqlsource(sqlite_url):
         result = reduce_to_target(source, reducer, target_rows=3, max_fetches=10)
         assert result["stats"]["collected"] > 0
         assert result["stats"]["stop_reason"] in {"target", "plateau"}
+
+
+@pytest.mark.parametrize(
+    "query", ["SELECT line FROM logs;", "SELECT line FROM logs  ;  ", "SELECT line FROM logs -- all rows"]
+)
+def test_sampling_wrappers_accept_a_terminated_or_commented_query(sqlite_url, query):
+    """A trailing ';' or '--' comment must not break the subquery the sampler wraps it in."""
+    with SQLSource(sqlite_url, query) as source:
+        assert len(source.sample_batch(10)) == 10
+    with SQLSource(sqlite_url, query, sample=1.0) as sampled:
+        assert len(list(sampled)) == 100

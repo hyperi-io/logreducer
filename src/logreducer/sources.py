@@ -61,6 +61,13 @@ class FileSource:
 
     def __init__(self, path: str | os.PathLike[str], *, max_memory_gb: float = 1.0) -> None:
         self.path = os.fspath(path)
+        # A pipe or device can be read once, but reduce() reads a source more than
+        # once, so the second pass would see nothing and return an empty result.
+        if os.path.exists(self.path) and not os.path.isfile(self.path):
+            raise ValueError(
+                f"{self.path!r} is not a regular file. A pipe or device cannot be re-read, "
+                "so write it to a file first (e.g. redirect into a temp file)."
+            )
         self._processor = StreamingProcessor(MemoryMonitor(max_memory_gb))
 
     def __iter__(self) -> Iterator[str]:

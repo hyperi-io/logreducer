@@ -2,6 +2,9 @@
 Unit tests for configuration module
 """
 
+import pytest
+
+from logreducer import LogReducer
 from logreducer.config import BigDialConfig, ProcessingLevel, ProcessingMode, get_preset_config
 
 
@@ -118,3 +121,50 @@ class TestGetPresetConfig:
 
         # Pattern count should increase
         assert standard.max_patterns < enhanced.max_patterns < maximum.max_patterns
+
+
+OUT_OF_RANGE = [
+    ("dedup_cache_size", 0),
+    ("temporal_window_minutes", 0),
+    ("max_patterns", 0),
+    ("max_patterns", -1),
+    ("examples_per_pattern", 0),
+    ("max_clusters", 0),
+    ("anomaly_max_rows", 0),
+    ("max_memory_gb", 0),
+    ("max_memory_gb", -1.0),
+    ("max_memory_gb", float("nan")),
+    ("max_memory_gb", float("inf")),
+    ("drain_similarity", 1.5),
+    ("fuzzy_threshold", 0.0),
+    ("anomaly_contamination", 0.9),
+]
+
+
+class TestOutOfRangeValues:
+    """Values that used to crash a run later, or silently empty its output."""
+
+    @pytest.mark.parametrize(("field", "value"), OUT_OF_RANGE)
+    def test_dataclass_rejects(self, field, value):
+        with pytest.raises(ValueError, match=field):
+            BigDialConfig(**{field: value})
+
+    @pytest.mark.parametrize(("field", "value"), OUT_OF_RANGE)
+    def test_reducer_override_rejects(self, field, value):
+        with pytest.raises(ValueError, match=field):
+            LogReducer(**{field: value})
+
+
+class TestFromEnvErrors:
+    @pytest.mark.parametrize(
+        ("variable", "raw", "expected"),
+        [
+            ("LOGREDUCER_MAX_PATTERNS", "abc", "LOGREDUCER_MAX_PATTERNS='abc'"),
+            ("LOGREDUCER_ENABLE_LOGGING", "treu", "LOGREDUCER_ENABLE_LOGGING='treu'"),
+            ("LOGREDUCER_MAX_PATTERNS", "0", "max_patterns"),
+        ],
+    )
+    def test_bad_value_names_the_variable(self, monkeypatch, variable, raw, expected):
+        monkeypatch.setenv(variable, raw)
+        with pytest.raises(ValueError, match=expected.replace("'", ".")):
+            BigDialConfig.from_env()

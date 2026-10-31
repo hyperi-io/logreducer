@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import math
 import random
+import re
 from collections.abc import Iterable
 from itertools import islice
 
@@ -35,6 +36,20 @@ RANDOM_FN: dict[str, str] = {
 }
 
 
+# A statement terminator that is followed only by whitespace and comments.
+_TRAILING_TERMINATOR = re.compile(r";(?:\s|--[^\n]*|/\*.*?\*/)*\Z", re.DOTALL)
+
+
+def wrap_subquery(query: str) -> str:
+    """The query as text safe to place inside ``( ... )``.
+
+    A trailing ``;`` is a syntax error inside a subquery, and a trailing ``--``
+    comment swallows the closing parenthesis, so the terminator is dropped and
+    the text ends on a newline.
+    """
+    return _TRAILING_TERMINATOR.sub("", query.strip()).rstrip() + "\n"
+
+
 def _pg_sample(query: str, fraction: float, seed: int | None) -> tuple[str | None, str]:
     # setseed makes random() deterministic for the rest of the connection; it
     # takes a value in [-1, 1]. Each pass opens a fresh connection and re-seeds,
@@ -46,13 +61,13 @@ def _pg_sample(query: str, fraction: float, seed: int | None) -> tuple[str | Non
     if seed is not None:
         s = ((seed % 2_000_000) / 1_000_000.0) - 1.0
         setup = f"SELECT setseed({s!r})"
-    return setup, f"SELECT * FROM ({query}) AS _lr_sample WHERE random() < {float(fraction)!r}"
+    return setup, f"SELECT * FROM ({wrap_subquery(query)}) AS _lr_sample WHERE random() < {float(fraction)!r}"
 
 
 def _mysql_sample(query: str, fraction: float, seed: int | None) -> tuple[str | None, str]:
     # RAND(seed) with a constant seed is a repeatable per-row sequence.
     rand = f"rand({int(seed)})" if seed is not None else "rand()"
-    return None, f"SELECT * FROM ({query}) AS _lr_sample WHERE {rand} < {float(fraction)!r}"
+    return None, f"SELECT * FROM ({wrap_subquery(query)}) AS _lr_sample WHERE {rand} < {float(fraction)!r}"
 
 
 def _sqlite_sample(query: str, fraction: float, seed: int | None) -> tuple[str | None, str]:
@@ -62,7 +77,7 @@ def _sqlite_sample(query: str, fraction: float, seed: int | None) -> tuple[str |
             "omit sample_seed for best-effort sampling, or use a seedable engine (postgresql, mysql)"
         )
     threshold = int(float(fraction) * 1_000_000)
-    return None, f"SELECT * FROM ({query}) AS _lr_sample WHERE (abs(random()) % 1000000) < {threshold}"
+    return None, f"SELECT * FROM ({wrap_subquery(query)}) AS _lr_sample WHERE (abs(random()) % 1000000) < {threshold}"
 
 
 # dialect.name -> builder. ClickHouse is handled by its own source (native
@@ -107,7 +122,7 @@ def build_sample_batch_sql(dialect: str, query: str, n: int) -> str:
     rand = RANDOM_FN.get(dialect)
     if rand is None:
         raise SamplingNotSupported(f"no random function for dialect {dialect!r} (supported: {sorted(RANDOM_FN)})")
-    return f"SELECT * FROM ({query}) AS _lr_batch ORDER BY {rand} LIMIT {int(n)}"
+    return f"SELECT * FROM ({wrap_subquery(query)}) AS _lr_batch ORDER BY {rand} LIMIT {int(n)}"
 
 
 def build_table_sample_query(
@@ -202,7 +217,7 @@ def estimate_batch_rows(
     """
     if not sample_lines or budget_bytes <= 0:
         return floor
-    avg_bytes = sum(len(s.encode("utf-8")) for s in sample_lines) / len(sample_lines)
+    avg_bytes = sum(len(s.encode("utf-8", "surrogatepass")) for s in sample_lines) / len(sample_lines)
     per_row = max(1.0, avg_bytes * overhead)
     rows = int(budget_bytes / per_row)
     if align > 1:

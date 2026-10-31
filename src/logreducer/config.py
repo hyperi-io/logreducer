@@ -1,6 +1,7 @@
 """Configuration and tuning parameters for LogReducer."""
 
 import logging
+import math
 import os
 import types
 import typing
@@ -88,6 +89,7 @@ class BigDialConfig:
     pretty_json: bool = False  # Pretty print JSON output
 
     def __post_init__(self) -> None:
+        validate_config(self)
         # Never promise more memory than the host can give: clamp to 70% of
         # what is currently available, and say so rather than silently mutate.
         available_gb = psutil.virtual_memory().available / (1024**3)
@@ -115,11 +117,42 @@ class BigDialConfig:
         overrides: dict[str, typing.Any] = {}
         for field in fields(cls):
             for prefix in prefixes:
-                raw = os.environ.get(f"{prefix.rstrip('_')}_{field.name.upper()}")
+                variable = f"{prefix.rstrip('_')}_{field.name.upper()}"
+                raw = os.environ.get(variable)
                 if raw is not None:
-                    overrides[field.name] = _coerce_env_value(raw, field.name)
+                    try:
+                        overrides[field.name] = _coerce_env_value(raw, field.name)
+                    except ValueError as exc:
+                        raise ValueError(f"{variable}={raw!r}: {exc}") from exc
                     break
         return cls(**overrides)
+
+
+def validate_config(config: BigDialConfig) -> None:
+    """Reject values that would crash a run later or silently empty its output.
+
+    Raises:
+        ValueError: Naming the first field that is out of range.
+    """
+    for name in ("dedup_cache_size", "temporal_window_minutes", "max_patterns", "examples_per_pattern"):
+        if getattr(config, name) < 1:
+            raise ValueError(f"{name} must be at least 1, got {getattr(config, name)!r}")
+    for name in ("max_clusters", "anomaly_max_rows"):
+        value = getattr(config, name)
+        if value is not None and value < 1:
+            raise ValueError(f"{name} must be at least 1 or None, got {value!r}")
+    if not 0 < config.max_memory_gb < math.inf:
+        raise ValueError(f"max_memory_gb must be finite and greater than 0, got {config.max_memory_gb!r}")
+    if not 0.0 <= config.drain_similarity <= 1.0:
+        raise ValueError(f"drain_similarity must be between 0 and 1, got {config.drain_similarity!r}")
+    if config.fuzzy_threshold is not None and not 0.0 < config.fuzzy_threshold <= 1.0:
+        raise ValueError(f"fuzzy_threshold must be in (0, 1] or None, got {config.fuzzy_threshold!r}")
+    if not 0.0 < config.anomaly_contamination <= 0.5:
+        raise ValueError(f"anomaly_contamination must be in (0, 0.5], got {config.anomaly_contamination!r}")
+
+
+_TRUE_WORDS = frozenset({"1", "true", "yes", "on"})
+_FALSE_WORDS = frozenset({"0", "false", "no", "off", ""})
 
 
 def _coerce_env_value(raw: str, field_name: str) -> object:
@@ -133,7 +166,10 @@ def _coerce_env_value(raw: str, field_name: str) -> object:
             return None
         target = args[0]
     if target is bool:
-        return raw.strip().lower() in ("1", "true", "yes", "on")
+        word = raw.strip().lower()
+        if word not in _TRUE_WORDS | _FALSE_WORDS:
+            raise ValueError("expected a boolean (true/false, yes/no, on/off, 1/0)")
+        return word in _TRUE_WORDS
     if target is int:
         return int(raw)
     if target is float:

@@ -74,6 +74,6 @@ open a pull request to `main`.
 
 ## Code style
 
-- Python 3.12+, [ruff](https://docs.astral.sh/ruff/) formatted (line length 120).
+- Python 3.14+, [ruff](https://docs.astral.sh/ruff/) formatted (line length 120).
 - Fully typed - `mypy` runs strict; annotate new code.
 - Australian English in prose; ASCII-only in comments, commit messages and docs.

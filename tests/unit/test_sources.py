@@ -1,5 +1,6 @@
 """Unit tests for the Source abstraction - the IO-agnostic input seam."""
 
+import os
 from pathlib import Path
 
 import pytest
@@ -64,3 +65,31 @@ def test_reduce_rejects_one_shot_generator():
     generator = (line for line in ["a", "b", "c"])
     with pytest.raises(TypeError, match="re-iterable"):
         reducer.reduce(generator)
+
+
+def test_reduce_rejects_a_bare_string():
+    """A path or blob passed by mistake would be reduced one character at a time."""
+    with pytest.raises(TypeError, match="process_file"):
+        LogReducer().reduce("app.log")
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="needs POSIX named pipes")
+def test_filesource_rejects_a_pipe(tmp_path):
+    """The count pass would drain a pipe and the processing pass would find it empty."""
+    fifo = tmp_path / "feed"
+    os.mkfifo(fifo)
+    with pytest.raises(ValueError, match="not a regular file"):
+        FileSource(fifo)
+
+
+def test_filesource_rejects_a_directory(tmp_path):
+    with pytest.raises(ValueError, match="not a regular file"):
+        FileSource(tmp_path)
+
+
+def test_filesource_keeps_invalid_utf8_visible(tmp_path):
+    """Undecodable bytes become U+FFFD instead of vanishing and gluing tokens together."""
+    path = tmp_path / "latin1.log"
+    path.write_bytes(b"caf\xe9 ok\nsecond line\n")
+
+    assert list(FileSource(path)) == ["caf\ufffd ok", "second line"]

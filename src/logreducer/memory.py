@@ -111,7 +111,7 @@ class StreamingProcessor:
         strategy = self.memory_monitor.estimate_file_strategy(file_size)
 
         if strategy == "full":
-            with open(file_path, encoding="utf-8", errors="ignore") as f:
+            with open(file_path, encoding="utf-8", errors="replace") as f:
                 for line in f:
                     line = line.strip()
                     if line:
@@ -134,7 +134,7 @@ class StreamingProcessor:
         check_every = 100_000
         next_check = check_every
 
-        with open(file_path, encoding="utf-8", errors="ignore") as f:
+        with open(file_path, encoding="utf-8", errors="replace") as f:
             for line_num, raw in enumerate(line.strip() for line in f):
                 if not raw:
                     continue
@@ -169,7 +169,7 @@ class StreamingProcessor:
         reservoir_size = min(self.chunk_size, 100000)
 
         def _lines() -> Iterator[str]:
-            with open(file_path, encoding="utf-8", errors="ignore") as f:
+            with open(file_path, encoding="utf-8", errors="replace") as f:
                 for line in f:
                     stripped = line.strip()
                     if stripped:
@@ -199,22 +199,29 @@ class BoundedDeduplicator:
     """
 
     def __init__(self, max_cache_size: int = 100000, hash_algorithm: str = "xxhash"):
+        if max_cache_size < 1:
+            raise ValueError(f"max_cache_size must be at least 1, got {max_cache_size!r}")
         self.max_cache_size = max_cache_size
 
-        # Choose hash function
+        # Choose hash function. surrogatepass keeps a lone surrogate in a
+        # caller-supplied line hashable instead of raising mid-run.
         if hash_algorithm == "xxhash":
             try:
                 import xxhash
 
-                self.hash_func = lambda x: xxhash.xxh64(x.encode()).hexdigest()
+                self.hash_func = lambda x: xxhash.xxh64(x.encode("utf-8", "surrogatepass")).hexdigest()
             except ImportError:
                 import hashlib
 
-                self.hash_func = lambda x: hashlib.blake2b(x.encode(), digest_size=16).hexdigest()
+                self.hash_func = lambda x: hashlib.blake2b(
+                    x.encode("utf-8", "surrogatepass"), digest_size=16
+                ).hexdigest()
         else:
             import hashlib
 
-            self.hash_func = lambda x: hashlib.md5(x.encode(), usedforsecurity=False).hexdigest()
+            self.hash_func = lambda x: hashlib.md5(
+                x.encode("utf-8", "surrogatepass"), usedforsecurity=False
+            ).hexdigest()
 
         self.seen_hashes: deque[str] = deque(maxlen=max_cache_size)
         self.seen_set: set[str] = set()
