@@ -12,7 +12,8 @@ maintainers = [
     {name = "HyperI Team", email = "dev@hyperi.io"},
 ]
 description = "Reduce GB-scale logs to a representative sample - streaming Python library and CLI with pattern mining and anomaly detection"
-readme = "README.md"
+# The PyPI page. README.md stays the GitHub front page.
+readme = "docs/pypi.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
 requires-python = ">=3.14"
