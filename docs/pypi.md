@@ -7,7 +7,7 @@ It ships as a CLI and as a Python library with an IO-agnostic core.
 ## What it gives you
 
 - A `logreducer` command that reduces a file, a SQL or ClickHouse query, or a Kafka topic, straight from the shell.
-- Pattern mode streams through a bounded dedup cache and template store, so memory does not grow with the file.
+- Pattern mode streams through a bounded dedup cache and template store, so memory grows with the number of distinct templates, not with the line count.
 - A memory budget that decides how a file is read: whole, in chunks, or reservoir-sampled once it passes five times the budget.
 - Four modes: pattern (Drain3 template mining), anomaly (Isolation Forest), temporal (one example per template per time window) and hybrid.
 - A core with no IO dependencies: anything re-iterable that yields `str` lines is a source, and anything with `write(lines)` is a sink.
