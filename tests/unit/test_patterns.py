@@ -382,3 +382,40 @@ class TestRepeatsCountTowardsPatterns:
         patterns = extractor.extract_counted_patterns(counted)
 
         assert {p.template: p.count for p in patterns}[ERROR_LINE] == 2
+
+
+def _spread_lines(count: int) -> list[str]:
+    """``count`` lines that share no tokens, spread over many tree leaves (cheap to mine)."""
+
+    def word(n: int) -> str:
+        letters = ""
+        while True:
+            n, rest = divmod(n, 26)
+            letters += chr(ord("a") + rest)
+            if n == 0:
+                return letters
+            n -= 1
+
+    lines = []
+    serial = 0
+    for length in range(2, 80):
+        for first in range(101):
+            for _ in range(2):
+                tokens = [f"lead{word(first)}"] + [word(serial + j) + "x" for j in range(length - 1)]
+                serial += length
+                lines.append(" ".join(tokens))
+                if len(lines) == count:
+                    return lines
+    raise AssertionError("not enough distinct leaves")
+
+
+class TestTemplateStoreIsBoundedByDefault:
+    def test_default_max_clusters(self):
+        assert BigDialConfig().max_clusters == 10_000
+
+    def test_default_config_evicts_beyond_the_bound(self):
+        extractor = PatternExtractor(BigDialConfig())
+
+        extractor.extract_patterns(_spread_lines(10_400))
+
+        assert len(extractor.miner.drain.clusters) == 10_000

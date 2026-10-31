@@ -71,8 +71,10 @@ store, and neither grows with the number of unique lines the source has.
 
 Drain3 compares each line with every template stored at the leaf it reaches, so
 time grows with the square of the template count when lines share no tokens.
-Measured on 16,000 lines that share nothing, 86 s unbounded and 4.6 s with
-`max_clusters=500`. Set `max_clusters` for high-cardinality sources.
+`max_clusters` (10,000 by default) bounds the template store and with it the
+comparisons per line. Measured on 16,000 lines that share nothing, 86 s with no
+bound and 4.6 s with `max_clusters=500`, so 10,000 caps growth on long inputs
+and a lower value is the speed setting for high-cardinality sources.
 
 Temporal mode returns one example per time window and template, ranked by severity and count, and does not stream. It reads every line and a parsed entry per line
 into memory before grouping, so it ignores `max_memory_gb`. Measured on an 80 MB

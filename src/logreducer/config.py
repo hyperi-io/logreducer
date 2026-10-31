@@ -58,8 +58,8 @@ class BigDialConfig:
     min_pattern_occurrences: int = 2
     anomaly_contamination: float = 0.1
     # Bound the Drain3 template store (LRU-evict beyond this many templates).
-    # None = unbounded (default; the store grows with distinct templates).
-    max_clusters: int | None = None
+    # None = unbounded (the store then grows with distinct templates).
+    max_clusters: int | None = 10_000
     # Cap the rows fed to anomaly detection (reservoir-sampled). Bounds the
     # TF-IDF matrix on a huge unique-line set, at the cost of anomaly recall
     # (rare lines may be sampled out). None = no cap (use every unique line).

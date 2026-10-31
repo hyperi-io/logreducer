@@ -227,7 +227,7 @@ logreducer --dsn postgresql://user@host/db --query "SELECT msg FROM logs" \
 Pattern mode streams and runs in near-constant memory. Temporal mode holds the whole source in memory, and anomaly mode holds its unique lines. The knobs:
 
 - `max_memory_gb` - the overall cap (also sizes file read strategy and the watchdog). Presets: 0.5 / 1 / 2 GB by level; values above 70% of available RAM are clamped with a warning.
-- `max_clusters` - LRU-bound the Drain3 template store (unbounded by default). Also caps the time on high-cardinality sources, where unbounded mining grows with the square of the template count.
+- `max_clusters` - LRU-bound the Drain3 template store (10,000 by default, `None` for unbounded). Mining time grows with the square of the number of templates a line is compared with, so a lower value also speeds up high-cardinality sources.
 - `anomaly_max_rows` - reservoir-cap the rows fed to anomaly detection (off by default; trades anomaly recall for a bounded matrix).
 
 ```python
