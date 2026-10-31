@@ -11,10 +11,10 @@ from pathlib import Path
 from typing import Any, Literal, overload
 
 from .anomaly import AnomalyDetector
-from .config import BigDialConfig, OutputFormat, ProcessingLevel, ProcessingMode, get_preset_config
+from .config import BigDialConfig, OutputFormat, ProcessingLevel, ProcessingMode, get_preset_config, validate_config
 from .logging_config import get_logger, setup_logging
 from .memory import BoundedDeduplicator, MemoryMonitor
-from .patterns import FuzzyDeduplicator, PatternExtractor
+from .patterns import FuzzyDeduplicator, PatternExtractor, pattern_priority
 from .sampling import reservoir_sample
 from .sinks import Sink
 from .sources import FileSource, Source
@@ -66,9 +66,9 @@ class LogReducer:
         self.config = replace(config) if config is not None else get_preset_config(level)
 
         # Apply overrides BEFORE setting up logging
-        if max_memory_gb:
+        if max_memory_gb is not None:
             self.config.max_memory_gb = max_memory_gb
-        if max_patterns:
+        if max_patterns is not None:
             self.config.max_patterns = max_patterns
 
         for key, value in kwargs.items():
@@ -80,6 +80,7 @@ class LogReducer:
             if key == "output_format" and isinstance(value, str):
                 value = OutputFormat(value.lower())
             setattr(self.config, key, value)
+        validate_config(self.config)
 
         # Setup logging based on config (after overrides applied)
         setup_logging(
@@ -191,6 +192,11 @@ class LogReducer:
         # re-reads the source to process it (hybrid re-reads again). A one-shot
         # iterator (a bare generator) would be drained by the count and leave
         # nothing to process - fail loudly rather than return an empty result.
+        if isinstance(source, str | bytes):
+            raise TypeError(
+                f"source must be an iterable of lines, got a single {type(source).__name__}; "
+                "use process_file() for a path, or pass a list of lines."
+            )
         if iter(source) is source:
             raise TypeError(
                 "source must be re-iterable (a fresh iterator on each pass); got a "
@@ -324,10 +330,10 @@ class LogReducer:
             # single generator pipeline, so there is no phase boundary to report.
             self.logger.info("Streaming pipeline: dedup -> fuzzy dedup -> pattern mining")
 
-        unique_stream = self.deduplicator.deduplicate_lines(source)
+        unique_stream = self.deduplicator.deduplicate_counted(source)
         if self.fuzzy_dedup:
-            unique_stream = self.fuzzy_dedup.deduplicate_stream(unique_stream)
-        patterns = self.pattern_extractor.extract_patterns(unique_stream)
+            unique_stream = self.fuzzy_dedup.deduplicate_pairs(unique_stream)
+        patterns = self.pattern_extractor.extract_counted_patterns(unique_stream)
 
         # Collect examples
         result = []
@@ -392,15 +398,12 @@ class LogReducer:
             self.logger.info("Phase 2/2: Temporal processing")
         temporal_results = self.temporal_processor.process_temporal(lines)
 
-        # Collect examples from temporal patterns
-        result = []
-        for pattern in temporal_results.get("temporal_patterns", [])[: self.config.max_patterns]:
-            if "example" in pattern:
-                result.append(pattern["example"])
+        # One example per (window, template), the most important first.
+        def rank(patterns: list[dict]) -> list[dict]:
+            return sorted(patterns, key=lambda p: pattern_priority(p["template"], p["count"]), reverse=True)
 
-        for pattern in temporal_results.get("timeless_patterns", [])[:100]:
-            if "example" in pattern:
-                result.append(pattern["example"])
+        result = [p["example"] for p in rank(temporal_results["temporal_patterns"])[: self.config.max_patterns]]
+        result.extend(p["example"] for p in rank(temporal_results["timeless_patterns"])[:100])
 
         return result
 

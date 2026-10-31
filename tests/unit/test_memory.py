@@ -5,6 +5,8 @@ Unit tests for memory management module
 import importlib.util
 from unittest.mock import Mock, patch
 
+import pytest
+
 from logreducer.memory import BoundedDeduplicator, MemoryMonitor, StreamingProcessor
 
 
@@ -261,3 +263,15 @@ class TestBoundedDeduplicator:
         assert dedup.stats["total"] == 6
         assert dedup.stats["unique"] == 4
         assert dedup.stats["duplicates"] == 2
+
+
+class TestDeduplicatorBoundaries:
+    def test_zero_cache_size_rejected(self):
+        with pytest.raises(ValueError, match="max_cache_size"):
+            BoundedDeduplicator(max_cache_size=0)
+
+    @pytest.mark.parametrize("algorithm", ["xxhash", "md5"])
+    def test_lone_surrogate_line_is_hashable(self, algorithm):
+        dedup = BoundedDeduplicator(max_cache_size=10, hash_algorithm=algorithm)
+
+        assert list(dedup.deduplicate_lines(["a\udc80b", "a\udc80b", "a\udc81b"])) == ["a\udc80b", "a\udc81b"]

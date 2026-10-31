@@ -13,6 +13,8 @@ from logreducer.kafka import (
     CONSUMER_DEFAULTS,
     PRODUCER_DEFAULTS,
     KafkaConsumerError,
+    KafkaDeliveryError,
+    KafkaSink,
     KafkaSource,
     _normalise_config,
     mask_credentials,
@@ -78,3 +80,21 @@ def test_kafka_source_raises_when_never_assigned():
     # Fails fast: the 1s backstop plus a poll or two, well under the librdkafka
     # session timeout - proof it is the backstop firing, not a hang.
     assert time.monotonic() - start < 15.0
+
+
+def test_kafka_sink_raises_when_nothing_is_delivered():
+    """write() must not report success for messages the broker never accepted.
+
+    Regression: no delivery callback was registered and flush()'s leftover count
+    was dropped, so a dead broker still returned the number of lines produced.
+    """
+    pytest.importorskip("confluent_kafka")
+    sink = KafkaSink(
+        {"bootstrap.servers": "127.0.0.1:59999", "message.timeout.ms": 300},  # nothing is listening here
+        "does-not-matter",
+        flush_timeout=10,
+    )
+    with pytest.raises(KafkaDeliveryError) as raised:
+        sink.write(["one", "two"])
+
+    assert raised.value.failed + raised.value.undelivered == 2

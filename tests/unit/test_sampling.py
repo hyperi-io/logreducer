@@ -11,6 +11,7 @@ from logreducer.sampling import (
     build_table_sample_query,
     estimate_batch_rows,
     reservoir_sample,
+    wrap_subquery,
 )
 
 
@@ -173,3 +174,32 @@ class TestEstimateBatchRows:
     def test_aligned_to_multiple(self):
         rows = estimate_batch_rows(["x" * 100], 5_000_000, floor=1000, ceil=10_000_000, align=1000)
         assert rows % 1000 == 0
+
+
+class TestWrapSubquery:
+    """The terminator strip must be linear: these inputs hang an ambiguous regex."""
+
+    @pytest.mark.parametrize(
+        ("query", "expected"),
+        [
+            pytest.param("SELECT 1", "SELECT 1\n", id="plain"),
+            pytest.param("SELECT 1;", "SELECT 1\n", id="semicolon"),
+            pytest.param("SELECT 1 ; \n ", "SELECT 1\n", id="semicolon-and-whitespace"),
+            pytest.param("SELECT 1; -- done", "SELECT 1\n", id="semicolon-then-line-comment"),
+            pytest.param("SELECT 1; /* done */", "SELECT 1\n", id="semicolon-then-block-comment"),
+            pytest.param("SELECT 1 -- note", "SELECT 1 -- note\n", id="line-comment-only"),
+            pytest.param("SELECT 1 -- a; b", "SELECT 1 -- a; b\n", id="semicolon-inside-a-comment"),
+            pytest.param("SELECT ';'", "SELECT ';'\n", id="semicolon-inside-a-string"),
+            pytest.param("SELECT 'it''s;' ;", "SELECT 'it''s;'\n", id="doubled-quote-then-semicolon"),
+            pytest.param("SELECT 1; SELECT 2", "SELECT 1; SELECT 2\n", id="semicolon-before-more-sql"),
+            pytest.param("SELECT 1;--" + "--" * 5000, "SELECT 1\n", id="line-comment-of-many-dashes"),
+            pytest.param("SELECT 1;--" + "--" * 5000 + "\nx", None, id="many-dashes-then-more-sql"),
+            pytest.param("SELECT 1;/*" + "*//*" * 5000, "SELECT 1\n", id="many-block-comments"),
+            pytest.param("SELECT 1;/*" + "*//*" * 5000 + "*/x", None, id="many-block-comments-then-more-sql"),
+        ],
+    )
+    def test_terminator_is_dropped_only_when_trailing(self, query, expected):
+        wrapped = wrap_subquery(query)
+
+        # An input with SQL after the comments keeps its ';' (not a terminator).
+        assert wrapped == (expected if expected is not None else query.strip() + "\n")

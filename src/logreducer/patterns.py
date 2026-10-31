@@ -5,6 +5,7 @@ from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from .memory import Occurrence
 from .template_mining import MaskingInstruction, TemplateMiner, TemplateMinerConfig
 
 if TYPE_CHECKING:
@@ -73,6 +74,37 @@ def _typed_masking_instructions() -> tuple[MaskingInstruction, ...]:
     return tuple(MaskingInstruction(f"{start}(?:{pattern}){end}", name) for pattern, name in shapes)
 
 
+_ALWAYS_KEPT_LEVELS = ("CRITICAL", "FATAL", "ERROR")
+
+
+def _is_severe(template: str) -> bool:
+    """True for a template that names a CRITICAL, FATAL or ERROR level."""
+    upper = template.upper()
+    return any(level in upper for level in _ALWAYS_KEPT_LEVELS)
+
+
+def pattern_priority(template: str, count: int) -> float:
+    """Rank score for a template seen ``count`` times.
+
+    Severity boosts are checked highest-first so a template containing both
+    (e.g. "CRITICAL: write FAILED") scores as critical, not merely error.
+    """
+    priority: float = count
+
+    template_upper = template.upper()
+    if "CRITICAL" in template_upper or "FATAL" in template_upper:
+        priority *= 200
+    elif "ERROR" in template_upper or "FAIL" in template_upper:
+        priority *= 100
+    elif "WARN" in template_upper:
+        priority *= 50
+
+    # Boost complex patterns
+    priority *= 1 + template.count("<*>") * 0.5
+    priority *= 1 + len(template.split()) * 0.1
+    return priority
+
+
 class PatternExtractor:
     """Extract patterns using the online template miner (see template_mining)."""
 
@@ -102,9 +134,18 @@ class PatternExtractor:
         generator - no need to materialise the whole line set. Memory is bounded
         by the number of clusters (see ``max_clusters``), not the line count.
         """
+        return self.extract_counted_patterns((line, None) for line in lines)
+
+    def extract_counted_patterns(self, pairs: Iterable[tuple[str, Occurrence | None]]) -> list[LogPattern]:
+        """Like ``extract_patterns``, for lines paired with their dedup ``Occurrence``.
+
+        Repeats that exact dedup drops after a line was kept still count towards
+        the pattern that line joined, so 100 identical errors make one pattern
+        with ``count == 100``.
+        """
         pattern_map: dict[int, LogPattern] = {}
 
-        for line in lines:
+        for line, occurrence in pairs:
             cluster = self.miner.add_log_message(line)
             pattern = pattern_map.get(cluster.cluster_id)
             if pattern is None:
@@ -112,6 +153,8 @@ class PatternExtractor:
                 pattern_map[cluster.cluster_id] = pattern
 
             pattern.count += 1
+            if occurrence is not None:
+                occurrence.target = pattern
 
             if len(pattern.examples) < self.config.examples_per_pattern:
                 pattern.examples.append(line)
@@ -134,31 +177,13 @@ class PatternExtractor:
         return patterns[: self.config.max_patterns]
 
     def _filter_by_occurrence(self, patterns: list[LogPattern]) -> list[LogPattern]:
-        """Filter patterns by minimum occurrence."""
-        return [p for p in patterns if p.count >= self.config.min_pattern_occurrences]
+        """Filter patterns by minimum occurrence, keeping every CRITICAL, FATAL or ERROR one."""
+        return [p for p in patterns if p.count >= self.config.min_pattern_occurrences or _is_severe(p.template)]
 
     def _calculate_priority(self, patterns: list[LogPattern]) -> list[LogPattern]:
-        """Calculate priority scores.
-
-        Severity boosts are checked highest-first so a template containing both
-        (e.g. "CRITICAL: write FAILED") scores as critical, not merely error.
-        """
+        """Set each pattern's priority score (see ``pattern_priority``)."""
         for pattern in patterns:
-            priority: float = pattern.count
-
-            template_upper = pattern.template.upper()
-            if "CRITICAL" in template_upper or "FATAL" in template_upper:
-                priority *= 200
-            elif "ERROR" in template_upper or "FAIL" in template_upper:
-                priority *= 100
-            elif "WARN" in template_upper:
-                priority *= 50
-
-            # Boost complex patterns
-            priority *= 1 + pattern.template.count("<*>") * 0.5
-            priority *= 1 + len(pattern.template.split()) * 0.1
-
-            pattern.priority = priority
+            pattern.priority = pattern_priority(pattern.template, pattern.count)
 
         return patterns
 
@@ -187,13 +212,29 @@ class FuzzyDeduplicator:
             return
 
         for i, line in enumerate(lines):
-            m = MinHash(num_perm=64)
-            for word in line.split():
-                m.update(word.encode("utf8"))
-
-            if not self.lsh.query(m):
-                self.lsh.insert(f"line_{i}", m)
+            if self._admit(i, line):
                 yield line
+
+    def deduplicate_pairs(self, pairs: Iterable[tuple[str, Occurrence]]) -> Iterator[tuple[str, Occurrence]]:
+        """``deduplicate_stream`` over (line, Occurrence) pairs, keeping each pair intact."""
+        if not self.enabled:
+            yield from pairs
+            return
+
+        for i, pair in enumerate(pairs):
+            if self._admit(i, pair[0]):
+                yield pair
+
+    def _admit(self, index: int, line: str) -> bool:
+        """True (and remembered) when no near-duplicate of ``line`` was admitted before."""
+        m = MinHash(num_perm=64)
+        for word in line.split():
+            m.update(word.encode("utf-8", "surrogatepass"))
+
+        if self.lsh.query(m):
+            return False
+        self.lsh.insert(f"line_{index}", m)
+        return True
 
     def deduplicate(self, lines: Iterable[str]) -> list[str]:
         """Remove near-duplicates, returning a list (eager wrapper of the stream)."""

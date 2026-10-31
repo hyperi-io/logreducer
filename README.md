@@ -1,7 +1,7 @@
 # LogReducer
 
 [![PyPI](https://img.shields.io/pypi/v/logreducer?logo=pypi)](https://pypi.org/project/logreducer/)
-[![Python Version](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/)
+[![Python Version](https://img.shields.io/badge/python-3.14%2B-blue)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
 
 Reduce gigabytes of logs to a small, representative sample - keeping the patterns and anomalies that matter and dropping the repetition that does not. Memory-safe streaming, temporal awareness, and ML-based anomaly detection.
@@ -24,7 +24,7 @@ Reduce gigabytes of logs to a small, representative sample - keeping the pattern
 
 ### As a CLI tool
 
-Install it as an isolated tool so its dependencies never clash with your other Python projects (needs Python 3.12+):
+Install it as an isolated tool so its dependencies never clash with your other Python projects (needs Python 3.14+):
 
 ```bash
 uv tool install logreducer     # recommended (uv)
@@ -89,7 +89,7 @@ reduced = reducer.reduce(lines)
 
 ## How it works
 
-Everything streams: lines flow through dedup and template mining as one generator pipeline, so the unique-line set is never materialised. Memory stays near-constant regardless of input size.
+Pattern mode streams: lines flow through dedup and template mining as one generator pipeline, so the unique-line set is never materialised and memory stays near-constant regardless of input size.
 
 ```mermaid
 flowchart LR
@@ -128,7 +128,7 @@ flowchart TD
 |------|-------------|----------|
 | `pattern` | Drain3 template mining | Structured / application logs (fastest) |
 | `anomaly` | Isolation Forest outlier detection | Security and error logs |
-| `temporal` | Time-aware pattern analysis | Time-series and monitoring logs |
+| `temporal` | One example per time window and template, most important first (`temporal_window_minutes`, capped by `max_patterns`) | Time-series and monitoring logs |
 | `hybrid` | Pattern + anomaly combined | Maximum coverage |
 
 | Level | Speed | Memory cap | Features |
@@ -224,10 +224,10 @@ logreducer --dsn postgresql://user@host/db --query "SELECT msg FROM logs" \
 
 ## Bounding memory
 
-The core streams, so pattern/temporal modes run in near-constant memory. The knobs:
+Pattern mode streams and runs in near-constant memory. Temporal mode holds the whole source in memory, and anomaly mode holds its unique lines. The knobs:
 
 - `max_memory_gb` - the overall cap (also sizes file read strategy and the watchdog). Presets: 0.5 / 1 / 2 GB by level; values above 70% of available RAM are clamped with a warning.
-- `max_clusters` - LRU-bound the Drain3 template store (unbounded by default).
+- `max_clusters` - LRU-bound the Drain3 template store (10,000 by default, `None` for unbounded). Mining time grows with the square of the number of templates a line is compared with, so a lower value also speeds up high-cardinality sources.
 - `anomaly_max_rows` - reservoir-cap the rows fed to anomaly detection (off by default; trades anomaly recall for a bounded matrix).
 
 ```python
@@ -314,6 +314,7 @@ reducer = LogReducer(
     anomaly_contamination=0.1,  # expected anomaly fraction
     temporal_window_minutes=60, # grouping window for temporal mode
     max_patterns=2000,          # cap on extracted patterns
+    min_pattern_occurrences=2,  # patterns seen fewer times are dropped, except CRITICAL/FATAL/ERROR ones
 )
 ```
 

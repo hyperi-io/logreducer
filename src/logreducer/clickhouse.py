@@ -23,6 +23,8 @@ import re
 from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any
 
+from .sampling import wrap_subquery
+
 if TYPE_CHECKING:
     from clickhouse_connect.driver.client import Client
 
@@ -97,7 +99,7 @@ class ClickHouseSource:
         self.parameters = parameters
         self.settings = settings
         self.sample = sample
-        self._query = f"{query} SAMPLE {float(sample)!r}" if sample is not None else query
+        self._query = f"{wrap_subquery(query)}SAMPLE {float(sample)!r}" if sample is not None else query
 
     @classmethod
     def from_table(

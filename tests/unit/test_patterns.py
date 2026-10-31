@@ -6,7 +6,9 @@ from unittest.mock import Mock, patch
 
 import pytest
 
+from logreducer import LogReducer
 from logreducer.config import BigDialConfig
+from logreducer.memory import BoundedDeduplicator
 from logreducer.patterns import FuzzyDeduplicator, LogPattern, PatternExtractor
 
 
@@ -331,3 +333,89 @@ class TestTypedMasking:
         assert len(patterns) == 1
         assert "<NUM>" in patterns[0].template
         assert "<HEX>" not in patterns[0].template
+
+
+ERROR_LINE = "ERROR disk write failed"
+INFO_LINE = "INFO worker started"
+ODD_LINE = "WARN one odd event"
+FATAL_LINE = "FATAL out of memory"
+CRITICAL_LINE = "CRITICAL replica lost quorum"
+
+REPEAT_CASES = [
+    pytest.param([ERROR_LINE] * 100, {ERROR_LINE: 100}, id="100-identical-errors"),
+    pytest.param([INFO_LINE] * 100, {INFO_LINE: 100}, id="100-identical-infos"),
+    pytest.param(
+        [ERROR_LINE] * 60 + [INFO_LINE] * 30 + [ODD_LINE],
+        {ERROR_LINE: 60, INFO_LINE: 30},
+        id="mixed-with-a-singleton",
+    ),
+    pytest.param([ODD_LINE], {}, id="a-warning-seen-once-is-still-dropped"),
+    pytest.param([INFO_LINE, ODD_LINE], {}, id="two-non-severe-lines-seen-once-each"),
+    pytest.param([FATAL_LINE], {FATAL_LINE: 1}, id="a-lone-fatal-is-kept"),
+    pytest.param([CRITICAL_LINE], {CRITICAL_LINE: 1}, id="a-lone-critical-is-kept"),
+    pytest.param([ERROR_LINE, INFO_LINE], {ERROR_LINE: 1}, id="a-lone-error-is-kept-and-a-lone-info-is-not"),
+]
+
+
+class TestRepeatsCountTowardsPatterns:
+    """Lines exact dedup drops still count towards the pattern their first sighting joined."""
+
+    @pytest.mark.parametrize(("lines", "expected"), REPEAT_CASES)
+    def test_pattern_counts_include_dropped_repeats(self, lines, expected):
+        extractor = PatternExtractor(BigDialConfig())
+        counted = BoundedDeduplicator(1000).deduplicate_counted(lines)
+
+        patterns = extractor.extract_counted_patterns(counted)
+
+        assert {p.examples[0]: p.count for p in patterns} == expected
+
+    @pytest.mark.parametrize("level", ["standard", "enhanced"])
+    @pytest.mark.parametrize(("lines", "expected"), REPEAT_CASES)
+    def test_reduce_keeps_repeated_lines_and_drops_singletons(self, level, lines, expected):
+        assert sorted(LogReducer(level=level).reduce(lines)) == sorted(expected)
+
+    def test_repeat_past_the_dedup_window_counts_as_a_new_sighting(self):
+        extractor = PatternExtractor(BigDialConfig())
+        lines = [ERROR_LINE, "filler a", "filler b", ERROR_LINE]
+        counted = BoundedDeduplicator(2).deduplicate_counted(lines)
+
+        patterns = extractor.extract_counted_patterns(counted)
+
+        assert {p.template: p.count for p in patterns}[ERROR_LINE] == 2
+
+
+def _spread_lines(count: int) -> list[str]:
+    """``count`` lines that share no tokens, spread over many tree leaves (cheap to mine)."""
+
+    def word(n: int) -> str:
+        letters = ""
+        while True:
+            n, rest = divmod(n, 26)
+            letters += chr(ord("a") + rest)
+            if n == 0:
+                return letters
+            n -= 1
+
+    lines = []
+    serial = 0
+    for length in range(2, 80):
+        for first in range(101):
+            for _ in range(2):
+                tokens = [f"lead{word(first)}"] + [word(serial + j) + "x" for j in range(length - 1)]
+                serial += length
+                lines.append(" ".join(tokens))
+                if len(lines) == count:
+                    return lines
+    raise AssertionError("not enough distinct leaves")
+
+
+class TestTemplateStoreIsBoundedByDefault:
+    def test_default_max_clusters(self):
+        assert BigDialConfig().max_clusters == 10_000
+
+    def test_default_config_evicts_beyond_the_bound(self):
+        extractor = PatternExtractor(BigDialConfig())
+
+        extractor.extract_patterns(_spread_lines(10_400))
+
+        assert len(extractor.miner.drain.clusters) == 10_000
