@@ -253,8 +253,8 @@ class TestLogReducerInternalMethods:
         # _process_pattern_mode iterates the source directly; a list is a valid
         # re-iterable source. Mock dedup + extract to control the pipeline.
         with (
-            patch.object(reducer.deduplicator, "deduplicate_lines") as mock_dedup,
-            patch.object(reducer.pattern_extractor, "extract_patterns") as mock_extract,
+            patch.object(reducer.deduplicator, "deduplicate_counted") as mock_dedup,
+            patch.object(reducer.pattern_extractor, "extract_counted_patterns") as mock_extract,
         ):
             # Setup mocks
             mock_dedup.return_value = ["line1", "line2"]  # Deduplicated
@@ -277,12 +277,12 @@ class TestLogReducerInternalMethods:
         reducer = LogReducer(level="enhanced", mode="pattern")
 
         with (
-            patch.object(reducer.deduplicator, "deduplicate_lines") as mock_dedup,
-            patch.object(reducer.fuzzy_dedup, "deduplicate_stream") as mock_fuzzy,
-            patch.object(reducer.pattern_extractor, "extract_patterns") as mock_extract,
+            patch.object(reducer.deduplicator, "deduplicate_counted") as mock_dedup,
+            patch.object(reducer.fuzzy_dedup, "deduplicate_pairs") as mock_fuzzy,
+            patch.object(reducer.pattern_extractor, "extract_counted_patterns") as mock_extract,
         ):
             # Setup mocks. Pattern mode now streams: fuzzy dedup is a generator
-            # filter (deduplicate_stream), fed the dedup output directly.
+            # filter (deduplicate_pairs), fed the dedup output directly.
             mock_dedup.return_value = ["line1", "line2", "line3"]
             mock_fuzzy.return_value = iter(["line1", "line2"])  # Fuzzy deduplicated stream
 

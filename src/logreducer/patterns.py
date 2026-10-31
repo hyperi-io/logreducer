@@ -5,6 +5,7 @@ from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from .memory import Occurrence
 from .template_mining import MaskingInstruction, TemplateMiner, TemplateMinerConfig
 
 if TYPE_CHECKING:
@@ -102,9 +103,18 @@ class PatternExtractor:
         generator - no need to materialise the whole line set. Memory is bounded
         by the number of clusters (see ``max_clusters``), not the line count.
         """
+        return self.extract_counted_patterns((line, None) for line in lines)
+
+    def extract_counted_patterns(self, pairs: Iterable[tuple[str, Occurrence | None]]) -> list[LogPattern]:
+        """Like ``extract_patterns``, for lines paired with their dedup ``Occurrence``.
+
+        Repeats that exact dedup drops after a line was kept still count towards
+        the pattern that line joined, so 100 identical errors make one pattern
+        with ``count == 100``.
+        """
         pattern_map: dict[int, LogPattern] = {}
 
-        for line in lines:
+        for line, occurrence in pairs:
             cluster = self.miner.add_log_message(line)
             pattern = pattern_map.get(cluster.cluster_id)
             if pattern is None:
@@ -112,6 +122,8 @@ class PatternExtractor:
                 pattern_map[cluster.cluster_id] = pattern
 
             pattern.count += 1
+            if occurrence is not None:
+                occurrence.target = pattern
 
             if len(pattern.examples) < self.config.examples_per_pattern:
                 pattern.examples.append(line)
@@ -187,13 +199,29 @@ class FuzzyDeduplicator:
             return
 
         for i, line in enumerate(lines):
-            m = MinHash(num_perm=64)
-            for word in line.split():
-                m.update(word.encode("utf-8", "surrogatepass"))
-
-            if not self.lsh.query(m):
-                self.lsh.insert(f"line_{i}", m)
+            if self._admit(i, line):
                 yield line
+
+    def deduplicate_pairs(self, pairs: Iterable[tuple[str, Occurrence]]) -> Iterator[tuple[str, Occurrence]]:
+        """``deduplicate_stream`` over (line, Occurrence) pairs, keeping each pair intact."""
+        if not self.enabled:
+            yield from pairs
+            return
+
+        for i, pair in enumerate(pairs):
+            if self._admit(i, pair[0]):
+                yield pair
+
+    def _admit(self, index: int, line: str) -> bool:
+        """True (and remembered) when no near-duplicate of ``line`` was admitted before."""
+        m = MinHash(num_perm=64)
+        for word in line.split():
+            m.update(word.encode("utf-8", "surrogatepass"))
+
+        if self.lsh.query(m):
+            return False
+        self.lsh.insert(f"line_{index}", m)
+        return True
 
     def deduplicate(self, lines: Iterable[str]) -> list[str]:
         """Remove near-duplicates, returning a list (eager wrapper of the stream)."""

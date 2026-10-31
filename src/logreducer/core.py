@@ -330,10 +330,10 @@ class LogReducer:
             # single generator pipeline, so there is no phase boundary to report.
             self.logger.info("Streaming pipeline: dedup -> fuzzy dedup -> pattern mining")
 
-        unique_stream = self.deduplicator.deduplicate_lines(source)
+        unique_stream = self.deduplicator.deduplicate_counted(source)
         if self.fuzzy_dedup:
-            unique_stream = self.fuzzy_dedup.deduplicate_stream(unique_stream)
-        patterns = self.pattern_extractor.extract_patterns(unique_stream)
+            unique_stream = self.fuzzy_dedup.deduplicate_pairs(unique_stream)
+        patterns = self.pattern_extractor.extract_counted_patterns(unique_stream)
 
         # Collect examples
         result = []

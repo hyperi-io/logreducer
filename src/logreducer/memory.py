@@ -5,7 +5,7 @@ import os
 import random
 from collections import deque
 from collections.abc import Iterable, Iterator
-from typing import Any
+from typing import Any, Protocol
 
 import psutil
 
@@ -190,6 +190,31 @@ class StreamingProcessor:
         yield from reservoir_sample(_lines(), 10000, random.Random(0))
 
 
+class _Counted(Protocol):
+    """Anything with a running ``count`` (a ``LogPattern``)."""
+
+    count: int
+
+
+class Occurrence:
+    """Ties a line that survived exact dedup to the pattern it was merged into.
+
+    Dedup drops later repeats of the line. Once a consumer sets ``target``, each
+    dropped repeat adds one to ``target.count``, so a line seen 100 times
+    counts 100 towards its pattern instead of 1.
+    """
+
+    __slots__ = ("target",)
+
+    def __init__(self) -> None:
+        self.target: _Counted | None = None
+
+    def repeat(self) -> None:
+        """Record one dropped repeat of the line."""
+        if self.target is not None:
+            self.target.count += 1
+
+
 class BoundedDeduplicator:
     """Memory-bounded exact deduplication (sliding-window semantics).
 
@@ -225,28 +250,45 @@ class BoundedDeduplicator:
 
         self.seen_hashes: deque[str] = deque(maxlen=max_cache_size)
         self.seen_set: set[str] = set()
+        self._occurrences: dict[str, Occurrence] = {}
         self.stats = {"total": 0, "unique": 0, "duplicates": 0}
 
     def is_duplicate(self, line: str) -> bool:
         """Check if line is duplicate."""
+        return self._observe(line)[0]
+
+    def _observe(self, line: str) -> tuple[bool, Occurrence]:
+        """Record ``line``, returning (is_duplicate, the Occurrence of its first sighting)."""
         self.stats["total"] += 1
         line_hash = self.hash_func(line)
 
         if line_hash in self.seen_set:
             self.stats["duplicates"] += 1
-            return True
+            occurrence = self._occurrences[line_hash]
+            occurrence.repeat()
+            return True, occurrence
 
         if len(self.seen_hashes) >= self.max_cache_size:
             old_hash = self.seen_hashes[0]
             self.seen_set.discard(old_hash)
+            self._occurrences.pop(old_hash, None)
 
+        occurrence = Occurrence()
         self.seen_hashes.append(line_hash)
         self.seen_set.add(line_hash)
+        self._occurrences[line_hash] = occurrence
         self.stats["unique"] += 1
-        return False
+        return False, occurrence
 
     def deduplicate_lines(self, lines: Iterable[str]) -> Iterator[str]:
         """Deduplicate a stream of lines."""
         for line in lines:
             if not self.is_duplicate(line):
                 yield line
+
+    def deduplicate_counted(self, lines: Iterable[str]) -> Iterator[tuple[str, Occurrence]]:
+        """Deduplicate a stream, pairing each kept line with its ``Occurrence``."""
+        for line in lines:
+            duplicate, occurrence = self._observe(line)
+            if not duplicate:
+                yield line, occurrence
