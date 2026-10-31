@@ -34,6 +34,14 @@ template counts from a handful to well over a thousand.
 
 `template_mining_golden.json.gz` is the template-mining output drain3 0.9.11 produced on the first 3000 lines of each corpus, under five miner configurations. `tests/integration/test_template_equivalence.py` holds `logreducer.template_mining` to it. Rebuilding a corpus invalidates that corpus's entries.
 
+`template_mining_quiet_golden.json.gz` is what the same drain3 produced over each corpus's quiet lines alone (lines naming no CRITICAL, FATAL or ERROR level), which is all the reducer mines. Rebuild it from the repository root, in an isolated environment, because drain3 is a frozen reference and not a dependency:
+
+```bash
+uvx --python 3.14 --with drain3==0.9.11 python -I tests/testdata/build_quiet_golden.py
+```
+
+The script first replays every corpus over all lines and exits if drain3 does not reproduce `template_mining_golden.json.gz`.
+
 ## PII cleansing
 
 `build.py` rewrites IPs (-> `10.x`), IPv6 (-> `2001:db8::`), emails

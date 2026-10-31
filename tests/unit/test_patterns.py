@@ -9,7 +9,7 @@ import pytest
 from logreducer import LogReducer
 from logreducer.config import BigDialConfig
 from logreducer.memory import BoundedDeduplicator
-from logreducer.patterns import FuzzyDeduplicator, LogPattern, PatternExtractor
+from logreducer.patterns import FuzzyDeduplicator, LogPattern, PatternExtractor, SevereShapes
 
 
 class TestLogPattern:
@@ -419,3 +419,37 @@ class TestTemplateStoreIsBoundedByDefault:
         extractor.extract_patterns(_spread_lines(10_400))
 
         assert len(extractor.miner.drain.clusters) == 10_000
+
+
+SHAPE_CASES = [
+    pytest.param(
+        ["{ts} ERROR disk full", "{ts2} ERROR disk full"], 1, ["2026-11-01T10:00:07Z", "2026-11-01T11:42:59Z"], id="z"
+    ),
+    pytest.param(
+        ["{ts} ERROR disk full", "{ts2} ERROR disk full"],
+        1,
+        ["2026-11-01 10:00:07,123", "2026-11-01 11:42:59,456"],
+        id="space-comma-fraction",
+    ),
+    pytest.param(
+        ["{ts} ERROR disk full", "{ts2} ERROR disk full"],
+        1,
+        ["2026-11-01T10:00:07+11:00", "2026-11-01T11:42:59-0500"],
+        id="offsets",
+    ),
+    pytest.param(["ERROR E1 failed", "ERROR E2 failed"], 2, ["", ""], id="digits-inside-an-identifier"),
+    pytest.param(["ERROR job 17 failed", "ERROR job 9001 failed"], 1, ["", ""], id="standalone-numbers"),
+    pytest.param(["INFO disk full", "WARN disk full"], 0, ["", ""], id="not-severe"),
+]
+
+
+@pytest.mark.parametrize(("templates", "shapes", "stamps"), SHAPE_CASES)
+def test_severe_shapes(templates, shapes, stamps):
+    """Stamps, numbers and addresses do not make a shape, identifiers with digits do."""
+    lines = [t.format(ts=stamps[0], ts2=stamps[1]) for t in templates]
+
+    tap = SevereShapes()
+    for line in lines:
+        tap.add(line)
+
+    assert len(tap.lines) == shapes

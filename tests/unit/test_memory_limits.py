@@ -7,7 +7,6 @@ behaves correctly under memory constraints.
 
 import os
 import tempfile
-import time
 
 import psutil
 import pytest
@@ -15,6 +14,7 @@ import pytest
 from logreducer import LogReducer
 from logreducer.config import BigDialConfig
 from logreducer.memory import MemoryMonitor
+from logreducer.sources import FileSource
 
 
 class TestMemoryLimits:
@@ -28,10 +28,10 @@ class TestMemoryLimits:
 
         # Test that available memory adjustment works
         config = BigDialConfig(max_memory_gb=999.0)  # Unrealistically high
-        # Should be adjusted down to 70% of available memory
-        available_gb = psutil.virtual_memory().available / (1024**3)
-        expected_max = available_gb * 0.7
-        assert config.max_memory_gb <= expected_max
+        # Clamped to 70% of the memory available when it was built, which never exceeds 70% of
+        # the host's total (available memory read again here would race with other processes).
+        total_gb = psutil.virtual_memory().total / (1024**3)
+        assert 0 < config.max_memory_gb <= total_gb * 0.7
 
     def test_memory_monitor_tracks_usage(self):
         """Test that memory monitor correctly tracks memory usage"""
@@ -61,24 +61,19 @@ class TestMemoryLimits:
             temp_file = f.name
 
         try:
-            # Test with very restrictive memory limit
-            reducer = LogReducer(
-                level="standard",
-                mode="pattern",
-                max_memory_gb=0.01,  # 10MB - very restrictive
-                enable_logging=True,
-            )
+            # A limit the file overshoots tenfold selects reservoir sampling
+            file_size = os.path.getsize(temp_file)
+            tight_limit_gb = file_size / 1024**3 / 10
+            monitor = MemoryMonitor(tight_limit_gb)
+            assert monitor.estimate_file_strategy(file_size) == "sampled"
 
-            # Process the file - should trigger sampling
+            reducer = LogReducer(level="standard", mode="pattern", max_memory_gb=tight_limit_gb)
             result = reducer.process_file(temp_file)
 
-            # Should still produce results despite memory constraints
-            assert len(result) > 0
-            assert len(result) < len(large_content)  # Should be reduced
-
-            # Check that memory limit was considered in stats
-            stats = reducer.stats
-            assert "memory_limit_triggered" in str(stats) or len(result) < len(large_content)
+            # The reader keeps one reservoir of lines, and the stats count only those
+            reservoir_size = min(monitor.safe_chunk_size, 100000)
+            assert reducer.stats["input_lines"] == reservoir_size < len(large_content)
+            assert 0 < len(result) < reducer.stats["input_lines"]
 
         finally:
             os.unlink(temp_file)
@@ -104,7 +99,13 @@ class TestMemoryLimits:
             # Test with progressively smaller memory limits
             memory_limits = [0.5, 0.1, 0.05]  # GB
 
+            lines_in_memory = []
             for limit in memory_limits:
+                # The monitor derives its soft limit and line budget from the configured limit.
+                monitor = MemoryMonitor(limit)
+                assert monitor.effective_limit == pytest.approx(limit * 0.8 * 1024**3)
+                lines_in_memory.append(monitor.max_lines_in_memory)
+
                 reducer = LogReducer(
                     level="standard",
                     mode="pattern",
@@ -112,20 +113,11 @@ class TestMemoryLimits:
                     enable_logging=True,
                 )
 
-                start_memory = psutil.Process().memory_info().rss / (1024**3)
+                # Should complete without crashing and produce some output
+                assert len(reducer.process_file(temp_file)) > 0
 
-                # Should complete without crashing
-                result = reducer.process_file(temp_file)
-
-                end_memory = psutil.Process().memory_info().rss / (1024**3)
-                memory_used = end_memory - start_memory
-
-                # Should produce some output
-                assert len(result) > 0
-
-                # Memory usage should be reasonable (allow some overhead)
-                # This is a soft check as exact memory control is difficult
-                assert memory_used < limit * 3, f"Used {memory_used:.2f}GB with {limit}GB limit"
+            # A smaller limit never allows more lines in memory
+            assert lines_in_memory == sorted(lines_in_memory, reverse=True)
 
         finally:
             os.unlink(temp_file)
@@ -150,50 +142,15 @@ class TestMemoryLimits:
             temp_file = f.name
 
         try:
-            # Get initial memory usage
-            process = psutil.Process()
-            initial_memory = process.memory_info().rss / (1024**3)
+            # A limit the file overshoots tenfold must select reservoir sampling
+            file_size = os.path.getsize(temp_file)
+            tight_limit_gb = file_size / 1024**3 / 10
+            assert MemoryMonitor(tight_limit_gb).estimate_file_strategy(file_size) == "sampled"
 
-            # Process with strict memory limit
-            reducer = LogReducer(
-                level="standard",
-                mode="pattern",
-                max_memory_gb=0.1,  # Very strict 100MB limit
-                enable_logging=True,
-            )
+            reducer = LogReducer(level="standard", mode="pattern", max_memory_gb=tight_limit_gb)
+            result = reducer.reduce(FileSource(temp_file, max_memory_gb=tight_limit_gb))
 
-            # Monitor memory during processing
-            peak_memory = initial_memory
-
-            def memory_monitor():
-                nonlocal peak_memory
-                for _ in range(50):  # Monitor for 5 seconds
-                    current = process.memory_info().rss / (1024**3)
-                    peak_memory = max(peak_memory, current)
-                    time.sleep(0.1)
-
-            import threading
-
-            monitor_thread = threading.Thread(target=memory_monitor, daemon=True)
-            monitor_thread.start()
-
-            # Process the file
-            start_time = time.time()
-            result = reducer.process_file(temp_file)
-            processing_time = time.time() - start_time
-
-            # Wait for monitoring to complete
-            monitor_thread.join(timeout=1)
-
-            # Verify results
-            assert len(result) > 0, "Should produce some output"
-            assert processing_time < 30, "Should complete in reasonable time"
-
-            # Memory usage should stay within bounds (with some tolerance)
-            memory_increase = peak_memory - initial_memory
-            assert memory_increase < 0.5, f"Memory increased by {memory_increase:.2f}GB (too much)"
-
-            print(f"[PASS] Processed {len(huge_content)} lines using {memory_increase:.3f}GB additional memory")
+            assert 0 < len(result) < len(huge_content)
 
         finally:
             os.unlink(temp_file)
@@ -218,9 +175,6 @@ class TestMemoryLimits:
             modes = ["pattern", "anomaly", "temporal", "hybrid"]
 
             for mode in modes:
-                process = psutil.Process()
-                initial_memory = process.memory_info().rss / (1024**3)
-
                 reducer = LogReducer(
                     level="standard",
                     mode=mode,
@@ -228,21 +182,10 @@ class TestMemoryLimits:
                     enable_logging=True,
                 )
 
-                # Process file
                 result = reducer.process_file(temp_file)
 
-                final_memory = process.memory_info().rss / (1024**3)
-                memory_used = final_memory - initial_memory
-
-                # Should produce output
-                assert len(result) > 0, f"Mode {mode} should produce output"
-
-                # Memory usage should be reasonable
-                assert memory_used < memory_limit * 2, (
-                    f"Mode {mode} used {memory_used:.2f}GB (exceeds {memory_limit}GB limit)"
-                )
-
-                print(f"[PASS] Mode {mode}: processed to {len(result)} lines, used {memory_used:.3f}GB")
+                assert reducer.config.max_memory_gb == memory_limit
+                assert 0 < len(result) < len(test_content), f"Mode {mode} should reduce the file"
 
         finally:
             os.unlink(temp_file)

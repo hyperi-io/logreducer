@@ -5,8 +5,6 @@ helpers, plus the never-assigned backstop (which deliberately points at a dead
 address), so they run in the normal (non-integration) suite.
 """
 
-import time
-
 import pytest
 
 from logreducer.kafka import (
@@ -64,7 +62,8 @@ def test_kafka_source_raises_when_never_assigned():
     Regression: empty_polls only advanced once partitions were assigned, so a
     dead broker (assignment() empty forever) left the read looping without end.
     Points at a closed local port and asserts the assignment_timeout backstop
-    raises promptly.
+    raises, reporting the configured value. The 1s backstop in the code under
+    test is what ends the read, so there is no elapsed-time assertion.
     """
     pytest.importorskip("confluent_kafka")
     source = KafkaSource(
@@ -74,12 +73,8 @@ def test_kafka_source_raises_when_never_assigned():
         poll_timeout=0.2,
         assignment_timeout=1.0,
     )
-    start = time.monotonic()
-    with pytest.raises(KafkaConsumerError, match="no partition assignment"):
+    with pytest.raises(KafkaConsumerError, match=r"no partition assignment within 1s"):
         list(source)
-    # Fails fast: the 1s backstop plus a poll or two, well under the librdkafka
-    # session timeout - proof it is the backstop firing, not a hang.
-    assert time.monotonic() - start < 15.0
 
 
 def test_kafka_sink_raises_when_nothing_is_delivered():
