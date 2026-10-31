@@ -3,6 +3,15 @@
 Rendered by CI and committed back at the end of a release -- do not edit by
 hand. Release notes also appear on the GitHub Releases page, one per tag.
 
+## [3.5.4](https://github.com/hyperi-io/logreducer/compare/v3.5.3...v3.5.4) (2026-10-31)
+
+### Bug Fixes
+
+* declare the repo classification as oss ([#18](https://github.com/hyperi-io/logreducer/issues/18)) ([719a472](https://github.com/hyperi-io/logreducer/commit/719a4728a0068af6501223a2a566947c091a804b))
+* run tests in parallel and clear the test warnings ([#19](https://github.com/hyperi-io/logreducer/issues/19)) ([77e6f27](https://github.com/hyperi-io/logreducer/commit/77e6f27f773d2e2e412c619dce502fb9ce381e2a))
+* **security:** update certifi to 2026.10.19 for GHSA-6q48-6c7w-9gw2 ([a7f200b](https://github.com/hyperi-io/logreducer/commit/a7f200bb9dff705b9b5f9cf8d5c9771c652f5f7b))
+* stop dropping lone errors and repeated lines, and bound the Drain3 template store ([#20](https://github.com/hyperi-io/logreducer/issues/20)) ([a6e8114](https://github.com/hyperi-io/logreducer/commit/a6e8114464c0220a7577cc973fcf717c5d67a2fd))
+
 ## [3.5.3](https://github.com/hyperi-io/logreducer/compare/v3.5.2...v3.5.3) (2026-10-14)
 
 ### Bug Fixes
