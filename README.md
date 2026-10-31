@@ -4,21 +4,19 @@
 [![Python Version](https://img.shields.io/badge/python-3.14%2B-blue)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
 
-Reduce gigabytes of logs to a small, representative sample - keeping the patterns and anomalies that matter and dropping the repetition that does not. Memory-safe streaming, temporal awareness, and ML-based anomaly detection.
+Reduce gigabytes of logs to a small, representative sample. By default you get a couple of examples of each recurring pattern, and the repeats are dropped. In a DFE deployment dfe-engine's sampler uses it for the smart and anomaly samples of a source's data.
 
-**LogReducer is two tools in one package:**
+It ships as a CLI and as a Python library with an IO-agnostic core.
 
-- **A CLI.** `logreducer app.log` reduces a file - or a SQL, ClickHouse, or Kafka source - straight from the shell. No code to write.
-- **A library with an IO-agnostic core.** The engine has zero IO dependencies and reduces any re-iterable stream of `str` lines (a `Source`). Embed it in your own pipeline; the engine never manages the connection.
+## What it gives you
 
-## Features
-
-- **Memory-safe streaming**: near-constant memory on multi-GB inputs; low, container-friendly defaults
-- **Four reduction modes**: pattern (Drain3), anomaly (Isolation Forest), temporal, and hybrid
-- **IO-agnostic core**: reduce a file, a `list[str]`, a database cursor, or a Kafka stream through one `Source` seam
-- **Optional adapters**: SQL (SQLAlchemy), ClickHouse (clickhouse-connect), Kafka (confluent-kafka) - install only what you use
-- **Engine-side sampling**: seeded, dialect-aware SQL sampling and native `TABLESAMPLE` for cheap reduction of huge tables
-- **Embeddable**: injection seams for a host application's own config cascade and logging standard
+- A `logreducer` command that reduces a file, a SQL or ClickHouse query, or a Kafka topic, straight from the shell.
+- Pattern mode streams through a bounded dedup cache and template store, so memory grows with the number of distinct templates, not with the line count.
+- Four modes: pattern (Drain3 template mining), anomaly (Isolation Forest), temporal (one example per template per time window) and hybrid.
+- A core with no IO dependencies: anything re-iterable that yields `str` lines is a source, and anything with `write(lines)` is a sink.
+- Seeded SQL sampling and ClickHouse `SAMPLE` for tables too big to scan in full.
+- Adapters for SQL, ClickHouse and Kafka as extras, so you install only the one you use.
+- Injection points for a host application's own config cascade and logging.
 
 ## Installation
 
@@ -89,7 +87,7 @@ reduced = reducer.reduce(lines)
 
 ## How it works
 
-Pattern mode streams: lines flow through dedup and template mining as one generator pipeline, so the unique-line set is never materialised and memory stays near-constant regardless of input size.
+Pattern mode streams: lines flow through dedup and template mining as one generator pipeline, so the unique-line set is never materialised. Memory grows with the number of distinct templates, since a result is kept for every template seen, not with the line count.
 
 ```mermaid
 flowchart LR
@@ -224,7 +222,7 @@ logreducer --dsn postgresql://user@host/db --query "SELECT msg FROM logs" \
 
 ## Bounding memory
 
-Pattern mode streams and runs in near-constant memory. Temporal mode holds the whole source in memory, and anomaly mode holds its unique lines. The knobs:
+Pattern mode streams, and its memory grows with distinct templates, not lines. Temporal mode holds the whole source in memory, and anomaly mode holds its unique lines. The knobs:
 
 - `max_memory_gb` - the overall cap (also sizes file read strategy and the watchdog). Presets: 0.5 / 1 / 2 GB by level; values above 70% of available RAM are clamped with a warning.
 - `max_clusters` - LRU-bound the Drain3 template store (10,000 by default, `None` for unbounded). Mining time grows with the square of the number of templates a line is compared with, so a lower value also speeds up high-cardinality sources.
@@ -421,4 +419,4 @@ expect that edge to become an ordinary pinned dependency.
 
 ## Issues
 
-Open bugs: [this repo](https://github.com/hyperi-io/logreducer/issues?q=is%3Aopen+is%3Aissue+type%3ABug+-label%3Abacklog+-label%3Anext-minor) | [whole DFE suite](https://github.com/search?type=issues&q=is%3Aopen+is%3Aissue+type%3ABug+-label%3Abacklog+-label%3Anext-minor+repo%3Ahyperi-io%2Fdfe-infra+repo%3Ahyperi-io%2Fdfe-docker+repo%3Ahyperi-io%2Fdfe-deploy+repo%3Ahyperi-io%2Fdfe-engine+repo%3Ahyperi-io%2Fdfe-loader+repo%3Ahyperi-io%2Fdfe-receiver+repo%3Ahyperi-io%2Fdfe-fetcher+repo%3Ahyperi-io%2Fdfe-archiver+repo%3Ahyperi-io%2Fdfe-transform-vrl+repo%3Ahyperi-io%2Fdfe-transform-vector+repo%3Ahyperi-io%2Fdfe-transform-elastic+repo%3Ahyperi-io%2Fdfe-ui+repo%3Ahyperi-io%2Fdfe-hyperdx+repo%3Ahyperi-io%2Fscalo-rs+repo%3Ahyperi-io%2Fscalo-py+repo%3Ahyperi-io%2Flogreducer+repo%3Ahyperi-io%2Fdfe-schemas+repo%3Ahyperi-io%2Fvector-vrl+repo%3Ahyperi-io%2Fculvert+repo%3Ahyperi-io%2Fclickhouse-dfe+repo%3Ahyperi-io%2Ffactbook-rs)
+Open bugs: [this repo](https://github.com/hyperi-io/logreducer/issues?q=is%3Aopen+is%3Aissue+type%3ABug+-label%3Abacklog+-label%3Anext-minor) | [whole DFE suite](https://github.com/search?type=issues&q=is%3Aopen+is%3Aissue+type%3ABug+-label%3Abacklog+-label%3Anext-minor+repo%3Ahyperi-io%2Fdfe-infra+repo%3Ahyperi-io%2Fdfe-docker+repo%3Ahyperi-io%2Fdfe-deploy+repo%3Ahyperi-io%2Fdfe-engine+repo%3Ahyperi-io%2Fdfe-loader+repo%3Ahyperi-io%2Fdfe-receiver+repo%3Ahyperi-io%2Fdfe-fetcher+repo%3Ahyperi-io%2Fdfe-archiver+repo%3Ahyperi-io%2Fdfe-transform-vrl+repo%3Ahyperi-io%2Fdfe-transform-vector+repo%3Ahyperi-io%2Fdfe-transform-elastic+repo%3Ahyperi-io%2Fdfe-ui+repo%3Ahyperi-io%2Fdfe-hyperdx+repo%3Ahyperi-io%2Fscalo-rs+repo%3Ahyperi-io%2Fscalo-py+repo%3Ahyperi-io%2Flogreducer+repo%3Ahyperi-io%2Fdfe-schemas+repo%3Ahyperi-io%2Fvector-vrl+repo%3Ahyperi-io%2Fculvert+repo%3Ahyperi-io%2Fdfe-clickhouse-rs+repo%3Ahyperi-io%2Ffactbook-rs)
