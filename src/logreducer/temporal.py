@@ -104,39 +104,34 @@ class TemporalProcessor:
                 window_key = int(epoch_seconds // (self.window_minutes * 60))
                 windows[window_key].append(entry)
 
-        # Process each window
+        # One pattern per template within each window.
         for window_key, window_entries in windows.items():
             if window_key not in self.miners_by_window:
                 self.miners_by_window[window_key] = TemplateMiner()
 
-            miner = self.miners_by_window[window_key]
-            clusters = [miner.add_log_message(entry.raw_line) for entry in window_entries]
-
-            # Templates are read once the window is fed, after later lines have widened their slots.
-            for entry, cluster in zip(window_entries, clusters, strict=True):
-                patterns.append(
-                    {
-                        "template": cluster.get_template(),
-                        "window": window_key,
-                        "count": 1,
-                        "example": entry.raw_line,
-                    }
-                )
+            for pattern in self._summarise(self.miners_by_window[window_key], window_entries):
+                patterns.append({**pattern, "window": window_key})
 
         return patterns
 
     def _extract_timeless_patterns(self, entries: list[LogEntry]) -> list[dict]:
         """Extract patterns without timestamps."""
-        miner = TemplateMiner()
-        clusters = [miner.add_log_message(entry.raw_line) for entry in entries]
+        return self._summarise(TemplateMiner(), entries)
 
-        # Templates are read once every entry is fed, after later lines have widened their slots.
+    @staticmethod
+    def _summarise(miner: TemplateMiner, entries: list[LogEntry]) -> list[dict]:
+        """One dict per template: its final template, how many entries share it, and the first of them."""
+        by_cluster: dict[int, dict] = {}
+        clusters = {}
+        for entry in entries:
+            cluster = miner.add_log_message(entry.raw_line)
+            clusters[cluster.cluster_id] = cluster
+            summary = by_cluster.setdefault(cluster.cluster_id, {"count": 0, "example": entry.raw_line})
+            summary["count"] += 1
+
+        # Templates are read once the feed ends, after later lines have widened their slots.
         return [
-            {
-                "template": cluster.get_template(),
-                "example": entry.raw_line,
-            }
-            for entry, cluster in zip(entries, clusters, strict=True)
+            {"template": clusters[cluster_id].get_template(), **summary} for cluster_id, summary in by_cluster.items()
         ]
 
     def _analyze_distribution(self, entries: list[LogEntry]) -> dict:

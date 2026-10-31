@@ -74,7 +74,7 @@ time grows with the square of the template count when lines share no tokens.
 Measured on 16,000 lines that share nothing, 86 s unbounded and 4.6 s with
 `max_clusters=500`. Set `max_clusters` for high-cardinality sources.
 
-Temporal mode does not stream. It reads every line and a parsed entry per line
+Temporal mode returns one example per time window and template, ranked by severity and count, and does not stream. It reads every line and a parsed entry per line
 into memory before grouping, so it ignores `max_memory_gb`. Measured on an 80 MB
 file, 832 MB peak against 156 MB for pattern mode.
 

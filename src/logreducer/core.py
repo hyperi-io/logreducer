@@ -14,7 +14,7 @@ from .anomaly import AnomalyDetector
 from .config import BigDialConfig, OutputFormat, ProcessingLevel, ProcessingMode, get_preset_config, validate_config
 from .logging_config import get_logger, setup_logging
 from .memory import BoundedDeduplicator, MemoryMonitor
-from .patterns import FuzzyDeduplicator, PatternExtractor
+from .patterns import FuzzyDeduplicator, PatternExtractor, pattern_priority
 from .sampling import reservoir_sample
 from .sinks import Sink
 from .sources import FileSource, Source
@@ -398,15 +398,12 @@ class LogReducer:
             self.logger.info("Phase 2/2: Temporal processing")
         temporal_results = self.temporal_processor.process_temporal(lines)
 
-        # Collect examples from temporal patterns
-        result = []
-        for pattern in temporal_results.get("temporal_patterns", [])[: self.config.max_patterns]:
-            if "example" in pattern:
-                result.append(pattern["example"])
+        # One example per (window, template), the most important first.
+        def rank(patterns: list[dict]) -> list[dict]:
+            return sorted(patterns, key=lambda p: pattern_priority(p["template"], p["count"]), reverse=True)
 
-        for pattern in temporal_results.get("timeless_patterns", [])[:100]:
-            if "example" in pattern:
-                result.append(pattern["example"])
+        result = [p["example"] for p in rank(temporal_results["temporal_patterns"])[: self.config.max_patterns]]
+        result.extend(p["example"] for p in rank(temporal_results["timeless_patterns"])[:100])
 
         return result
 

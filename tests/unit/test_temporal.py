@@ -7,6 +7,7 @@ from datetime import datetime
 
 import pytest
 
+from logreducer import LogReducer
 from logreducer.temporal import LogEntry, TemporalProcessor, TimestampParser
 
 
@@ -185,11 +186,12 @@ class TestTemporalProcessor:
         assert len(result["temporal_patterns"]) == 0
 
     def test_timeless_entries_carry_the_final_template(self):
-        """Every entry of one cluster reports the template its window ends on."""
+        """A cluster reports the template its feed ends on, with its count and first line."""
         processor = TemporalProcessor()
         result = processor.process_temporal(["user alice logged in", "user bob logged in"])
-        templates = [p["template"] for p in result["timeless_patterns"]]
-        assert templates == ["user <*> logged in", "user <*> logged in"]
+        assert result["timeless_patterns"] == [
+            {"template": "user <*> logged in", "count": 2, "example": "user alice logged in"}
+        ]
 
     def test_timed_entries_carry_the_final_template(self):
         """The first entry of a window is not left with its pre-widening template."""
@@ -211,8 +213,9 @@ class TestBoundaryInputs:
     def test_sentinel_timestamps_do_not_crash(self, stamp):
         result = TemporalProcessor().process_temporal([f"{stamp} ERROR sentinel row {i}" for i in range(3)])
 
-        assert len(result["temporal_patterns"]) == 3
-        assert len({p["window"] for p in result["temporal_patterns"]}) == 1
+        assert [(p["count"], p["window"]) for p in result["temporal_patterns"]] == [
+            (3, result["temporal_patterns"][0]["window"])
+        ]
 
     def test_window_is_independent_of_local_timezone(self, monkeypatch):
         # 01:30 does not exist in London on 2024-03-31 (clocks jump to 02:00).
@@ -231,3 +234,54 @@ class TestBoundaryInputs:
     def test_non_positive_window_rejected(self, minutes):
         with pytest.raises(ValueError, match="window_minutes"):
             TemporalProcessor(window_minutes=minutes)
+
+
+TEMPLATES = ["user %d logged in", "ERROR db timeout after %d ms", "cache miss for key %d"]
+
+
+def _timed_lines(templates: int, windows: int, per_cell: int = 100) -> list[str]:
+    """``per_cell`` lines of each template in each hourly window, interleaved."""
+    return [
+        f"2026-01-01 {10 + hour}:{i % 60:02d}:{i % 60:02d} " + TEMPLATES[t] % (hour * 1000 + i)
+        for hour in range(windows)
+        for i in range(per_cell)
+        for t in range(templates)
+    ]
+
+
+CLUSTER_CASES = [
+    pytest.param(1, 1, id="one-template-one-window"),
+    pytest.param(3, 1, id="three-templates-one-window"),
+    pytest.param(1, 3, id="one-template-three-windows"),
+    pytest.param(3, 3, id="three-templates-three-windows"),
+]
+
+
+class TestOnePatternPerCluster:
+    """Output is one example per (window, template), not the head of the file."""
+
+    @pytest.mark.parametrize(("templates", "windows"), CLUSTER_CASES)
+    def test_one_pattern_per_window_and_template(self, templates, windows):
+        result = TemporalProcessor().process_temporal(_timed_lines(templates, windows))
+
+        patterns = result["temporal_patterns"]
+        assert len(patterns) == templates * windows
+        assert {p["count"] for p in patterns} == {100}
+        assert len({p["window"] for p in patterns}) == windows
+
+    @pytest.mark.parametrize(("templates", "windows"), CLUSTER_CASES)
+    def test_reduce_reaches_the_last_window(self, templates, windows):
+        lines = _timed_lines(templates, windows)
+
+        reduced = LogReducer(mode="temporal").reduce(lines)
+
+        assert len(reduced) == templates * windows
+        assert any(line.startswith(f"2026-01-01 {10 + windows - 1}:") for line in reduced)
+
+    def test_most_important_cluster_survives_the_cap(self):
+        lines = _timed_lines(3, 3)
+
+        reduced = LogReducer(mode="temporal", max_patterns=2).reduce(lines)
+
+        assert len(reduced) == 2
+        assert all("ERROR" in line for line in reduced)

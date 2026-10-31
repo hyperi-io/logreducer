@@ -128,7 +128,7 @@ flowchart TD
 |------|-------------|----------|
 | `pattern` | Drain3 template mining | Structured / application logs (fastest) |
 | `anomaly` | Isolation Forest outlier detection | Security and error logs |
-| `temporal` | Time-aware pattern analysis | Time-series and monitoring logs |
+| `temporal` | One example per time window and template, most important first (`temporal_window_minutes`, capped by `max_patterns`) | Time-series and monitoring logs |
 | `hybrid` | Pattern + anomaly combined | Maximum coverage |
 
 | Level | Speed | Memory cap | Features |

@@ -83,6 +83,28 @@ def _is_severe(template: str) -> bool:
     return any(level in upper for level in _ALWAYS_KEPT_LEVELS)
 
 
+def pattern_priority(template: str, count: int) -> float:
+    """Rank score for a template seen ``count`` times.
+
+    Severity boosts are checked highest-first so a template containing both
+    (e.g. "CRITICAL: write FAILED") scores as critical, not merely error.
+    """
+    priority: float = count
+
+    template_upper = template.upper()
+    if "CRITICAL" in template_upper or "FATAL" in template_upper:
+        priority *= 200
+    elif "ERROR" in template_upper or "FAIL" in template_upper:
+        priority *= 100
+    elif "WARN" in template_upper:
+        priority *= 50
+
+    # Boost complex patterns
+    priority *= 1 + template.count("<*>") * 0.5
+    priority *= 1 + len(template.split()) * 0.1
+    return priority
+
+
 class PatternExtractor:
     """Extract patterns using the online template miner (see template_mining)."""
 
@@ -159,27 +181,9 @@ class PatternExtractor:
         return [p for p in patterns if p.count >= self.config.min_pattern_occurrences or _is_severe(p.template)]
 
     def _calculate_priority(self, patterns: list[LogPattern]) -> list[LogPattern]:
-        """Calculate priority scores.
-
-        Severity boosts are checked highest-first so a template containing both
-        (e.g. "CRITICAL: write FAILED") scores as critical, not merely error.
-        """
+        """Set each pattern's priority score (see ``pattern_priority``)."""
         for pattern in patterns:
-            priority: float = pattern.count
-
-            template_upper = pattern.template.upper()
-            if "CRITICAL" in template_upper or "FATAL" in template_upper:
-                priority *= 200
-            elif "ERROR" in template_upper or "FAIL" in template_upper:
-                priority *= 100
-            elif "WARN" in template_upper:
-                priority *= 50
-
-            # Boost complex patterns
-            priority *= 1 + pattern.template.count("<*>") * 0.5
-            priority *= 1 + len(pattern.template.split()) * 0.1
-
-            pattern.priority = priority
+            pattern.priority = pattern_priority(pattern.template, pattern.count)
 
         return patterns
 
