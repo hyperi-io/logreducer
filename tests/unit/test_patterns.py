@@ -338,6 +338,8 @@ class TestTypedMasking:
 ERROR_LINE = "ERROR disk write failed"
 INFO_LINE = "INFO worker started"
 ODD_LINE = "WARN one odd event"
+FATAL_LINE = "FATAL out of memory"
+CRITICAL_LINE = "CRITICAL replica lost quorum"
 
 REPEAT_CASES = [
     pytest.param([ERROR_LINE] * 100, {ERROR_LINE: 100}, id="100-identical-errors"),
@@ -347,8 +349,11 @@ REPEAT_CASES = [
         {ERROR_LINE: 60, INFO_LINE: 30},
         id="mixed-with-a-singleton",
     ),
-    pytest.param([ODD_LINE], {}, id="a-line-seen-once-is-still-dropped"),
-    pytest.param([ERROR_LINE, INFO_LINE], {}, id="two-lines-seen-once-each"),
+    pytest.param([ODD_LINE], {}, id="a-warning-seen-once-is-still-dropped"),
+    pytest.param([INFO_LINE, ODD_LINE], {}, id="two-non-severe-lines-seen-once-each"),
+    pytest.param([FATAL_LINE], {FATAL_LINE: 1}, id="a-lone-fatal-is-kept"),
+    pytest.param([CRITICAL_LINE], {CRITICAL_LINE: 1}, id="a-lone-critical-is-kept"),
+    pytest.param([ERROR_LINE, INFO_LINE], {ERROR_LINE: 1}, id="a-lone-error-is-kept-and-a-lone-info-is-not"),
 ]
 
 

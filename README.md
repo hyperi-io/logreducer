@@ -314,6 +314,7 @@ reducer = LogReducer(
     anomaly_contamination=0.1,  # expected anomaly fraction
     temporal_window_minutes=60, # grouping window for temporal mode
     max_patterns=2000,          # cap on extracted patterns
+    min_pattern_occurrences=2,  # patterns seen fewer times are dropped, except CRITICAL/FATAL/ERROR ones
 )
 ```
 

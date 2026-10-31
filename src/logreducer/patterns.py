@@ -74,6 +74,15 @@ def _typed_masking_instructions() -> tuple[MaskingInstruction, ...]:
     return tuple(MaskingInstruction(f"{start}(?:{pattern}){end}", name) for pattern, name in shapes)
 
 
+_ALWAYS_KEPT_LEVELS = ("CRITICAL", "FATAL", "ERROR")
+
+
+def _is_severe(template: str) -> bool:
+    """True for a template that names a CRITICAL, FATAL or ERROR level."""
+    upper = template.upper()
+    return any(level in upper for level in _ALWAYS_KEPT_LEVELS)
+
+
 class PatternExtractor:
     """Extract patterns using the online template miner (see template_mining)."""
 
@@ -146,8 +155,8 @@ class PatternExtractor:
         return patterns[: self.config.max_patterns]
 
     def _filter_by_occurrence(self, patterns: list[LogPattern]) -> list[LogPattern]:
-        """Filter patterns by minimum occurrence."""
-        return [p for p in patterns if p.count >= self.config.min_pattern_occurrences]
+        """Filter patterns by minimum occurrence, keeping every CRITICAL, FATAL or ERROR one."""
+        return [p for p in patterns if p.count >= self.config.min_pattern_occurrences or _is_severe(p.template)]
 
     def _calculate_priority(self, patterns: list[LogPattern]) -> list[LogPattern]:
         """Calculate priority scores.
