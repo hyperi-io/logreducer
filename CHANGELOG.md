@@ -3,6 +3,13 @@
 Rendered by CI and committed back at the end of a release -- do not edit by
 hand. Release notes also appear on the GitHub Releases page, one per tag.
 
+## [3.5.6](https://github.com/hyperi-io/logreducer/compare/v3.5.5...v3.5.6) (2026-11-01)
+
+### Bug Fixes
+
+* bound pattern memory, fix Kafka reads ([#25](https://github.com/hyperi-io/logreducer/issues/25)) ([2e40a5b](https://github.com/hyperi-io/logreducer/commit/2e40a5b71a9f2feefe2401b0c4d15817ead2da71)), closes [#23](https://github.com/hyperi-io/logreducer/issues/23)
+* **ci:** run the full test tier nightly and before every release ([#28](https://github.com/hyperi-io/logreducer/issues/28)) ([c4b8653](https://github.com/hyperi-io/logreducer/commit/c4b8653fa47a51555adf58720e91e2170418601b))
+
 ## [3.5.5](https://github.com/hyperi-io/logreducer/compare/v3.5.4...v3.5.5) (2026-11-01)
 
 ### Bug Fixes
