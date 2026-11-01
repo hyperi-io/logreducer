@@ -74,7 +74,7 @@ module-root = "src"
 
 # Ruff: lint + format (replaces black + flake8 + isort). Line length 120.
 [tool.ruff]
-target-version = "py312"
+target-version = "py314"
 line-length = 120
 indent-width = 4
 src = ["src"]
@@ -144,7 +144,7 @@ line-ending = "auto"
 # (datasketch, ...); our own code stays fully typed via
 # disallow_untyped_defs below.
 [tool.mypy]
-python_version = "3.12"  # Held below requires-python with ruff; see target-version
+python_version = "3.14"
 ignore_missing_imports = true
 warn_return_any = true
 warn_unused_configs = true
@@ -244,7 +244,7 @@ min_confidence = 80
 
 # vermin: verify no syntax/features newer than the minimum Python.
 [tool.vermin]
-targets = ["3.12"]
+targets = ["3.14"]
 no_tips = true
 
 [tool.bandit.assert_used]

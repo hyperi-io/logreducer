@@ -231,7 +231,7 @@ def _priority(pattern: LogPattern) -> float:
 class PatternExtractor:
     """Extract patterns using the online template miner (see template_mining)."""
 
-    def __init__(self, config: "BigDialConfig") -> None:
+    def __init__(self, config: BigDialConfig) -> None:
         self.config = config
         self.setup_drain3()
 

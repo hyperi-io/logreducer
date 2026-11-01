@@ -102,7 +102,7 @@ class BigDialConfig:
             self.max_memory_gb = clamped
 
     @classmethod
-    def from_env(cls, *prefixes: str) -> "BigDialConfig":
+    def from_env(cls, *prefixes: str) -> BigDialConfig:
         """Build a config from environment variables, cascade-aware.
 
         ``from_env()`` reads ``LOGREDUCER_<FIELD>`` (upper-cased field names,

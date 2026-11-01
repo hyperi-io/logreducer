@@ -348,7 +348,7 @@ class LogReducer:
 
         # Collect the examples of quiet patterns (the extractor has already applied max_patterns to
         # them). Severe lines come from the severe shapes that reduce() adds, one per shape.
-        result = []
+        result: list[str] = []
         for pattern in patterns:
             result.extend(line for line in pattern.examples if not is_severe(line))
 
