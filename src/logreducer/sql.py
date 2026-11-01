@@ -106,28 +106,34 @@ class SQLSource:
         # on SQLite) fails at construction, not deep inside iteration.
         self._sample_setup: str | None = None
         self._sample_sql: str | None = None
+        # A seeded MySQL sample hashes the query's columns, read on the first pass's connection.
+        self._needs_columns = False
         if sample is not None:
             from .sampling import build_sample_sql
 
             dialect = self._engine.dialect.name
-            columns = None
-            if sample_seed is not None and dialect in ("mysql", "mariadb"):
-                columns = self._quoted_columns(query, params)
-            self._sample_setup, self._sample_sql = build_sample_sql(dialect, query, sample, sample_seed, columns)
+            self._needs_columns = sample_seed is not None and dialect in ("mysql", "mariadb")
+            placeholder = ["NULL"] if self._needs_columns else None
+            setup, sql = build_sample_sql(dialect, query, sample, sample_seed, placeholder)
+            if not self._needs_columns:
+                self._sample_setup, self._sample_sql = setup, sql
 
-    def _quoted_columns(self, query: str, params: dict[str, Any] | None) -> list[str]:
-        """Return the quoted column names of ``query``, read with a zero-row run of it."""
+    def _build_column_sample(self, conn: Any, sample: float) -> None:
+        """Build the seeded MySQL sample from the query's quoted columns, read with a zero-row run of it."""
         from sqlalchemy import text
 
-        from .sampling import wrap_subquery
+        from .sampling import build_sample_sql, wrap_subquery
 
         # Risk accepted: the query is the caller's own SELECT, which this source exists to run.
         # nosemgrep: python.sqlalchemy.security.audit.avoid-sqlalchemy-text.avoid-sqlalchemy-text
-        probe = text(f"SELECT * FROM ({wrap_subquery(query)}) AS _lr_columns LIMIT 0")
-        with self._engine.connect() as conn:
-            names = list(conn.execute(probe, params or {}).keys())
+        probe = text(f"SELECT * FROM ({wrap_subquery(self.query)}) AS _lr_columns LIMIT 0")
+        names = list(conn.execute(probe, self.params or {}).keys())
         quote = self._engine.dialect.identifier_preparer.quote
-        return [f"_lr_sample.{quote(name)}" for name in names]
+        columns = [f"_lr_sample.{quote(name)}" for name in names]
+        self._sample_setup, self._sample_sql = build_sample_sql(
+            self._engine.dialect.name, self.query, sample, self.sample_seed, columns
+        )
+        self._needs_columns = False
 
     @classmethod
     def from_table(
@@ -180,8 +186,10 @@ class SQLSource:
 
         from .sources import rows_to_lines
 
-        stmt = text(self._sample_sql if self._sample_sql is not None else self.query)
         with self._engine.connect() as conn:
+            if self._needs_columns and self.sample is not None:
+                self._build_column_sample(conn, self.sample)
+            stmt = text(self._sample_sql if self._sample_sql is not None else self.query)
             # A deterministic sample (PostgreSQL) needs its per-connection seed
             # set before the query, on the same connection.
             if self._sample_setup is not None:

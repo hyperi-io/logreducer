@@ -104,6 +104,23 @@ def test_sqlsource_from_table_seed_on_sqlite_raises(sqlite_url):
         SQLSource.from_table(sqlite_url, "logs", "line", sample=0.3, sample_seed=1)
 
 
+@pytest.mark.parametrize(("sample", "error"), [(0.2, None), (1.5, ValueError)])
+def test_seeded_mysql_source_connects_only_when_read(sample, error):
+    """Construction validates the request but opens no connection, so an unreachable server fails on the read."""
+    pytest.importorskip("pymysql")
+    from sqlalchemy.exc import OperationalError
+
+    unreachable = "mysql+pymysql://user:pw@127.0.0.1:1/logs"  # nothing listens on port 1
+    if error is not None:
+        with pytest.raises(error):
+            SQLSource(unreachable, "SELECT line FROM logs", sample=sample, sample_seed=42)
+        return
+
+    source = SQLSource(unreachable, "SELECT line FROM logs", sample=sample, sample_seed=42)
+    with pytest.raises(OperationalError):
+        list(source)
+
+
 def test_reduce_to_target_over_sqlsource(sqlite_url):
     # 4 distinct patterns in the table; ask for 3 - reached via sampled batches.
     reducer = LogReducer(level="standard", mode="pattern")
