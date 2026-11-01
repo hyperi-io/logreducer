@@ -19,11 +19,24 @@ class LogEntry:
     line_number: int = 0
 
 
+def _as_naive_utc(timestamp: datetime) -> datetime:
+    """Return ``timestamp`` shifted to UTC without its offset. A naive one is already read as UTC."""
+    if timestamp.tzinfo is None:
+        return timestamp
+    try:
+        return timestamp.astimezone(UTC).replace(tzinfo=None)
+    except OverflowError:
+        # Shifting a stamp at the edge of the calendar leaves datetime's range.
+        return timestamp.replace(tzinfo=None)
+
+
 class TimestampParser:
     """Parse timestamps from various formats."""
 
+    # The format None marks ISO-8601, which fromisoformat reads with its fraction and offset.
     PATTERNS = [
-        (r"\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}:\d{2}", "%Y-%m-%d %H:%M:%S"),
+        (r"\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?:Z|[+-]\d{2}:?\d{2})?", None),
+        (r"\d{1,2}/\w{3}/\d{4}:\d{2}:\d{2}:\d{2} [+-]\d{4}", "%d/%b/%Y:%H:%M:%S %z"),
         (r"\d{1,2}/\w{3}/\d{4}:\d{2}:\d{2}:\d{2}", "%d/%b/%Y:%H:%M:%S"),
         (r"\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}", "%b %d %H:%M:%S"),
     ]
@@ -32,23 +45,25 @@ class TimestampParser:
     LEVEL_PATTERN = re.compile(r"\b(DEBUG|INFO|WARN|ERROR|CRITICAL)\b", re.I)
 
     def parse_line(self, line: str, line_number: int = 0) -> LogEntry:
-        """Parse log line."""
+        """Parse log line, normalising a timestamp with an offset to naive UTC."""
         entry = LogEntry(raw_line=line.strip(), line_number=line_number)
 
-        # Extract timestamp
         for pattern, date_format in self.COMPILED_PATTERNS:
             match = pattern.search(line)
-            if match:
-                try:
-                    timestamp_str = match.group()
-                    if "%Y" not in date_format:
-                        timestamp_str = f"{datetime.now().year} {timestamp_str}"
-                        date_format = f"%Y {date_format}"
-                    entry.timestamp = datetime.strptime(timestamp_str.replace("T", " "), date_format)
-                    break
-                except (ValueError, TypeError):
-                    # Timestamp parsing failed, try next pattern
-                    pass
+            if not match:
+                continue
+            timestamp_str = match.group()
+            try:
+                if date_format is None:
+                    timestamp = datetime.fromisoformat(timestamp_str.replace(",", "."))
+                elif "%Y" not in date_format:
+                    timestamp = datetime.strptime(f"{datetime.now().year} {timestamp_str}", f"%Y {date_format}")
+                else:
+                    timestamp = datetime.strptime(timestamp_str, date_format)
+            except ValueError:
+                continue
+            entry.timestamp = _as_naive_utc(timestamp)
+            break
 
         # Extract level
         level_match = self.LEVEL_PATTERN.search(line)

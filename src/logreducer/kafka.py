@@ -13,24 +13,24 @@ Two intentional consumer design choices, because a logreducer ``Source`` must
 be finite and re-iterable (the reducer counts lines by exhausting the source,
 and re-reads it for multi-pass modes):
 
-* **Bounded.** The read stops when every assigned partition has reached its end
-  (``enable.partition.eof`` -> ``_PARTITION_EOF``), which is the deterministic
-  "caught up with the topic" signal. A consecutive-idle-poll count is only a
-  backstop for the never-assigned case (e.g. a missing topic).
-* **No commit.** Offsets are never committed, so each pass re-reads from the
-  earliest offset - that is what makes the source re-iterable. An application
+* **Bounded.** The read records each partition's end offset when it is assigned
+  and stops once every partition has reached it, by offset or by
+  ``_PARTITION_EOF``. Messages written after that point wait for the next read.
+  A read that goes ``idle_timeout`` seconds without a message short of those
+  offsets raises, so a partial read never looks like a complete one.
+* **No commit.** Offsets are never committed, and every assigned partition is
+  rewound to its earliest offset whatever the group has committed, so each pass
+  re-reads the whole topic - that is what makes the source re-iterable. An application
   that needs offset tracking should consume itself and hand the reducer its own
   iterable of ``str``.
 
 Install: ``pip install 'logreducer[kafka]'``.
 """
 
-from __future__ import annotations
-
 import importlib.util
 import time
 from collections.abc import Iterable, Iterator
-from typing import Any
+from typing import Any, Self
 
 # Production-lean librdkafka defaults: durable produces, bounded timeouts,
 # cheap batching. Any key can be overridden by the user config.
@@ -53,8 +53,7 @@ CONSUMER_DEFAULTS: dict[str, Any] = {
     "max.poll.interval.ms": 300000,  # 5 minutes max poll interval
     "fetch.min.bytes": 1,  # Return immediately with any data
     "fetch.wait.max.ms": 500,  # Max wait for fetch.min.bytes
-    # logreducer-specific: needed so a drained partition reports EOF, which is
-    # how the bounded read knows it has caught up with the topic.
+    # Ends a partition whose last offsets hold no message (transaction markers, compaction).
     "enable.partition.eof": True,
 }
 
@@ -119,10 +118,10 @@ def _normalise_config(config: str | dict[str, Any]) -> dict[str, Any]:
 class KafkaSource:
     """A bounded, re-iterable stream of log lines from a Kafka topic.
 
-    Each iteration creates a fresh consumer, subscribes, and reads until every
-    assigned partition reports end-of-partition (i.e. the topic is drained),
-    decoding each message value to a ``str`` line. Offsets are never committed,
-    so every pass re-reads from the earliest offset.
+    Each iteration creates a fresh consumer, subscribes, and reads every partition
+    up to the end offset it had when assigned, decoding each message value to a
+    ``str`` line. Offsets are never committed, so every pass re-reads from the
+    earliest offset.
     """
 
     def __init__(
@@ -134,7 +133,7 @@ class KafkaSource:
         verify_ssl: bool = True,
         max_messages: int | None = None,
         poll_timeout: float = 1.0,
-        idle_polls: int = 3,
+        idle_timeout: float = 30.0,
         assignment_timeout: float = 30.0,
         encoding: str = "utf-8",
     ) -> None:
@@ -147,8 +146,9 @@ class KafkaSource:
             verify_ssl: If False, disable TLS certificate verification.
             max_messages: Optional hard cap on lines read per pass.
             poll_timeout: Seconds to block per ``poll`` call.
-            idle_polls: Backstop for a never-EOF broker - once partitions are
-                assigned, stop after this many consecutive empty polls.
+            idle_timeout: Backstop for a stalled broker. Once partitions are
+                assigned, iteration raises if this many seconds pass with no
+                message or EOF while a partition is short of its end offset.
             assignment_timeout: Backstop for the never-assigned case (unreachable
                 broker, missing topic, auth failure). If no partition is assigned
                 within this many seconds, iteration raises instead of hanging.
@@ -163,25 +163,31 @@ class KafkaSource:
         self.topics = [topics] if isinstance(topics, str) else list(topics)
         self.max_messages = max_messages
         self.poll_timeout = poll_timeout
-        self.idle_polls = idle_polls
+        self.idle_timeout = idle_timeout
         self.assignment_timeout = assignment_timeout
         self.encoding = encoding
 
     def __iter__(self) -> Iterator[str]:
-        from confluent_kafka import Consumer, KafkaError
+        from confluent_kafka import OFFSET_BEGINNING, Consumer, KafkaError
+
+        def from_the_start(consumer: Any, partitions: list[Any]) -> None:
+            # A committed group offset would skip the history before it.
+            for tp in partitions:
+                tp.offset = OFFSET_BEGINNING
+            consumer.assign(partitions)
 
         consumer = Consumer(self._config)
-        consumer.subscribe(self.topics)
-        eof_partitions: set[tuple[str, int]] = set()
-        empty_polls = 0
+        consumer.subscribe(self.topics, on_assign=from_the_start)
+        # End offset of each partition when first assigned: the read stops there, so a write
+        # made during it is left for the next pass.
+        end_offsets: dict[tuple[str, int], int] = {}
+        drained: set[tuple[str, int]] = set()
         emitted = 0
-        # Never-assigned backstop: an unreachable broker, a missing topic, or an
-        # auth failure leaves assignment() empty forever, so empty_polls (gated
-        # on assignment) never fires and the loop would spin indefinitely. Bail
-        # if no partition is ever assigned within the timeout - a stuck
-        # dependency surfaced as a real error, not a silent hang.
+        # An unreachable broker, a missing topic or an auth failure leaves assignment() empty
+        # forever, so a read that is never assigned raises after assignment_timeout.
         ever_assigned = False
         assignment_deadline = time.monotonic() + self.assignment_timeout
+        last_event = time.monotonic()
         try:
             while True:
                 if self.max_messages is not None and emitted >= self.max_messages:
@@ -189,8 +195,14 @@ class KafkaSource:
 
                 msg = consumer.poll(self.poll_timeout)
 
-                if consumer.assignment():
-                    ever_assigned = True
+                assignment = consumer.assignment()
+                if assignment:
+                    if not ever_assigned:
+                        ever_assigned = True
+                        last_event = time.monotonic()
+                    self._record_end_offsets(consumer, assignment, end_offsets, drained)
+                    if drained >= end_offsets.keys():
+                        break
                 elif not ever_assigned and time.monotonic() >= assignment_deadline:
                     raise KafkaConsumerError(
                         f"no partition assignment within {self.assignment_timeout:.0f}s for "
@@ -198,28 +210,32 @@ class KafkaSource:
                     )
 
                 if msg is None:
-                    # Before partitions are assigned an empty poll just means the
-                    # group is still joining - don't count it. Once assigned,
-                    # repeated empties are the backstop for a never-EOF broker.
-                    if consumer.assignment():
-                        empty_polls += 1
-                        if empty_polls >= self.idle_polls:
-                            break
+                    if ever_assigned and time.monotonic() - last_event >= self.idle_timeout:
+                        short = sorted(end_offsets.keys() - drained)
+                        raise KafkaConsumerError(
+                            f"read stopped short of the end: no message for {self.idle_timeout:.0f}s "
+                            f"with partitions {short!r} still below their end offsets"
+                        )
                     continue
-                empty_polls = 0
+                last_event = time.monotonic()
 
+                topic, partition = msg.topic(), msg.partition()
                 error = msg.error()
-                if error:
-                    if error.code() == KafkaError._PARTITION_EOF:
-                        topic, partition = msg.topic(), msg.partition()
-                        if topic is not None and partition is not None:
-                            eof_partitions.add((topic, partition))
-                        assigned = {(tp.topic, tp.partition) for tp in consumer.assignment()}
-                        # Drained: every partition we hold has reported its end.
-                        if assigned and eof_partitions >= assigned:
-                            break
-                        continue
+                if error and error.code() != KafkaError._PARTITION_EOF:
                     raise KafkaConsumerError(f"Kafka error: {error.str()}", error_code=error.code())
+                if topic is None or partition is None:
+                    continue
+                partition_key = (topic, partition)
+                if error:
+                    drained.add(partition_key)
+                    continue
+
+                end = end_offsets.get(partition_key)
+                offset = msg.offset()
+                if end is not None and offset is not None and offset >= end - 1:
+                    drained.add(partition_key)
+                    if offset >= end:
+                        continue
 
                 value = msg.value()
                 if value is None:
@@ -230,6 +246,28 @@ class KafkaSource:
                     yield line
         finally:
             consumer.close()
+
+    def _record_end_offsets(
+        self,
+        consumer: Any,
+        assignment: list[Any],
+        end_offsets: dict[tuple[str, int], int],
+        drained: set[tuple[str, int]],
+    ) -> None:
+        """Record the high watermark of each newly assigned partition, marking empty ones drained."""
+        from confluent_kafka import KafkaException
+
+        for tp in assignment:
+            key = (tp.topic, tp.partition)
+            if key in end_offsets:
+                continue
+            try:
+                low, high = consumer.get_watermark_offsets(tp, timeout=self.assignment_timeout, cached=False)
+            except KafkaException as exc:
+                raise KafkaConsumerError(f"cannot read the end offset of {key!r}: {exc}") from exc
+            end_offsets[key] = high
+            if high <= low:
+                drained.add(key)
 
     def __repr__(self) -> str:
         return f"KafkaSource(topics={self.topics!r}, config={mask_credentials(self._config)!r})"
@@ -251,6 +289,7 @@ class KafkaSink:
         key: str | None = None,
         verify_ssl: bool = True,
         flush_timeout: float | None = None,
+        queue_full_timeout: float = 30.0,
         encoding: str = "utf-8",
     ) -> None:
         """Build a Kafka sink.
@@ -261,6 +300,8 @@ class KafkaSink:
             key: Optional fixed message key applied to every line.
             verify_ssl: If False, disable TLS certificate verification.
             flush_timeout: Seconds to wait on the final flush (None = infinite).
+            queue_full_timeout: Seconds one line waits for space in a full local
+                producer queue before ``write`` gives up.
             encoding: Text encoding for the produced message values.
         """
         try:
@@ -272,6 +313,7 @@ class KafkaSink:
         self.topic = topic
         self.key = key
         self.flush_timeout = flush_timeout
+        self.queue_full_timeout = queue_full_timeout
         self.encoding = encoding
         self._producer = Producer(self._config)
 
@@ -279,12 +321,13 @@ class KafkaSink:
         """Produce each line to the topic and flush; return the number delivered.
 
         With the default ``flush_timeout=None`` the final flush blocks until the
-        queue drains.
+        queue drains. The flush runs even when a produce raises, so lines queued
+        before the failure are delivered or counted.
 
         Raises:
             KafkaDeliveryError: A message was rejected by the broker, expired
-                before delivery, or was still queued when a finite
-                ``flush_timeout`` ran out.
+                before delivery, was still queued when a finite ``flush_timeout``
+                ran out, or found the local queue full for ``queue_full_timeout``.
         """
         key_bytes = self.key.encode(self.encoding) if self.key is not None else None
         produced = 0
@@ -294,11 +337,12 @@ class KafkaSink:
             if err is not None:
                 errors.append(str(err))
 
-        for line in lines:
-            self._producer.produce(self.topic, value=line.encode(self.encoding), key=key_bytes, on_delivery=on_delivery)
-            self._producer.poll(0)  # Trigger delivery callbacks (non-blocking)
-            produced += 1
-        undelivered = self.flush()
+        try:
+            for line in lines:
+                self._produce(line.encode(self.encoding), key_bytes, on_delivery)
+                produced += 1
+        finally:
+            undelivered = self.flush()
         if errors or undelivered:
             raise KafkaDeliveryError(
                 f"{len(errors)} of {produced} messages failed and {undelivered} were still queued "
@@ -308,6 +352,24 @@ class KafkaSink:
             )
         return produced
 
+    def _produce(self, value: bytes, key: bytes | None, on_delivery: Any) -> None:
+        """Queue one message, serving delivery reports to free space while the local queue is full."""
+        deadline = time.monotonic() + self.queue_full_timeout
+        while True:
+            try:
+                self._producer.produce(self.topic, value=value, key=key, on_delivery=on_delivery)
+                break
+            except BufferError:
+                if time.monotonic() >= deadline:
+                    queued = len(self._producer)
+                    raise KafkaDeliveryError(
+                        f"local producer queue stayed full for {self.queue_full_timeout:.0f}s for topic {self.topic!r}",
+                        failed=0,
+                        undelivered=queued,
+                    ) from None
+                self._producer.poll(0.1)
+        self._producer.poll(0)
+
     def flush(self) -> int:
         """Wait for outstanding messages; return the count still in queue."""
         if self.flush_timeout is not None:
@@ -316,7 +378,7 @@ class KafkaSink:
             result = self._producer.flush()
         return result
 
-    def __enter__(self) -> KafkaSink:
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, *exc: object) -> None:

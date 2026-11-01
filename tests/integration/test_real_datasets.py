@@ -2,7 +2,7 @@
 
 Verifies the core reduction capability on varied, messy, real-world logs - and
 that the SAME data reduces consistently whether it arrives as an in-memory list,
-from PostgreSQL (SQLSource) or from a Redpanda/Kafka topic (KafkaSource).
+from PostgreSQL (SQLSource) or from a Kafka topic (KafkaSource).
 
 Docker-gated where a store is involved; the in-memory sweep needs no services.
 No mocks - real corpora, real engines/brokers via testcontainers.
@@ -81,28 +81,19 @@ def test_reduce_from_clickhouse(clickhouse_client):
         corpora.drop_clickhouse_table(clickhouse_client, table)
 
 
-def test_reduce_from_kafka(kafka_bootstrap):
-    """A dataset produced to a Kafka topic reduces via KafkaSource.
-
-    Runs against whatever broker the fixture resolves: a configured broker
-    from the env (possibly SASL-authenticated) or the docker Redpanda fallback.
-    """
+def test_reduce_from_kafka(kafka_bootstrap, kafka_topics, kafka_group):
+    """A dataset produced to a Kafka topic reduces via KafkaSource."""
     pytest.importorskip("confluent_kafka")
     from logreducer.kafka import KafkaSource
 
-    name = "loghub_openssh"
-    topic = corpora.unique_name("logreducer-real")
-    group = corpora.unique_name("logreducer-grp")
-    try:
-        produced = corpora.load_into_kafka(kafka_bootstrap, topic, name, limit=20000)
-        assert produced == 20000
+    topic = kafka_topics("real-dataset")
+    produced = corpora.load_into_kafka(kafka_bootstrap, topic, "loghub_openssh", limit=20000)
+    assert produced == 20000
 
-        source = KafkaSource(kafka_bootstrap, group_id=group, topics=topic, max_messages=20000)
-        reduced = LogReducer(level="standard", mode="pattern").reduce(source)
-        assert reduced
-        assert len(reduced) < produced  # real reduction happened
-    finally:
-        corpora.delete_kafka_topic(kafka_bootstrap, topic)
+    source = KafkaSource(kafka_bootstrap, group_id=kafka_group("real-dataset"), topics=topic, max_messages=20000)
+    reduced = LogReducer(level="standard", mode="pattern").reduce(source)
+    assert reduced
+    assert len(reduced) < produced  # real reduction happened
 
 
 def test_reduce_to_target_over_real_postgres(pg_engine):

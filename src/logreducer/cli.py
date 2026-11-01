@@ -189,7 +189,7 @@ def _reduce(
         else:
             _err("Error: provide a log file, or --dsn with --query (SQL/ClickHouse) or --topic/--group (Kafka)")
             raise typer.Exit(1)
-    except (typer.Exit, typer.BadParameter):
+    except typer.Exit, typer.BadParameter:
         raise  # our control-flow exit / typer usage errors - let typer format them
     except KeyboardInterrupt:
         _err("Processing interrupted by user")
@@ -276,7 +276,7 @@ def _run_target(
             close = getattr(source, "close", None)
             if callable(close):
                 close()
-    except (typer.Exit, typer.BadParameter):
+    except typer.Exit, typer.BadParameter:
         raise
     except KeyboardInterrupt:
         _err("Processing interrupted by user")

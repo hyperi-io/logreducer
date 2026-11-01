@@ -71,8 +71,9 @@ class SQLSource:
             yield_per: Server-side cursor batch size (rows fetched per round
                 trip). Larger trades memory for fewer round trips.
             sample: Optional fraction in (0, 1] - return only that fraction of
-                rows via a per-dialect random predicate. Pass ``sample_seed``
-                for a deterministic, re-iterable sample (required for the
+                rows. Pass ``sample_seed`` for a re-iterable sample that keeps a
+                row by a hash of its content, so every pass returns the same rows
+                whatever order the engine reads them in (required for the
                 reducer's multi-pass modes; PostgreSQL/MySQL only). Without a
                 seed the sample is best-effort and not reproducible across passes.
             sample_seed: Seed for a reproducible sample. Raises
@@ -105,12 +106,34 @@ class SQLSource:
         # on SQLite) fails at construction, not deep inside iteration.
         self._sample_setup: str | None = None
         self._sample_sql: str | None = None
+        # A seeded MySQL sample hashes the query's columns, read on the first pass's connection.
+        self._needs_columns = False
         if sample is not None:
             from .sampling import build_sample_sql
 
-            self._sample_setup, self._sample_sql = build_sample_sql(
-                self._engine.dialect.name, query, sample, sample_seed
-            )
+            dialect = self._engine.dialect.name
+            self._needs_columns = sample_seed is not None and dialect in ("mysql", "mariadb")
+            placeholder = ["NULL"] if self._needs_columns else None
+            setup, sql = build_sample_sql(dialect, query, sample, sample_seed, placeholder)
+            if not self._needs_columns:
+                self._sample_setup, self._sample_sql = setup, sql
+
+    def _build_column_sample(self, conn: Any, sample: float) -> None:
+        """Build the seeded MySQL sample from the query's quoted columns, read with a zero-row run of it."""
+        from sqlalchemy import text
+
+        from .sampling import build_sample_sql, wrap_subquery
+
+        # Risk accepted: the query is the caller's own SELECT, which this source exists to run.
+        # nosemgrep: python.sqlalchemy.security.audit.avoid-sqlalchemy-text.avoid-sqlalchemy-text
+        probe = text(f"SELECT * FROM ({wrap_subquery(self.query)}) AS _lr_columns LIMIT 0")
+        names = list(conn.execute(probe, self.params or {}).keys())
+        quote = self._engine.dialect.identifier_preparer.quote
+        columns = [f"_lr_sample.{quote(name)}" for name in names]
+        self._sample_setup, self._sample_sql = build_sample_sql(
+            self._engine.dialect.name, self.query, sample, self.sample_seed, columns
+        )
+        self._needs_columns = False
 
     @classmethod
     def from_table(
@@ -163,8 +186,10 @@ class SQLSource:
 
         from .sources import rows_to_lines
 
-        stmt = text(self._sample_sql if self._sample_sql is not None else self.query)
         with self._engine.connect() as conn:
+            if self._needs_columns and self.sample is not None:
+                self._build_column_sample(conn, self.sample)
+            stmt = text(self._sample_sql if self._sample_sql is not None else self.query)
             # A deterministic sample (PostgreSQL) needs its per-connection seed
             # set before the query, on the same connection.
             if self._sample_setup is not None:

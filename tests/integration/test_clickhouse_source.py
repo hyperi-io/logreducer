@@ -1,13 +1,7 @@
-"""Integration test: ClickHouseSource against a real ClickHouse.
+"""Integration test: ClickHouseSource against the run's shared ClickHouse.
 
-Runs against a local/network ClickHouse when CLICKHOUSE_* is set (see
-.env.example), otherwise a throwaway docker ClickHouse that is stopped as
-soon as the session ends. Marked `integration`; deselect with
-`-m "not integration"`.
-
-The query uses ClickHouse's built-in numbers() table function, so the test is
-READ-ONLY: no table is created, nothing is written, nothing to clean up - safe
-even against a shared cluster.
+The query uses ClickHouse's built-in numbers() table function, so the test
+writes nothing. Marked `integration`; deselect with `-m "not integration"`.
 """
 
 import pytest

@@ -16,23 +16,26 @@ from logreducer.sampling import (
 
 
 class TestBuildSampleSql:
-    def test_postgresql_seeded_sets_seed_and_predicate(self):
+    def test_postgresql_seeded_hashes_the_row(self):
         setup, sql = build_sample_sql("postgresql", "SELECT msg FROM logs", 0.1, seed=42)
-        assert setup is not None
-        assert "setseed" in setup
-        assert "random() <" in sql
+        assert setup is None
+        assert "md5(_lr_sample::text || '42')" in sql
+        assert f"< {int(0.1 * 2**32)}" in sql
         assert "SELECT msg FROM logs" in sql  # user query wrapped, not rewritten
-        assert "_lr_sample" in sql
 
     def test_postgresql_unseeded_has_no_setup(self):
         setup, sql = build_sample_sql("postgresql", "SELECT msg FROM logs", 0.25)
         assert setup is None
         assert "random() <" in sql
 
-    def test_mysql_uses_rand(self):
-        setup, sql = build_sample_sql("mysql", "SELECT msg FROM logs", 0.1, seed=7)
+    def test_mysql_seeded_hashes_the_named_columns(self):
+        setup, sql = build_sample_sql("mysql", "SELECT msg FROM logs", 0.1, seed=7, columns=["_lr_sample.`msg`"])
         assert setup is None
-        assert "rand(7)" in sql
+        assert "MD5(CONCAT_WS(CHAR(31), _lr_sample.`msg`, '7'))" in sql
+
+    def test_mysql_seeded_without_columns_raises(self):
+        with pytest.raises(ValueError, match="column names"):
+            build_sample_sql("mysql", "SELECT msg FROM logs", 0.1, seed=7)
 
     def test_fraction_one_is_valid(self):
         # 1.0 is the inclusive upper bound: sample everything.
@@ -111,7 +114,7 @@ class TestBuildTableSampleQuery:
 
     def test_mysql_predicate_fallback(self):
         sql = build_table_sample_query("mysql", "`logs`", "`msg`", fraction=0.1, seed=7)
-        assert "rand(7)" in sql
+        assert "MD5(CONCAT_WS(CHAR(31), `msg`, '7'))" in sql
         assert "TABLESAMPLE" not in sql
 
     def test_sqlite_predicate_and_seed_raises(self):

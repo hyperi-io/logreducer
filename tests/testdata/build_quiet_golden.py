@@ -17,6 +17,7 @@ that golden came from fails here and not in the test.
 import gzip
 import hashlib
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -30,12 +31,11 @@ OUT = TESTDATA / "template_mining_quiet_golden.json.gz"
 
 # logreducer's BigDialConfig defaults for the fields the five configurations override.
 DEFAULTS = {"max_clusters": 10_000, "drain_similarity": 0.4, "typed_masking": False}
-LEVELS = ("CRITICAL", "FATAL", "ERROR")
+SEVERE_LEVEL = re.compile(r"\b(?:CRITICAL|FATAL|ERROR)\b", re.IGNORECASE)
 
 
 def is_severe(line: str) -> bool:
-    upper = line.upper()
-    return any(level in upper for level in LEVELS)
+    return SEVERE_LEVEL.search(line) is not None
 
 
 def read_lines(name: str, limit: int) -> list[str]:

@@ -9,10 +9,10 @@ from pathlib import Path
 
 import pytest
 
-# Load the local .env (CLICKHOUSE_*, KAFKA_BOOTSTRAP_SERVERS, ...) so the
-# integration tests can reach a real local-network service when one is
-# configured. An absent or empty .env is fine - those tests then fall back to a
-# throwaway docker container, or skip if docker is unavailable too.
+# The run's one ClickHouse and Kafka, shared by every xdist worker.
+pytest_plugins = ["scalo.deployment.test_support.pytest_plugin"]
+
+# Load the local .env so a test can read local settings. An absent .env is fine.
 try:
     from dotenv import load_dotenv
 

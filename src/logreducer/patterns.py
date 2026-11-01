@@ -1,9 +1,12 @@
 """Pattern extraction (Drain3 template mining) and fuzzy deduplication."""
 
+import heapq
 import logging
+import re
+from collections import deque
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from .memory import Occurrence
 from .template_mining import MaskingInstruction, TemplateMiner, TemplateMinerConfig
@@ -94,13 +97,13 @@ def _typed_masking_instructions(timestamp: bool = False) -> tuple[MaskingInstruc
     return tuple(MaskingInstruction(f"{start}(?:{pattern}){end}", name) for pattern, name in shapes)
 
 
-_ALWAYS_KEPT_LEVELS = ("CRITICAL", "FATAL", "ERROR")
+# A level is a whole word in any case, so a field name like error_count does not count.
+_SEVERE_LEVEL = re.compile(r"\b(?:CRITICAL|FATAL|ERROR)\b", re.IGNORECASE)
 
 
 def is_severe(text: str) -> bool:
     """True for a line or template that names a CRITICAL, FATAL or ERROR level."""
-    upper = text.upper()
-    return any(level in upper for level in _ALWAYS_KEPT_LEVELS)
+    return _SEVERE_LEVEL.search(text) is not None
 
 
 class SevereShapes:
@@ -172,10 +175,63 @@ def pattern_priority(template: str, count: int, severe: bool = False) -> float:
     return priority
 
 
+class _RetiredPatterns:
+    """Patterns whose cluster was LRU-evicted, holding only those the capped ranking can still return.
+
+    A retired pattern's template no longer changes, and its count grows only while the dedup
+    cache still holds an ``Occurrence`` pointing at it. That cache is FIFO, so ``window`` lines
+    after the last one that carried an ``Occurrence``, the count is final. Final patterns compete
+    for the ``cap`` places the output has, and one that loses can never win one back. Severe
+    patterns are all kept, as the cap does not apply to them.
+    """
+
+    def __init__(self, cap: int, min_count: int, window: int) -> None:
+        self._cap = cap
+        self._min_count = min_count
+        self._window = window
+        self._severe: list[tuple[int, LogPattern]] = []
+        # Min-heap on (priority, -cluster_id): the root is the one the final sort ranks last.
+        self._best: list[tuple[float, int, LogPattern]] = []
+        # Min-heap on the line number of the pattern's last Occurrence.
+        self._counting: list[tuple[int, int, LogPattern]] = []
+
+    def add(self, cluster_id: int, pattern: LogPattern, last_occurrence: int | None) -> None:
+        """Retire the pattern of an evicted cluster, given the line number of its last ``Occurrence``."""
+        if pattern.severe:
+            self._severe.append((cluster_id, pattern))
+        elif last_occurrence is None:
+            self._offer(cluster_id, pattern)
+        else:
+            heapq.heappush(self._counting, (last_occurrence, cluster_id, pattern))
+
+    def advance(self, line_number: int) -> None:
+        """Rank every retired pattern whose count can no longer change by ``line_number``."""
+        while self._counting and line_number - self._counting[0][0] >= self._window:
+            _, cluster_id, pattern = heapq.heappop(self._counting)
+            self._offer(cluster_id, pattern)
+
+    def _offer(self, cluster_id: int, pattern: LogPattern) -> None:
+        if pattern.count < self._min_count:
+            return
+        heapq.heappush(self._best, (_priority(pattern), -cluster_id, pattern))
+        if len(self._best) > self._cap:
+            heapq.heappop(self._best)
+
+    def items(self) -> list[tuple[int, LogPattern]]:
+        """Return every retired pattern that could still reach the output, keyed by cluster id."""
+        best = [(-negative_id, pattern) for _, negative_id, pattern in self._best]
+        counting = [(cluster_id, pattern) for _, cluster_id, pattern in self._counting]
+        return self._severe + best + counting
+
+
+def _priority(pattern: LogPattern) -> float:
+    return pattern_priority(pattern.template, pattern.count, pattern.severe)
+
+
 class PatternExtractor:
     """Extract patterns using the online template miner (see template_mining)."""
 
-    def __init__(self, config: "BigDialConfig") -> None:
+    def __init__(self, config: BigDialConfig) -> None:
         self.config = config
         self.setup_drain3()
 
@@ -199,8 +255,9 @@ class PatternExtractor:
         """Extract patterns from lines (accepts a stream; only clusters are held).
 
         Feeds each line into the online miner, so the caller can pass a
-        generator - no need to materialise the whole line set. Memory is bounded
-        by the number of clusters (see ``max_clusters``), not the line count.
+        generator - no need to materialise the whole line set. With ``max_clusters``
+        set, memory is bounded by it and by ``max_patterns``, not by the line count
+        or the number of distinct templates.
         """
         return self.extract_counted_patterns((line, None) for line in lines)
 
@@ -209,11 +266,23 @@ class PatternExtractor:
 
         Repeats that exact dedup drops after a line was kept still count towards
         the pattern that line joined, so 100 identical errors make one pattern
-        with ``count == 100``.
+        with ``count == 100``. The ``Occurrence`` objects must come from a dedup
+        cache, and any fuzzy index between, of at most ``dedup_cache_size`` lines:
+        an evicted pattern's count is taken as final twice that many lines after
+        its last ``Occurrence``, once a near-duplicate matched to it has also left
+        the dedup cache.
         """
         pattern_map: dict[int, LogPattern] = {}
+        last_occurrence: dict[int, int] = {}
+        retired = _RetiredPatterns(
+            self.config.max_patterns, self.config.min_pattern_occurrences, 2 * self.config.dedup_cache_size
+        )
+        max_clusters = self.config.max_clusters
+        # Sweeping at twice the store's bound costs O(1) per line, amortised.
+        sweep_at = None if max_clusters is None else 2 * max_clusters
 
-        for line, occurrence in pairs:
+        for line_number, (line, occurrence) in enumerate(pairs):
+            retired.advance(line_number)
             cluster = self.miner.add_log_message(line)
             pattern = pattern_map.get(cluster.cluster_id)
             if pattern is None:
@@ -223,9 +292,13 @@ class PatternExtractor:
             pattern.count += 1
             if occurrence is not None:
                 occurrence.target = pattern
+                last_occurrence[cluster.cluster_id] = line_number
 
             if len(pattern.examples) < self.config.examples_per_pattern:
                 pattern.examples.append(line)
+
+            if sweep_at is not None and len(pattern_map) >= sweep_at:
+                self._retire_evicted(pattern_map, last_occurrence, retired)
 
         # Later lines widen a cluster's slots to <*>, so the stored template is
         # re-read once the feed ends; an LRU-evicted cluster keeps its snapshot.
@@ -234,7 +307,9 @@ class PatternExtractor:
             if live_cluster is not None:
                 pattern.template = live_cluster.get_template()
 
-        patterns = list(pattern_map.values())
+        # Cluster ids rise in creation order, which the stable sort below breaks ties on.
+        candidates = sorted([*pattern_map.items(), *retired.items()], key=lambda item: item[0])
+        patterns = [pattern for _, pattern in candidates]
 
         # Apply filters
         patterns = self._filter_by_occurrence(patterns)
@@ -243,6 +318,14 @@ class PatternExtractor:
         # Sort by priority and limit, with severe patterns outside the limit
         patterns.sort(key=lambda p: p.priority, reverse=True)
         return cap_outside_severe(patterns, self.config.max_patterns, lambda p: p.severe)
+
+    def _retire_evicted(
+        self, pattern_map: dict[int, LogPattern], last_occurrence: dict[int, int], retired: _RetiredPatterns
+    ) -> None:
+        """Move the patterns of clusters the miner has evicted out of ``pattern_map``."""
+        evicted = [cluster_id for cluster_id in pattern_map if self.miner.get_cluster(cluster_id) is None]
+        for cluster_id in evicted:
+            retired.add(cluster_id, pattern_map.pop(cluster_id), last_occurrence.pop(cluster_id, None))
 
     def _filter_by_occurrence(self, patterns: list[LogPattern]) -> list[LogPattern]:
         """Filter patterns by minimum occurrence, keeping every CRITICAL, FATAL or ERROR one."""
@@ -257,10 +340,30 @@ class PatternExtractor:
 
 
 class FuzzyDeduplicator:
-    """Fuzzy (near-duplicate) deduplication using MinHash LSH."""
+    """Fuzzy (near-duplicate) deduplication using MinHash LSH.
 
-    def __init__(self, threshold: float = 0.8):
+    With ``max_entries`` set, the index holds the most recently admitted lines and drops the
+    oldest first, the same sliding window ``BoundedDeduplicator`` keeps for exact repeats. A
+    near-duplicate of a line that has left the window is admitted again.
+    """
+
+    def __init__(self, threshold: float = 0.8, max_entries: int | None = None):
+        """Create a deduplicator.
+
+        Args:
+            threshold: Jaccard similarity at or above which a line is a near-duplicate.
+            max_entries: Admitted lines the index holds. ``None`` keeps every one.
+
+        Raises:
+            ValueError: If ``max_entries`` is below 1.
+        """
+        if max_entries is not None and max_entries < 1:
+            raise ValueError(f"max_entries must be at least 1 or None, got {max_entries!r}")
         self.threshold = threshold
+        self.max_entries = max_entries
+        self._keys: deque[int] = deque()
+        self._occurrences: dict[int, Occurrence] = {}
+        self._next_key = 0
         self.enabled = MINHASH_AVAILABLE
 
         if self.enabled:
@@ -272,36 +375,52 @@ class FuzzyDeduplicator:
         """Yield near-unique lines as they arrive (streaming near-dup filter).
 
         Queries the LSH per line and inserts only new ones, so the reducer never
-        materialises the full unique-line list. Note the LSH itself grows with
-        the number of near-unique lines - that is inherent to fuzzy dedup.
+        materialises the full unique-line list. The index grows with near-unique
+        lines up to ``max_entries``.
         """
         if not self.enabled:
             yield from lines
             return
 
-        for i, line in enumerate(lines):
-            if self._admit(i, line):
+        for line in lines:
+            if self._admit(line):
                 yield line
 
     def deduplicate_pairs(self, pairs: Iterable[tuple[str, Occurrence]]) -> Iterator[tuple[str, Occurrence]]:
-        """``deduplicate_stream`` over (line, Occurrence) pairs, keeping each pair intact."""
+        """``deduplicate_stream`` over (line, Occurrence) pairs, keeping each pair intact.
+
+        A dropped near-duplicate, and every later exact repeat of it, counts towards the
+        pattern of the admitted line it matched.
+        """
         if not self.enabled:
             yield from pairs
             return
 
-        for i, pair in enumerate(pairs):
-            if self._admit(i, pair[0]):
+        for pair in pairs:
+            if self._admit(*pair):
                 yield pair
 
-    def _admit(self, index: int, line: str) -> bool:
-        """True (and remembered) when no near-duplicate of ``line`` was admitted before."""
+    def _admit(self, line: str, occurrence: Occurrence | None = None) -> bool:
+        """True (and remembered) when no near-duplicate of ``line`` is in the index."""
         m = MinHash(num_perm=64)
         for word in line.split():
             m.update(word.encode("utf-8", "surrogatepass"))
 
-        if self.lsh.query(m):
+        if matches := cast("list[int]", self.lsh.query(m)):
+            if occurrence is not None and (admitted := self._occurrences.get(min(matches))) is not None:
+                occurrence.target = admitted.target
+                admitted.repeat()
             return False
-        self.lsh.insert(f"line_{index}", m)
+        if self.max_entries is not None and len(self._keys) >= self.max_entries:
+            evicted = self._keys.popleft()
+            self.lsh.remove(evicted)
+            self._occurrences.pop(evicted, None)
+        key = self._next_key
+        self._next_key += 1
+        self.lsh.insert(key, m)
+        self._keys.append(key)
+        if occurrence is not None:
+            self._occurrences[key] = occurrence
         return True
 
     def deduplicate(self, lines: Iterable[str]) -> list[str]:

@@ -37,23 +37,8 @@ uv build                       # build wheel + sdist
   internal code). `tests/integration/` - marked `integration`, run against
   real services. `tests/testdata/` holds gzipped, PII-cleansed slices of REAL
   public log datasets (see its README for provenance and the rebuild tool).
-- Integration tests find their services env-first, then docker, then skip:
-
-```mermaid
-flowchart TD
-    ENV{"env vars set?<br/>(CLICKHOUSE_* /<br/>KAFKA_BOOTSTRAP_SERVERS)"} -->|yes| PROBE{"endpoint<br/>reachable?"}
-    PROBE -->|yes| USE(["use the configured service<br/>(unique table/topic names,<br/>dropped afterwards)"])
-    PROBE -->|"no (warns why)"| DOCKER
-    ENV -->|no| DOCKER{"Docker<br/>available?"}
-    DOCKER -->|yes| TC(["throwaway testcontainer:<br/>ClickHouse / Redpanda /<br/>PostgreSQL / MySQL"])
-    TC --> STOP(["stopped at session end<br/>(LOGREDUCER_KEEP_CONTAINERS=1<br/>keeps it + prints the endpoint)"])
-    DOCKER -->|no| SKIP([pytest.skip])
-```
-
-- Copy `.env.example` to `.env` to point tests at existing services. CI sets
-  no env vars, so it always takes the docker path.
-- Every test that touches a shared service creates uniquely-named tables and
-  topics and cleans them up, so runs never collide.
+- ClickHouse and Kafka come from scalo's shared test services (`scalo.deployment.test_support.pytest_plugin`): one container each per run, shared by every xdist worker, or the always-present server the `HYPERI_TEST_*` settings in `.env.example` name. Each test gets its own database or topics, dropped afterwards. Without Docker those tests skip locally and fail in CI.
+- PostgreSQL and MySQL are throwaway testcontainers, stopped at the end of the session unless `LOGREDUCER_KEEP_CONTAINERS=1`, and skip without Docker.
 
 ## Commit messages
 

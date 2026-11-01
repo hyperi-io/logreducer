@@ -5,8 +5,9 @@ fresh random batches and reduces them one at a time, accumulating distinct
 representative lines until it has the number the caller asked for - or the
 source runs dry, a fetch cap is hit, or the representatives stop growing.
 
-Peak memory is bounded to roughly one batch plus the accumulator: batches are
-sized to a byte budget (from the observed average row size), and a psutil
+Peak memory is bounded to roughly one batch plus the accumulator: the first
+batch is a 1,000-row probe, later ones are sized to a byte budget from the
+observed average row size, and a psutil
 watchdog shrinks the batch and, as a hard backstop, stops the loop under
 pressure. This is the memory-safe path for "give me X lines from a huge table"
 without a full scan.
@@ -28,7 +29,7 @@ if TYPE_CHECKING:
     from .core import LogReducer
     from .sources import Source
 
-_DEFAULT_BATCH_ROWS = 10_000
+# Also the first batch when sizing adapts, as nothing is known about row sizes yet.
 _MIN_BATCH_ROWS = 1_000
 
 
@@ -105,7 +106,7 @@ def reduce_to_target(
     rng = random.Random(seed)
 
     seen: dict[str, None] = {}
-    batch = batch_rows if batch_rows is not None else _DEFAULT_BATCH_ROWS
+    batch = batch_rows if batch_rows is not None else _MIN_BATCH_ROWS
     fetches = 0
     plateau = 0
     reason = "max_fetches"

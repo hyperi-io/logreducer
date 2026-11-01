@@ -11,9 +11,9 @@ It ships as a CLI and as a Python library with an IO-agnostic core.
 ## What it gives you
 
 - A `logreducer` command that reduces a file, a SQL or ClickHouse query, or a Kafka topic, straight from the shell.
-- Pattern mode streams through a bounded dedup cache and template store, so memory grows with the number of distinct templates, not with the line count.
+- Pattern mode streams through a bounded dedup cache, fuzzy index and template store, so memory does not grow with the line count or the number of distinct lines.
 - Four modes: pattern (Drain3 template mining), anomaly (Isolation Forest), temporal (one example per template per time window) and hybrid.
-- ERROR, FATAL and CRITICAL lines always come through, one per distinct shape and ahead of the reduced output, in every mode and however a file is read. A SQL or ClickHouse source samples in the database first, so only the lines it returns are seen.
+- Lines naming ERROR, FATAL or CRITICAL as a whole word, in any case, always come through, one per distinct shape and ahead of the reduced output, in every mode and however a file is read. A SQL or ClickHouse source samples in the database first, so only the lines it returns are seen.
 - A core with no IO dependencies: anything re-iterable that yields `str` lines is a source, and anything with `write(lines)` is a sink.
 - Seeded SQL sampling and ClickHouse `SAMPLE` for tables too big to scan in full.
 - Adapters for SQL, ClickHouse and Kafka as extras, so you install only the one you use.
@@ -88,7 +88,7 @@ reduced = reducer.reduce(lines)
 
 ## How it works
 
-Pattern mode streams: lines flow through dedup and template mining as one generator pipeline, so the unique-line set is never materialised. Memory grows with the number of distinct templates, since a result is kept for every template seen, not with the line count.
+Pattern mode streams: lines flow through dedup and template mining as one generator pipeline, so the unique-line set is never materialised. A template the store evicts keeps its place in the ranking only while it can still make the `max_patterns` cut, so memory is set by `max_clusters`, `max_patterns` and `dedup_cache_size`, not by the input.
 
 ```mermaid
 flowchart LR
@@ -223,10 +223,11 @@ logreducer --dsn postgresql://user@host/db --query "SELECT msg FROM logs" \
 
 ## Bounding memory
 
-Pattern mode streams, and its memory grows with distinct templates, not lines. Temporal mode holds the whole source in memory, and anomaly mode holds its unique lines. The knobs:
+Pattern mode streams, and its memory is fixed by the knobs below, not by lines or distinct templates. Temporal mode holds the whole source in memory, and anomaly mode holds its unique lines. The knobs:
 
 - `max_memory_gb` - the overall cap (also sizes file read strategy and the watchdog). Presets: 0.5 / 1 / 2 GB by level; values above 70% of available RAM are clamped with a warning.
-- `max_clusters` - LRU-bound the Drain3 template store (10,000 by default, `None` for unbounded). Mining time grows with the square of the number of templates a line is compared with, so a lower value also speeds up high-cardinality sources.
+- `dedup_cache_size` - the lines exact dedup remembers, and at enhanced and maximum the lines the fuzzy index holds. Both drop the oldest first, so a repeat or near-repeat older than the window comes through again.
+- `max_clusters` - LRU-bound the Drain3 template store (10,000 by default, `None` for unbounded, which also keeps every evicted template's result). Mining time grows with the square of the number of templates a line is compared with, so a lower value also speeds up high-cardinality sources.
 - `anomaly_max_rows` - reservoir-cap the rows fed to anomaly detection (off by default; trades anomaly recall for a bounded matrix).
 
 ```python
@@ -307,7 +308,7 @@ reducer = LogReducer(
     level="enhanced",
     mode="hybrid",
     max_memory_gb=1.0,          # memory ceiling (clamped to 70% of available RAM)
-    dedup_cache_size=100000,    # bounded dedup cache
+    dedup_cache_size=100000,    # bounded dedup cache and fuzzy index
     drain_similarity=0.4,       # pattern similarity threshold
     fuzzy_threshold=0.8,        # fuzzy-dedup threshold (enhanced/maximum)
     anomaly_contamination=0.1,  # expected anomaly fraction

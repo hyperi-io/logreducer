@@ -137,15 +137,3 @@ def load_into_kafka(config: str | dict[str, Any], topic: str, name: str, *, limi
     if undelivered:
         raise RuntimeError(f"{undelivered} of {produced} messages not delivered to {topic} within 60s")
     return produced
-
-
-def delete_kafka_topic(config: str | dict[str, Any], topic: str) -> None:
-    """Best-effort delete of a temp topic (cleanup on shared/persistent brokers)."""
-    import contextlib
-
-    from confluent_kafka.admin import AdminClient
-
-    admin = AdminClient(_kafka_conf(config))
-    for future in admin.delete_topics([topic]).values():
-        with contextlib.suppress(Exception):
-            future.result(timeout=30)
