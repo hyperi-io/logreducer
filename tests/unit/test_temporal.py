@@ -3,7 +3,7 @@ Unit tests for temporal processing module
 """
 
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 
 import pytest
 
@@ -229,6 +229,25 @@ class TestBoundaryInputs:
             time.tzset()
 
         assert windows[1] - windows[0] == 2
+
+    @pytest.mark.parametrize(
+        "stamps",
+        [
+            pytest.param(["2026-01-01T01:00:00+01:00", "2026-01-01T00:00:00Z"], id="iso-offset-and-z"),
+            pytest.param(["2026-01-01 05:30:00.250+0530", "2026-01-01 00:00:00,750"], id="compact-offset-and-naive"),
+            pytest.param(["01/Jan/2026:01:00:00 +0100", "01/Jan/2026:00:00:00 +0000"], id="apache-offset"),
+        ],
+    )
+    def test_one_instant_lands_in_one_window_whatever_its_offset(self, stamps):
+        result = TemporalProcessor(60).process_temporal([f"{stamp} INFO heartbeat ok" for stamp in stamps])
+
+        midnight_utc_hour = int(datetime(2026, 1, 1, tzinfo=UTC).timestamp() // 3600)
+        assert [(p["count"], p["window"]) for p in result["temporal_patterns"]] == [(2, midnight_utc_hour)]
+
+    def test_offset_at_the_end_of_time_does_not_crash(self):
+        result = TemporalProcessor().process_temporal(["9999-12-31T23:59:59-01:00 INFO edge"])
+
+        assert len(result["temporal_patterns"]) == 1
 
     @pytest.mark.parametrize("minutes", [0, -5])
     def test_non_positive_window_rejected(self, minutes):
