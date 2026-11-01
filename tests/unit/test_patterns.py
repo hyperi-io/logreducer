@@ -10,7 +10,7 @@ import pytest
 from logreducer import LogReducer
 from logreducer.config import BigDialConfig
 from logreducer.memory import BoundedDeduplicator
-from logreducer.patterns import FuzzyDeduplicator, LogPattern, PatternExtractor, SevereShapes
+from logreducer.patterns import FuzzyDeduplicator, LogPattern, PatternExtractor, SevereShapes, is_severe
 
 
 class TestLogPattern:
@@ -569,6 +569,22 @@ SHAPE_CASES = [
     pytest.param(["ERROR job 17 failed", "ERROR job 9001 failed"], 1, ["", ""], id="standalone-numbers"),
     pytest.param(["INFO disk full", "WARN disk full"], 0, ["", ""], id="not-severe"),
 ]
+
+
+@pytest.mark.parametrize(
+    ("line", "severe"),
+    [
+        pytest.param("ERROR disk full", True, id="level-word"),
+        pytest.param("2026-01-01 [error] disk full", True, id="lower-case-in-brackets"),
+        pytest.param("level=FATAL out of memory", True, id="level-field"),
+        pytest.param("CRITICAL: replica lost", True, id="level-with-colon"),
+        pytest.param("INFO error_count=0 route=A1", False, id="field-name"),
+        pytest.param("INFO no errors in the last hour", False, id="plural"),
+        pytest.param("INFO TERRORBIRD sighted", False, id="inside-a-word"),
+    ],
+)
+def test_is_severe_matches_a_level_word_not_a_substring(line, severe):
+    assert is_severe(line) is severe
 
 
 @pytest.mark.parametrize(("templates", "shapes", "stamps"), SHAPE_CASES)

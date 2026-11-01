@@ -13,7 +13,7 @@ It ships as a CLI and as a Python library with an IO-agnostic core.
 - A `logreducer` command that reduces a file, a SQL or ClickHouse query, or a Kafka topic, straight from the shell.
 - Pattern mode streams through a bounded dedup cache, fuzzy index and template store, so memory does not grow with the line count or the number of distinct lines.
 - Four modes: pattern (Drain3 template mining), anomaly (Isolation Forest), temporal (one example per template per time window) and hybrid.
-- ERROR, FATAL and CRITICAL lines always come through, one per distinct shape and ahead of the reduced output, in every mode and however a file is read. A SQL or ClickHouse source samples in the database first, so only the lines it returns are seen.
+- Lines naming ERROR, FATAL or CRITICAL as a whole word, in any case, always come through, one per distinct shape and ahead of the reduced output, in every mode and however a file is read. A SQL or ClickHouse source samples in the database first, so only the lines it returns are seen.
 - A core with no IO dependencies: anything re-iterable that yields `str` lines is a source, and anything with `write(lines)` is a sink.
 - Seeded SQL sampling and ClickHouse `SAMPLE` for tables too big to scan in full.
 - Adapters for SQL, ClickHouse and Kafka as extras, so you install only the one you use.

@@ -2,6 +2,7 @@
 
 import heapq
 import logging
+import re
 from collections import deque
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from dataclasses import dataclass, field
@@ -96,13 +97,13 @@ def _typed_masking_instructions(timestamp: bool = False) -> tuple[MaskingInstruc
     return tuple(MaskingInstruction(f"{start}(?:{pattern}){end}", name) for pattern, name in shapes)
 
 
-_ALWAYS_KEPT_LEVELS = ("CRITICAL", "FATAL", "ERROR")
+# A level is a whole word in any case, so a field name like error_count does not count.
+_SEVERE_LEVEL = re.compile(r"\b(?:CRITICAL|FATAL|ERROR)\b", re.IGNORECASE)
 
 
 def is_severe(text: str) -> bool:
     """True for a line or template that names a CRITICAL, FATAL or ERROR level."""
-    upper = text.upper()
-    return any(level in upper for level in _ALWAYS_KEPT_LEVELS)
+    return _SEVERE_LEVEL.search(text) is not None
 
 
 class SevereShapes:
