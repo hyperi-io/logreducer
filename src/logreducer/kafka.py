@@ -29,7 +29,7 @@ Install: ``pip install 'logreducer[kafka]'``.
 import importlib.util
 import time
 from collections.abc import Iterable, Iterator
-from typing import Any
+from typing import Any, Self
 
 # Production-lean librdkafka defaults: durable produces, bounded timeouts,
 # cheap batching. Any key can be overridden by the user config.
@@ -52,8 +52,7 @@ CONSUMER_DEFAULTS: dict[str, Any] = {
     "max.poll.interval.ms": 300000,  # 5 minutes max poll interval
     "fetch.min.bytes": 1,  # Return immediately with any data
     "fetch.wait.max.ms": 500,  # Max wait for fetch.min.bytes
-    # A partition that ends in records the consumer skips (transaction markers, compacted
-    # offsets) is known to be read through only by its EOF event.
+    # Ends a partition whose last offsets hold no message (transaction markers, compaction).
     "enable.partition.eof": True,
 }
 
@@ -120,8 +119,8 @@ class KafkaSource:
 
     Each iteration creates a fresh consumer, subscribes, and reads every partition
     up to the end offset it had when assigned, decoding each message value to a
-    ``str`` line. Offsets are never committed,
-    so every pass re-reads from the earliest offset.
+    ``str`` line. Offsets are never committed, so every pass re-reads from the
+    earliest offset.
     """
 
     def __init__(
@@ -213,13 +212,16 @@ class KafkaSource:
                     continue
                 last_event = time.monotonic()
 
-                partition_key = (msg.topic(), msg.partition())
+                topic, partition = msg.topic(), msg.partition()
                 error = msg.error()
-                if error:
-                    if error.code() == KafkaError._PARTITION_EOF:
-                        drained.add(partition_key)
-                        continue
+                if error and error.code() != KafkaError._PARTITION_EOF:
                     raise KafkaConsumerError(f"Kafka error: {error.str()}", error_code=error.code())
+                if topic is None or partition is None:
+                    continue
+                partition_key = (topic, partition)
+                if error:
+                    drained.add(partition_key)
+                    continue
 
                 end = end_offsets.get(partition_key)
                 offset = msg.offset()
@@ -369,7 +371,7 @@ class KafkaSink:
             result = self._producer.flush()
         return result
 
-    def __enter__(self) -> KafkaSink:
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, *exc: object) -> None:
