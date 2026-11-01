@@ -307,3 +307,12 @@ class TestOnePatternPerCluster:
         # One ERROR line whatever the cap, and the cap fills with the rest.
         assert sum("ERROR" in line for line in reduced) == 1
         assert len(reduced) == 1 + 2
+
+    @pytest.mark.parametrize(("cap", "expected"), [(1, 1), (2, 2), (5, 4)])
+    def test_timed_and_timeless_patterns_share_one_cap(self, cap, expected):
+        timed = [line for line in _timed_lines(3, 1) if "ERROR" not in line]
+        timeless = [f"worker {n} heartbeat ok" for n in range(50)] + [f"queue depth {n} items" for n in range(50)]
+
+        reduced = LogReducer(mode="temporal", max_patterns=cap).reduce(timed + timeless)
+
+        assert len(reduced) == expected

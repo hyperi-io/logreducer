@@ -418,14 +418,10 @@ class LogReducer:
             self.logger.info("Phase 2/2: Temporal processing")
         temporal_results = self.temporal_processor.process_temporal(lines)
 
-        # One example per (window, template), the most important first.
-        def rank(patterns: list[dict]) -> list[dict]:
-            return sorted(patterns, key=lambda p: pattern_priority(p["template"], p["count"]), reverse=True)
-
-        result = [p["example"] for p in rank(temporal_results["temporal_patterns"])[: self.config.max_patterns]]
-        result.extend(p["example"] for p in rank(temporal_results["timeless_patterns"])[:100])
-
-        return result
+        # One example per (window, template) or timeless template, the most important first, under one cap.
+        candidates = temporal_results["temporal_patterns"] + temporal_results["timeless_patterns"]
+        ranked = sorted(candidates, key=lambda p: pattern_priority(p["template"], p["count"]), reverse=True)
+        return [p["example"] for p in ranked[: self.config.max_patterns]]
 
     def _process_hybrid_mode(self, source: Source) -> list[str]:
         """Process using combined approach."""
