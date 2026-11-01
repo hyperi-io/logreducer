@@ -70,6 +70,8 @@ into a list. Peak memory is the bounded dedup cache, the fuzzy index (the same `
 
 An evicted template's result is kept only while it can still make the `max_patterns` cut. Its count stops changing once the dedup cache has dropped the lines that fed it, so from then on it competes for one of `max_patterns` places, and a result that loses one can never win it back. That keeps the output identical to ranking every template ever seen.
 
+The fuzzy index measured about 1.8 KB per entry, so the preset windows hold about 180 MB at enhanced (100K lines) and 360 MB at maximum (200K), inside their 1 GB and 2 GB budgets.
+
 Drain3 compares each line with every template stored at the leaf it reaches, so
 time grows with the square of the template count when lines share no tokens.
 `max_clusters` (10,000 by default) bounds the template store and with it the
