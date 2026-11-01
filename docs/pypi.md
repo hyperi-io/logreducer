@@ -10,6 +10,7 @@ It ships as a CLI and as a Python library with an IO-agnostic core.
 - Pattern mode streams through a bounded dedup cache and template store, so memory grows with the number of distinct templates, not with the line count.
 - A memory budget that decides how a file is read: whole, in chunks, or reservoir-sampled once it passes five times the budget.
 - Four modes: pattern (Drain3 template mining), anomaly (Isolation Forest), temporal (one example per template per time window) and hybrid.
+- ERROR, FATAL and CRITICAL lines always come through, one per distinct shape and ahead of the reduced output, in every mode and however a file is read. A SQL or ClickHouse source samples in the database first, so only the lines it returns are seen.
 - A core with no IO dependencies: anything re-iterable that yields `str` lines is a source, and anything with `write(lines)` is a sink.
 - Seeded SQL sampling and ClickHouse `SAMPLE` for tables too big to scan in full.
 - `reduce_to_target` to collect about N representative lines from a large source, holding roughly one batch in memory.

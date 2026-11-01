@@ -4,6 +4,7 @@ import json
 import os
 import random
 import time
+from collections.abc import Iterable
 from dataclasses import replace
 from datetime import datetime
 from enum import Enum
@@ -14,7 +15,7 @@ from .anomaly import AnomalyDetector
 from .config import BigDialConfig, OutputFormat, ProcessingLevel, ProcessingMode, get_preset_config, validate_config
 from .logging_config import get_logger, setup_logging
 from .memory import BoundedDeduplicator, MemoryMonitor
-from .patterns import FuzzyDeduplicator, PatternExtractor, pattern_priority
+from .patterns import FuzzyDeduplicator, PatternExtractor, SevereShapes, is_severe, pattern_priority
 from .sampling import reservoir_sample
 from .sinks import Sink
 from .sources import FileSource, Source
@@ -213,7 +214,13 @@ class LogReducer:
         # Count input lines for the reduction ratio (one pass over the source).
         # Note: a size-sampled FileSource yields its sampled line count, so for
         # very large files the ratio and input_lines stat are approximate.
-        input_lines = sum(1 for _ in source)
+        shapes = SevereShapes()
+        input_lines = 0
+        for line in source:
+            input_lines += 1
+            shapes.add(line)
+        # A FileSource taps its own reads, which see the lines it samples away.
+        shapes = getattr(source, "severe_shapes", shapes)
 
         size_bytes = getattr(source, "size_bytes", None)
         file_size_mb = size_bytes / (1024 * 1024) if size_bytes else None
@@ -233,6 +240,10 @@ class LogReducer:
             result_lines = self._process_temporal_mode(source)
         else:  # HYBRID
             result_lines = self._process_hybrid_mode(source)
+
+        # Modes return quiet lines under their caps. Severe lines are one per shape, outside every
+        # cap, so the output is bounded by the caps plus the number of distinct severe shapes.
+        result_lines = shapes.lines + result_lines
 
         # Calculate stats
         processing_time = time.time() - start_time
@@ -330,31 +341,44 @@ class LogReducer:
             # single generator pipeline, so there is no phase boundary to report.
             self.logger.info("Streaming pipeline: dedup -> fuzzy dedup -> pattern mining")
 
-        unique_stream = self.deduplicator.deduplicate_counted(source)
+        quiet_lines = (line for line in source if not is_severe(line))
+        unique_stream = self.deduplicator.deduplicate_counted(quiet_lines)
         if self.fuzzy_dedup:
             unique_stream = self.fuzzy_dedup.deduplicate_pairs(unique_stream)
         patterns = self.pattern_extractor.extract_counted_patterns(unique_stream)
 
-        # Collect examples
+        # Collect the examples of quiet patterns (the extractor has already applied max_patterns to
+        # them). Severe lines come from the severe shapes that reduce() adds, one per shape.
         result = []
-        for pattern in patterns[: self.config.max_patterns]:
-            result.extend(pattern.examples)
+        for pattern in patterns:
+            result.extend(line for line in pattern.examples if not is_severe(line))
 
         return result
 
-    def _cap_for_anomaly(self, unique_lines: list[str]) -> list[str]:
+    def _cap_for_anomaly(self, unique_lines: Iterable[str]) -> list[str]:
         """Reservoir-cap unique lines to anomaly_max_rows to bound the ML matrix.
 
         Anomaly detection (Isolation Forest over a TF-IDF matrix) is batch ML and
         cannot stream, so a huge unique-line set is the one place a hard memory
-        cap needs an explicit sample. Fixed seed = reproducible across passes.
-        Trades anomaly recall (a rare line may be sampled out) for bounded memory;
-        off unless anomaly_max_rows is set.
+        cap needs an explicit sample. The sample is drawn in one pass over the
+        stream, so the full set is never held. Fixed seed = reproducible across
+        passes. Trades anomaly recall (a rare line may be sampled out) for bounded
+        memory. With no anomaly_max_rows the lines are kept whole.
         """
         cap = self.config.anomaly_max_rows
-        if cap and len(unique_lines) > cap:
-            return reservoir_sample(unique_lines, cap, random.Random(0))
-        return unique_lines
+        if not cap:
+            return unique_lines if isinstance(unique_lines, list) else list(unique_lines)
+        if isinstance(unique_lines, list) and len(unique_lines) <= cap:
+            return unique_lines
+        return reservoir_sample(unique_lines, cap, random.Random(0))
+
+    def _detect_quiet_anomalies(self, detector: AnomalyDetector, source: Source) -> tuple[list[str], list[str]]:
+        """Return (anomalous, normal) among the quiet unique lines of ``source``.
+
+        Severe lines are left out of the detector's input, since reduce() adds one per shape.
+        """
+        quiet_unique = (line for line in self.deduplicator.deduplicate_lines(source) if not is_severe(line))
+        return detector.detect_anomalies(self._cap_for_anomaly(quiet_unique))
 
     def _process_anomaly_mode(self, source: Source) -> list[str]:
         """Process using anomaly detection."""
@@ -364,14 +388,10 @@ class LogReducer:
             return self._process_pattern_mode(source)
 
         if self.config.enable_logging:
-            self.logger.info("Phase 1/2: Reading and deduplicating")
-        unique_lines = self._cap_for_anomaly(list(self.deduplicator.deduplicate_lines(source)))
+            self.logger.info("Reading, deduplicating and anomaly detection")
+        anomalous, normal = self._detect_quiet_anomalies(self.anomaly_detector, source)
 
-        if self.config.enable_logging:
-            self.logger.info("Phase 2/2: Anomaly detection")
-        anomalous, normal = self.anomaly_detector.detect_anomalies(unique_lines)
-
-        # Keep all anomalies + sample of normal
+        # Keep all anomalies (capped) + sample of normal
         result = anomalous[: self.config.max_patterns // 2]
 
         # Add some normal lines for context. Seeded RNG so a re-run over the
@@ -392,7 +412,8 @@ class LogReducer:
 
         if self.config.enable_logging:
             self.logger.info("Phase 1/2: Reading lines")
-        lines = list(source)
+        # Severe lines never reach the miner: reduce() adds one line per severe shape, not one per window.
+        lines = [line for line in source if not is_severe(line)]
 
         if self.config.enable_logging:
             self.logger.info("Phase 2/2: Temporal processing")
@@ -421,8 +442,7 @@ class LogReducer:
             # anomaly pass needs a fresh deduplicator - otherwise every line reads
             # as already-seen and no anomalies survive (hybrid -> pattern-only).
             self.deduplicator = BoundedDeduplicator(self.config.dedup_cache_size, self.config.hash_algorithm)
-            unique_lines = self._cap_for_anomaly(list(self.deduplicator.deduplicate_lines(source)))
-            anomalous, _ = self.anomaly_detector.detect_anomalies(unique_lines)
+            anomalous, _ = self._detect_quiet_anomalies(self.anomaly_detector, source)
 
             # Combine, preferring anomalies
             result = anomalous[: self.config.max_patterns // 2]

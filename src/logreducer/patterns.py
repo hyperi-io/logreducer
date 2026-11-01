@@ -1,7 +1,7 @@
 """Pattern extraction (Drain3 template mining) and fuzzy deduplication."""
 
 import logging
-from collections.abc import Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -25,7 +25,18 @@ except ImportError:
 
 @dataclass
 class LogPattern:
-    """Represents a unique log pattern."""
+    """Represents a unique log pattern.
+
+    Attributes:
+        template: The pattern, with ``<*>`` for the slots that vary.
+        examples: Lines kept as examples.
+        count: Lines that joined the pattern.
+        priority: Rank score (see ``pattern_priority``).
+        anomaly_score: Score from anomaly detection.
+        metadata: Free-form extras.
+        severe: Whether its lines are CRITICAL, FATAL or ERROR. Kept when the
+            template has widened the level word to ``<*>``.
+    """
 
     template: str
     examples: list[str] = field(default_factory=list)
@@ -33,9 +44,10 @@ class LogPattern:
     priority: float = 0.0
     anomaly_score: float = 0.0
     metadata: dict = field(default_factory=dict)
+    severe: bool = False
 
 
-def _typed_masking_instructions() -> tuple[MaskingInstruction, ...]:
+def _typed_masking_instructions(timestamp: bool = False) -> tuple[MaskingInstruction, ...]:
     """Build the curated masking set for typed template slots.
 
     The miner applies these to each line before clustering, so masked values
@@ -43,13 +55,21 @@ def _typed_masking_instructions() -> tuple[MaskingInstruction, ...]:
     collapsing to the bare ``<*>`` wildcard. Instructions run sequentially
     over already-masked text, so the specific shapes (IP, UUID, MAC, IPv6)
     precede the greedy catch-alls (HEX, NUM).
+
+    Args:
+        timestamp: Also mask ISO-8601 timestamps. Only the severe-shape key
+            sets it, so the miner's typed templates stay as they are.
     """
     # Zero-width token boundaries (drain3's documented idiom): mask a value
     # delimited by non-alphanumerics, never a substring of a word.
     start = r"(?:(?<=[^A-Za-z0-9])|^)"
     end = r"(?:(?=[^A-Za-z0-9])|$)"
     hex4 = r"[0-9A-Fa-f]{1,4}"
+    # ISO-8601 date and time, with optional fraction and Z or offset. Listed first because the
+    # NUM mask stops at letters and would leave the "T10" and "07Z" of a stamp unmasked.
+    iso_timestamp = (r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?:Z|[+-]\d{2}(?::?\d{2})?)?", "TIMESTAMP")
     shapes = [
+        *([iso_timestamp] if timestamp else []),
         # IPv4 dotted quad.
         (r"\d{1,3}(?:\.\d{1,3}){3}", "IP"),
         # UUID before HEX, which would otherwise eat its 8/12-char runs.
@@ -77,24 +97,71 @@ def _typed_masking_instructions() -> tuple[MaskingInstruction, ...]:
 _ALWAYS_KEPT_LEVELS = ("CRITICAL", "FATAL", "ERROR")
 
 
-def _is_severe(template: str) -> bool:
-    """True for a template that names a CRITICAL, FATAL or ERROR level."""
-    upper = template.upper()
+def is_severe(text: str) -> bool:
+    """True for a line or template that names a CRITICAL, FATAL or ERROR level."""
+    upper = text.upper()
     return any(level in upper for level in _ALWAYS_KEPT_LEVELS)
 
 
-def pattern_priority(template: str, count: int) -> float:
+class SevereShapes:
+    """The first severe line of each shape, fed one line at a time.
+
+    Numbers, IPs, hex runs and ISO-8601 timestamps do not change a shape, and digits inside an
+    identifier do (``E1`` and ``E2`` are two shapes). The reducer feeds it every line as the
+    source is read, before any sampling or dedup, so a severe line cannot be lost to either.
+    It holds one line per distinct shape.
+    """
+
+    def __init__(self) -> None:
+        self._masks = _typed_masking_instructions(timestamp=True)
+        self._first_of_shape: dict[str, str] = {}
+
+    def add(self, line: str) -> None:
+        """Remember ``line`` when it is severe and its shape is new."""
+        if not is_severe(line):
+            return
+        shape = line
+        for mask in self._masks:
+            shape = mask.mask(shape)
+        self._first_of_shape.setdefault(shape, line)
+
+    @property
+    def lines(self) -> list[str]:
+        """The remembered lines, in the order their shapes first appeared."""
+        return list(self._first_of_shape.values())
+
+
+def cap_outside_severe[T](ranked: Sequence[T], cap: int, severe: Callable[[T], bool]) -> list[T]:
+    """Keep every severe item and the first ``cap`` others, in ranked order.
+
+    A severity boost is a finite multiplier, so a frequent quiet item can outrank a rare
+    severe one. Severe items sit outside the cap instead.
+    """
+    kept: list[T] = []
+    others = 0
+    for item in ranked:
+        if severe(item):
+            kept.append(item)
+        elif others < cap:
+            kept.append(item)
+            others += 1
+    return kept
+
+
+def pattern_priority(template: str, count: int, severe: bool = False) -> float:
     """Rank score for a template seen ``count`` times.
 
     Severity boosts are checked highest-first so a template containing both
-    (e.g. "CRITICAL: write FAILED") scores as critical, not merely error.
+    (e.g. "CRITICAL: write FAILED") scores as critical, not merely error. A
+    ``severe`` pattern scores as error at least, because its template may have
+    widened the level word to ``<*>``.
     """
     priority: float = count
 
     template_upper = template.upper()
     if "CRITICAL" in template_upper or "FATAL" in template_upper:
         priority *= 200
-    elif "ERROR" in template_upper or "FAIL" in template_upper:
+    elif severe or "ERROR" in template_upper or "FAIL" in template_upper:
         priority *= 100
     elif "WARN" in template_upper:
         priority *= 50
@@ -124,6 +191,7 @@ class PatternExtractor:
             # drain_max_clusters, keeping memory flat on high-cardinality logs.
             drain_max_clusters=self.config.max_clusters,
             masking_instructions=masking,
+            drain_is_severe=is_severe,
         )
         self.miner = TemplateMiner(drain_config)
 
@@ -149,7 +217,7 @@ class PatternExtractor:
             cluster = self.miner.add_log_message(line)
             pattern = pattern_map.get(cluster.cluster_id)
             if pattern is None:
-                pattern = LogPattern(template=cluster.get_template(), count=0)
+                pattern = LogPattern(template=cluster.get_template(), count=0, severe=cluster.severe)
                 pattern_map[cluster.cluster_id] = pattern
 
             pattern.count += 1
@@ -172,18 +240,18 @@ class PatternExtractor:
         patterns = self._filter_by_occurrence(patterns)
         patterns = self._calculate_priority(patterns)
 
-        # Sort by priority and limit
+        # Sort by priority and limit, with severe patterns outside the limit
         patterns.sort(key=lambda p: p.priority, reverse=True)
-        return patterns[: self.config.max_patterns]
+        return cap_outside_severe(patterns, self.config.max_patterns, lambda p: p.severe)
 
     def _filter_by_occurrence(self, patterns: list[LogPattern]) -> list[LogPattern]:
         """Filter patterns by minimum occurrence, keeping every CRITICAL, FATAL or ERROR one."""
-        return [p for p in patterns if p.count >= self.config.min_pattern_occurrences or _is_severe(p.template)]
+        return [p for p in patterns if p.count >= self.config.min_pattern_occurrences or p.severe]
 
     def _calculate_priority(self, patterns: list[LogPattern]) -> list[LogPattern]:
         """Set each pattern's priority score (see ``pattern_priority``)."""
         for pattern in patterns:
-            pattern.priority = pattern_priority(pattern.template, pattern.count)
+            pattern.priority = pattern_priority(pattern.template, pattern.count, pattern.severe)
 
         return patterns
 

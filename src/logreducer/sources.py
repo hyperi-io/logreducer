@@ -22,6 +22,7 @@ from collections.abc import Iterable, Iterator, Sequence
 from typing import Any, Protocol, runtime_checkable
 
 from .memory import MemoryMonitor, StreamingProcessor
+from .patterns import SevereShapes
 
 
 def rows_to_lines(rows: Iterable[Sequence[Any]]) -> Iterator[str]:
@@ -57,6 +58,10 @@ class FileSource:
     Re-iterable and memory-aware: each iteration re-opens the file and streams
     it through the constant-memory strategy (full / chunked / reservoir-sampled
     by size), so the reducer can make multiple passes without loading the file.
+
+    Attributes:
+        severe_shapes: One severe line per shape, from every line the latest pass read,
+            including the ones that pass sampled away.
     """
 
     def __init__(self, path: str | os.PathLike[str], *, max_memory_gb: float = 1.0) -> None:
@@ -69,9 +74,12 @@ class FileSource:
                 "so write it to a file first (e.g. redirect into a temp file)."
             )
         self._processor = StreamingProcessor(MemoryMonitor(max_memory_gb))
+        self.severe_shapes = SevereShapes()
 
     def __iter__(self) -> Iterator[str]:
-        return self._processor.read_file_streaming(self.path)
+        # A fresh tap per pass: it sees every line of the file, however the pass samples.
+        self.severe_shapes = SevereShapes()
+        return self._processor.read_file_streaming(self.path, self.severe_shapes.add)
 
     @property
     def size_bytes(self) -> int | None:

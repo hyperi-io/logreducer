@@ -275,13 +275,16 @@ class TestOnePatternPerCluster:
 
         reduced = LogReducer(mode="temporal").reduce(lines)
 
-        assert len(reduced) == templates * windows
+        # The ERROR template is one line for the whole run, not one per window.
+        severe_lines = 1 if templates > 1 else 0
+        assert len(reduced) == (templates - severe_lines) * windows + severe_lines
         assert any(line.startswith(f"2026-01-01 {10 + windows - 1}:") for line in reduced)
 
-    def test_most_important_cluster_survives_the_cap(self):
+    def test_severe_shape_is_one_line_outside_the_cap(self):
         lines = _timed_lines(3, 3)
 
         reduced = LogReducer(mode="temporal", max_patterns=2).reduce(lines)
 
-        assert len(reduced) == 2
-        assert all("ERROR" in line for line in reduced)
+        # One ERROR line whatever the cap, and the cap fills with the rest.
+        assert sum("ERROR" in line for line in reduced) == 1
+        assert len(reduced) == 1 + 2

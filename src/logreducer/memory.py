@@ -4,7 +4,7 @@ import gc
 import os
 import random
 from collections import deque
-from collections.abc import Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from typing import Any, Protocol
 
 import psutil
@@ -105,8 +105,14 @@ class StreamingProcessor:
         self.memory_monitor = memory_monitor
         self.chunk_size = memory_monitor.safe_chunk_size
 
-    def read_file_streaming(self, file_path: str) -> Iterator[str]:
-        """Read file with minimal memory usage."""
+    def read_file_streaming(self, file_path: str, tap: Callable[[str], None] | None = None) -> Iterator[str]:
+        """Read file with minimal memory usage.
+
+        Args:
+            file_path: The file to read.
+            tap: Called with every non-empty stripped line as it is read, before any sampling
+                drops it, whichever strategy the file's size and the memory left select.
+        """
         file_size = os.path.getsize(file_path)
         strategy = self.memory_monitor.estimate_file_strategy(file_size)
 
@@ -115,15 +121,17 @@ class StreamingProcessor:
                 for line in f:
                     line = line.strip()
                     if line:
+                        if tap:
+                            tap(line)
                         yield line
 
         elif strategy == "chunked":
-            yield from self._read_chunked(file_path)
+            yield from self._read_chunked(file_path, tap)
 
         else:  # sampled
-            yield from self._read_sampled(file_path)
+            yield from self._read_sampled(file_path, tap)
 
-    def _read_chunked(self, file_path: str) -> Iterator[str]:
+    def _read_chunked(self, file_path: str, tap: Callable[[str], None] | None = None) -> Iterator[str]:
         """Read file in chunks, degrading to sampling under memory pressure.
 
         The memory check runs on its own line counter, NOT on chunk-flush
@@ -139,6 +147,8 @@ class StreamingProcessor:
                 if not raw:
                     continue
 
+                if tap:
+                    tap(raw)
                 chunk.append(raw)
 
                 if len(chunk) >= self.chunk_size:
@@ -150,13 +160,13 @@ class StreamingProcessor:
                     _, is_safe = self.memory_monitor.check_memory()
                     if not is_safe:
                         yield from chunk
-                        yield from self._read_sampled_remainder(f)
+                        yield from self._read_sampled_remainder(f, tap)
                         return
 
             if chunk:
                 yield from chunk
 
-    def _read_sampled(self, file_path: str) -> Iterator[str]:
+    def _read_sampled(self, file_path: str, tap: Callable[[str], None] | None = None) -> Iterator[str]:
         """Reservoir sampling for huge files (uniform, reproducible).
 
         Uses Algorithm L with a fixed-seed RNG so every pass over this
@@ -173,11 +183,13 @@ class StreamingProcessor:
                 for line in f:
                     stripped = line.strip()
                     if stripped:
+                        if tap:
+                            tap(stripped)
                         yield stripped
 
         yield from reservoir_sample(_lines(), reservoir_size, random.Random(0))
 
-    def _read_sampled_remainder(self, file_handle: Any) -> Iterator[str]:
+    def _read_sampled_remainder(self, file_handle: Any, tap: Callable[[str], None] | None = None) -> Iterator[str]:
         """Reservoir-sample the rest of an already-open file (mid-chunk fallback)."""
         from .sampling import reservoir_sample
 
@@ -185,6 +197,8 @@ class StreamingProcessor:
             for line in file_handle:
                 stripped = line.strip()
                 if stripped:
+                    if tap:
+                        tap(stripped)
                     yield stripped
 
         yield from reservoir_sample(_lines(), 10000, random.Random(0))

@@ -57,6 +57,47 @@ class TestClustering:
 
         assert short.cluster_id != long.cluster_id
 
+    @pytest.mark.parametrize(
+        ("is_severe", "lines", "same_cluster", "severe_flags"),
+        [
+            pytest.param(None, ["10:00 INFO GET /a 200", "11:00 ERROR GET /a 200"], True, [False], id="no-predicate"),
+            pytest.param(
+                lambda _text: False,
+                ["10:00 INFO GET /a 200", "11:00 ERROR GET /a 200"],
+                True,
+                [False],
+                id="never-severe",
+            ),
+            pytest.param(
+                lambda text: "ERROR" in text,
+                ["10:00 INFO GET /a 200", "11:00 ERROR GET /a 200"],
+                False,
+                [False, True],
+                id="severe-line-stays-apart",
+            ),
+            pytest.param(
+                lambda text: "ERROR" in text,
+                ["10:00 ERROR GET /a 200", "11:00 ERROR GET /a 201"],
+                True,
+                [True],
+                id="severe-lines-merge",
+            ),
+            pytest.param(
+                lambda text: "ERROR" in text or "FATAL" in text,
+                ["10:00 ERROR GET /a 200", "11:00 FATAL GET /a 200"],
+                True,
+                [True],
+                id="widening-the-level-keeps-the-flag",
+            ),
+        ],
+    )
+    def test_severity_predicate_keeps_severe_lines_apart(self, is_severe, lines, same_cluster, severe_flags):
+        miner = TemplateMiner(TemplateMinerConfig(drain_is_severe=is_severe))
+        clusters = [miner.add_log_message(line) for line in lines]
+
+        assert (clusters[0] is clusters[1]) is same_cluster
+        assert [c.severe for c in miner.drain.clusters] == severe_flags
+
     def test_empty_and_blank_lines_share_one_empty_cluster(self):
         miner = TemplateMiner()
         empty = miner.add_log_message("")
