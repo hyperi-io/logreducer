@@ -16,7 +16,8 @@ and re-reads it for multi-pass modes):
 * **Bounded.** The read records each partition's end offset when it is assigned
   and stops once every partition has reached it, by offset or by
   ``_PARTITION_EOF``. Messages written after that point wait for the next read.
-  A consecutive-idle-poll count is only a backstop for a stalled broker.
+  A read that goes ``idle_timeout`` seconds without a message short of those
+  offsets raises, so a partial read never looks like a complete one.
 * **No commit.** Offsets are never committed, so each pass re-reads from the
   earliest offset - that is what makes the source re-iterable. An application
   that needs offset tracking should consume itself and hand the reducer its own
@@ -132,7 +133,7 @@ class KafkaSource:
         verify_ssl: bool = True,
         max_messages: int | None = None,
         poll_timeout: float = 1.0,
-        idle_polls: int = 3,
+        idle_timeout: float = 30.0,
         assignment_timeout: float = 30.0,
         encoding: str = "utf-8",
     ) -> None:
@@ -145,8 +146,9 @@ class KafkaSource:
             verify_ssl: If False, disable TLS certificate verification.
             max_messages: Optional hard cap on lines read per pass.
             poll_timeout: Seconds to block per ``poll`` call.
-            idle_polls: Backstop for a never-EOF broker - once partitions are
-                assigned, stop after this many consecutive empty polls.
+            idle_timeout: Backstop for a stalled broker. Once partitions are
+                assigned, iteration raises if this many seconds pass with no
+                message or EOF while a partition is short of its end offset.
             assignment_timeout: Backstop for the never-assigned case (unreachable
                 broker, missing topic, auth failure). If no partition is assigned
                 within this many seconds, iteration raises instead of hanging.
@@ -161,7 +163,7 @@ class KafkaSource:
         self.topics = [topics] if isinstance(topics, str) else list(topics)
         self.max_messages = max_messages
         self.poll_timeout = poll_timeout
-        self.idle_polls = idle_polls
+        self.idle_timeout = idle_timeout
         self.assignment_timeout = assignment_timeout
         self.encoding = encoding
 
@@ -174,15 +176,12 @@ class KafkaSource:
         # made during it is left for the next pass.
         end_offsets: dict[tuple[str, int], int] = {}
         drained: set[tuple[str, int]] = set()
-        empty_polls = 0
         emitted = 0
-        # Never-assigned backstop: an unreachable broker, a missing topic, or an
-        # auth failure leaves assignment() empty forever, so empty_polls (gated
-        # on assignment) never fires and the loop would spin indefinitely. Bail
-        # if no partition is ever assigned within the timeout - a stuck
-        # dependency surfaced as a real error, not a silent hang.
+        # An unreachable broker, a missing topic or an auth failure leaves assignment() empty
+        # forever, so a read that is never assigned raises after assignment_timeout.
         ever_assigned = False
         assignment_deadline = time.monotonic() + self.assignment_timeout
+        last_event = time.monotonic()
         try:
             while True:
                 if self.max_messages is not None and emitted >= self.max_messages:
@@ -192,7 +191,9 @@ class KafkaSource:
 
                 assignment = consumer.assignment()
                 if assignment:
-                    ever_assigned = True
+                    if not ever_assigned:
+                        ever_assigned = True
+                        last_event = time.monotonic()
                     self._record_end_offsets(consumer, assignment, end_offsets, drained)
                     if drained >= end_offsets.keys():
                         break
@@ -203,15 +204,14 @@ class KafkaSource:
                     )
 
                 if msg is None:
-                    # Before partitions are assigned an empty poll just means the
-                    # group is still joining - don't count it. Once assigned,
-                    # repeated empties are the backstop for a never-EOF broker.
-                    if assignment:
-                        empty_polls += 1
-                        if empty_polls >= self.idle_polls:
-                            break
+                    if ever_assigned and time.monotonic() - last_event >= self.idle_timeout:
+                        short = sorted(end_offsets.keys() - drained)
+                        raise KafkaConsumerError(
+                            f"read stopped short of the end: no message for {self.idle_timeout:.0f}s "
+                            f"with partitions {short!r} still below their end offsets"
+                        )
                     continue
-                empty_polls = 0
+                last_event = time.monotonic()
 
                 partition_key = (msg.topic(), msg.partition())
                 error = msg.error()

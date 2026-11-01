@@ -32,7 +32,6 @@ def test_kafka_sink_then_source_roundtrip(kafka_bootstrap):
         kafka_bootstrap,
         group_id=f"logreducer-it-{uuid.uuid4().hex[:8]}",
         topics=topic,
-        idle_polls=10,
     )
     consumed = list(source)
     assert len(consumed) == 30
@@ -74,3 +73,28 @@ def test_source_stops_at_the_end_offsets_it_started_with(kafka_bootstrap):
         consumed.append(line)
 
     assert consumed == lines
+
+
+def test_empty_polls_before_the_end_do_not_end_the_read(kafka_bootstrap):
+    from logreducer.kafka import KafkaSink, KafkaSource
+
+    topic = _name()
+    lines = [f"INFO line {i}" for i in range(2_000)]
+    KafkaSink(kafka_bootstrap, topic).write(lines)
+    # A 1 ms poll returns empty between most fetches.
+    source = KafkaSource(_config(kafka_bootstrap, **THROTTLED), group_id=_name(), topics=topic, poll_timeout=0.001)
+
+    assert list(source) == lines
+
+
+def test_a_read_that_stalls_short_of_the_end_raises(kafka_bootstrap):
+    from logreducer.kafka import KafkaConsumerError, KafkaSink, KafkaSource
+
+    topic = _name()
+    KafkaSink(kafka_bootstrap, topic).write([f"INFO line {i}" for i in range(10)])
+    # The broker holds each fetch until 10 MB is ready or 20 s pass, so nothing arrives inside the idle timeout.
+    stalled = _config(kafka_bootstrap, **{"fetch.min.bytes": 10_000_000, "fetch.wait.max.ms": 20_000})
+    source = KafkaSource(stalled, group_id=_name(), topics=topic, idle_timeout=2.0)
+
+    with pytest.raises(KafkaConsumerError, match="stopped short of the end"):
+        list(source)
