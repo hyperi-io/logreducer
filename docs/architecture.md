@@ -131,24 +131,14 @@ Three seams, none of which needs the library to know anything about the host.
 
 ## Invariants
 
-1. **`__iter__` returns a fresh iterator.** Checked at the entry point, not
-   documented and hoped for.
-2. **The core imports no IO library.** An adapter's dependency is an extra, and
-   the core never imports the adapter modules.
-3. **Analysis state is per run.** `_reset_components()` rebuilds the dedup
-   seen-set, both Drain3 miners and the fuzzy LSH, so one `LogReducer` is
-   reusable across calls and hybrid's two passes cannot poison each other.
-   Without it every line reads as already-seen and the result is empty.
-4. **An unknown config keyword raises.** A silently dropped override is tuning
-   that quietly does nothing, which is worse than a failure.
-5. **The row-to-line convention is shared.** The database adapters take the FIRST
-   column, skip NULLs and skip blank lines, matching `FileSource`, so the same
-   data reduces identically whichever source carried it.
-6. **Every sample is seeded.** See above.
-7. **Config enums serialise as their `.value`**, so metadata survives
-   `json.dumps` and no `OutputFormat.LINE`-style repr leaks into output.
-8. **A memory ceiling above 70% of available RAM is clamped with a warning**
-   rather than accepted.
+1. `__iter__` returns a fresh iterator, checked at the entry point rather than documented and hoped for.
+2. The core imports no IO library. An adapter's dependency is an extra, and the core never imports the adapter modules.
+3. Analysis state is per run. `_reset_components()` rebuilds the dedup seen-set, both Drain3 miners and the fuzzy LSH, so one `LogReducer` is reusable across calls and hybrid's two passes cannot poison each other. Without it every line reads as already-seen and the result is empty.
+4. An unknown config keyword raises. A silently dropped override is tuning that quietly does nothing, which is worse than a failure.
+5. The row-to-line convention is shared. The database adapters take the FIRST column, skip NULLs and skip blank lines, matching `FileSource`, so the same data reduces identically whichever source carried it.
+6. Every sample is seeded. See above.
+7. Config enums serialise as their `.value`, so metadata survives `json.dumps` and no `OutputFormat.LINE`-style repr leaks into output.
+8. A memory ceiling above 70% of available RAM is clamped with a warning rather than accepted, whether it comes from the config or a `LogReducer` argument.
 
 ### Where the numbers are approximate
 
