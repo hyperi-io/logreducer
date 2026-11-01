@@ -477,6 +477,31 @@ class TestRepeatsCountTowardsPatterns:
     def test_reduce_keeps_repeated_lines_and_drops_singletons(self, level, lines, expected):
         assert sorted(LogReducer(level=level).reduce(lines)) == sorted(expected)
 
+    @pytest.mark.parametrize(
+        ("lines", "expected"),
+        [
+            pytest.param(["INFO disk check ok", "INFO  disk check ok"], 2, id="near-duplicate"),
+            pytest.param(["INFO disk check ok"] + ["INFO  disk check ok"] * 4, 5, id="repeats-of-a-near-duplicate"),
+        ],
+    )
+    def test_near_duplicates_count_towards_the_pattern_they_matched(self, lines, expected):
+        fuzzy = FuzzyDeduplicator(max_entries=1_000)
+        if not fuzzy.enabled:
+            pytest.skip("datasketch not installed")
+        counted = fuzzy.deduplicate_pairs(BoundedDeduplicator(1_000).deduplicate_counted(lines))
+
+        patterns = PatternExtractor(BigDialConfig()).extract_counted_patterns(counted)
+
+        assert [(p.template, p.count) for p in patterns] == [("INFO disk check ok", expected)]
+
+    def test_reduce_keeps_a_pattern_seen_only_as_near_duplicates(self):
+        if not FuzzyDeduplicator().enabled:
+            pytest.skip("datasketch not installed")
+
+        assert LogReducer(level="enhanced").reduce(["INFO disk check ok", "INFO  disk check ok"]) == [
+            "INFO disk check ok"
+        ]
+
     def test_repeat_past_the_dedup_window_counts_as_a_new_sighting(self):
         extractor = PatternExtractor(BigDialConfig())
         lines = [ERROR_LINE, "filler a", "filler b", ERROR_LINE]

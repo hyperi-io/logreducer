@@ -5,7 +5,7 @@ import logging
 from collections import deque
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from .memory import Occurrence
 from .template_mining import MaskingInstruction, TemplateMiner, TemplateMinerConfig
@@ -266,13 +266,15 @@ class PatternExtractor:
         Repeats that exact dedup drops after a line was kept still count towards
         the pattern that line joined, so 100 identical errors make one pattern
         with ``count == 100``. The ``Occurrence`` objects must come from a dedup
-        cache of at most ``dedup_cache_size`` lines: an evicted pattern's count is
-        taken as final that many lines after its last ``Occurrence``.
+        cache, and any fuzzy index between, of at most ``dedup_cache_size`` lines:
+        an evicted pattern's count is taken as final twice that many lines after
+        its last ``Occurrence``, once a near-duplicate matched to it has also left
+        the dedup cache.
         """
         pattern_map: dict[int, LogPattern] = {}
         last_occurrence: dict[int, int] = {}
         retired = _RetiredPatterns(
-            self.config.max_patterns, self.config.min_pattern_occurrences, self.config.dedup_cache_size
+            self.config.max_patterns, self.config.min_pattern_occurrences, 2 * self.config.dedup_cache_size
         )
         max_clusters = self.config.max_clusters
         # Sweeping at twice the store's bound costs O(1) per line, amortised.
@@ -359,6 +361,7 @@ class FuzzyDeduplicator:
         self.threshold = threshold
         self.max_entries = max_entries
         self._keys: deque[int] = deque()
+        self._occurrences: dict[int, Occurrence] = {}
         self._next_key = 0
         self.enabled = MINHASH_AVAILABLE
 
@@ -383,29 +386,40 @@ class FuzzyDeduplicator:
                 yield line
 
     def deduplicate_pairs(self, pairs: Iterable[tuple[str, Occurrence]]) -> Iterator[tuple[str, Occurrence]]:
-        """``deduplicate_stream`` over (line, Occurrence) pairs, keeping each pair intact."""
+        """``deduplicate_stream`` over (line, Occurrence) pairs, keeping each pair intact.
+
+        A dropped near-duplicate, and every later exact repeat of it, counts towards the
+        pattern of the admitted line it matched.
+        """
         if not self.enabled:
             yield from pairs
             return
 
         for pair in pairs:
-            if self._admit(pair[0]):
+            if self._admit(*pair):
                 yield pair
 
-    def _admit(self, line: str) -> bool:
+    def _admit(self, line: str, occurrence: Occurrence | None = None) -> bool:
         """True (and remembered) when no near-duplicate of ``line`` is in the index."""
         m = MinHash(num_perm=64)
         for word in line.split():
             m.update(word.encode("utf-8", "surrogatepass"))
 
-        if self.lsh.query(m):
+        if matches := cast("list[int]", self.lsh.query(m)):
+            if occurrence is not None and (admitted := self._occurrences.get(min(matches))) is not None:
+                occurrence.target = admitted.target
+                admitted.repeat()
             return False
         if self.max_entries is not None and len(self._keys) >= self.max_entries:
-            self.lsh.remove(self._keys.popleft())
+            evicted = self._keys.popleft()
+            self.lsh.remove(evicted)
+            self._occurrences.pop(evicted, None)
         key = self._next_key
         self._next_key += 1
         self.lsh.insert(key, m)
         self._keys.append(key)
+        if occurrence is not None:
+            self._occurrences[key] = occurrence
         return True
 
     def deduplicate(self, lines: Iterable[str]) -> list[str]:
