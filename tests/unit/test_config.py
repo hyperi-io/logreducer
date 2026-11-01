@@ -2,6 +2,7 @@
 Unit tests for configuration module
 """
 
+import psutil
 import pytest
 
 from logreducer import LogReducer
@@ -68,13 +69,23 @@ class TestBigDialConfig:
         """Typed masking is opt-in; default behaviour stays unmasked."""
         assert BigDialConfig().typed_masking is False
 
-    def test_post_init_memory_adjustment(self):
-        """Test that __post_init__ adjusts memory if too high"""
-        # This will depend on system memory, so we test behavior
-        config = BigDialConfig(max_memory_gb=999999.0)  # Unrealistic high value
+    @pytest.mark.parametrize(
+        "build",
+        [
+            pytest.param(lambda: BigDialConfig(max_memory_gb=999999.0), id="config"),
+            pytest.param(lambda: LogReducer(max_memory_gb=999999.0).config, id="reducer-argument"),
+            pytest.param(
+                lambda: LogReducer(config=BigDialConfig(), max_memory_gb=999999.0).config, id="injected-config-argument"
+            ),
+        ],
+    )
+    def test_memory_above_70_percent_of_available_is_clamped(self, build):
+        # Available memory moves between the clamp and this line, and never exceeds the total.
+        assert build().max_memory_gb <= psutil.virtual_memory().total / 1024**3 * 0.7
 
-        # Should be adjusted down based on available memory
-        assert config.max_memory_gb < 999999.0
+    def test_reducer_override_is_validated(self):
+        with pytest.raises(ValueError, match="max_patterns"):
+            LogReducer(max_patterns=0)
 
 
 class TestGetPresetConfig:

@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Literal, overload
 
 from .anomaly import AnomalyDetector
-from .config import BigDialConfig, OutputFormat, ProcessingLevel, ProcessingMode, get_preset_config, validate_config
+from .config import BigDialConfig, OutputFormat, ProcessingLevel, ProcessingMode, get_preset_config
 from .logging_config import get_logger, setup_logging
 from .memory import BoundedDeduplicator, MemoryMonitor
 from .patterns import FuzzyDeduplicator, PatternExtractor, SevereShapes, is_severe, pattern_priority
@@ -64,24 +64,23 @@ class LogReducer:
         self.mode = mode
 
         # Base config: an injected one wins over the level preset.
-        self.config = replace(config) if config is not None else get_preset_config(level)
+        base = config if config is not None else get_preset_config(level)
 
-        # Apply overrides BEFORE setting up logging
+        overrides: dict[str, Any] = {}
         if max_memory_gb is not None:
-            self.config.max_memory_gb = max_memory_gb
+            overrides["max_memory_gb"] = max_memory_gb
         if max_patterns is not None:
-            self.config.max_patterns = max_patterns
-
+            overrides["max_patterns"] = max_patterns
         for key, value in kwargs.items():
             # Fail fast on typos: silently dropping an unknown override means a
             # user's tuning quietly does nothing.
-            if not hasattr(self.config, key):
+            if not hasattr(base, key):
                 raise ValueError(f"Unknown config option {key!r} (see BigDialConfig for valid fields)")
-            # Special handling for output_format to convert string to enum
             if key == "output_format" and isinstance(value, str):
                 value = OutputFormat(value.lower())
-            setattr(self.config, key, value)
-        validate_config(self.config)
+            overrides[key] = value
+        # replace() builds a new config, so overrides are validated and memory-clamped like any other.
+        self.config = replace(base, **overrides)
 
         # Setup logging based on config (after overrides applied)
         setup_logging(
