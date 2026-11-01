@@ -118,6 +118,27 @@ def test_invalid_loop_params_raise(kwargs, match):
         reduce_to_target(EmptySource(), _reducer(), target_rows=5, **kwargs)
 
 
+class WideRowSource(GrowingSource):
+    """Rows of about 100 KB, recording every batch size asked for."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.requested: list[int] = []
+
+    def sample_batch(self, n: int) -> list[str]:
+        self.requested.append(n)
+        return [f"{line} {'x' * 100_000}" for line in super().sample_batch(n)]
+
+
+@pytest.mark.parametrize(("batch_rows", "first"), [(None, 1_000), (123, 123)])
+def test_first_batch_is_a_small_probe_until_row_sizes_are_known(batch_rows, first):
+    source = WideRowSource()
+
+    reduce_to_target(source, _reducer(), target_rows=10_000, max_fetches=2, batch_rows=batch_rows, plateau_rounds=5)
+
+    assert source.requested[0] == first
+
+
 def test_fixed_batch_rows_disables_adaptive_sizing():
     source = ManyTemplateSource(n_templates=40)
     result = reduce_to_target(
