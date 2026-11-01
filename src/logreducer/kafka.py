@@ -280,6 +280,7 @@ class KafkaSink:
         key: str | None = None,
         verify_ssl: bool = True,
         flush_timeout: float | None = None,
+        queue_full_timeout: float = 30.0,
         encoding: str = "utf-8",
     ) -> None:
         """Build a Kafka sink.
@@ -290,6 +291,8 @@ class KafkaSink:
             key: Optional fixed message key applied to every line.
             verify_ssl: If False, disable TLS certificate verification.
             flush_timeout: Seconds to wait on the final flush (None = infinite).
+            queue_full_timeout: Seconds one line waits for space in a full local
+                producer queue before ``write`` gives up.
             encoding: Text encoding for the produced message values.
         """
         try:
@@ -301,6 +304,7 @@ class KafkaSink:
         self.topic = topic
         self.key = key
         self.flush_timeout = flush_timeout
+        self.queue_full_timeout = queue_full_timeout
         self.encoding = encoding
         self._producer = Producer(self._config)
 
@@ -308,12 +312,13 @@ class KafkaSink:
         """Produce each line to the topic and flush; return the number delivered.
 
         With the default ``flush_timeout=None`` the final flush blocks until the
-        queue drains.
+        queue drains. The flush runs even when a produce raises, so lines queued
+        before the failure are delivered or counted.
 
         Raises:
             KafkaDeliveryError: A message was rejected by the broker, expired
-                before delivery, or was still queued when a finite
-                ``flush_timeout`` ran out.
+                before delivery, was still queued when a finite ``flush_timeout``
+                ran out, or found the local queue full for ``queue_full_timeout``.
         """
         key_bytes = self.key.encode(self.encoding) if self.key is not None else None
         produced = 0
@@ -323,11 +328,12 @@ class KafkaSink:
             if err is not None:
                 errors.append(str(err))
 
-        for line in lines:
-            self._producer.produce(self.topic, value=line.encode(self.encoding), key=key_bytes, on_delivery=on_delivery)
-            self._producer.poll(0)  # Trigger delivery callbacks (non-blocking)
-            produced += 1
-        undelivered = self.flush()
+        try:
+            for line in lines:
+                self._produce(line.encode(self.encoding), key_bytes, on_delivery)
+                produced += 1
+        finally:
+            undelivered = self.flush()
         if errors or undelivered:
             raise KafkaDeliveryError(
                 f"{len(errors)} of {produced} messages failed and {undelivered} were still queued "
@@ -336,6 +342,24 @@ class KafkaSink:
                 undelivered=undelivered,
             )
         return produced
+
+    def _produce(self, value: bytes, key: bytes | None, on_delivery: Any) -> None:
+        """Queue one message, serving delivery reports to free space while the local queue is full."""
+        deadline = time.monotonic() + self.queue_full_timeout
+        while True:
+            try:
+                self._producer.produce(self.topic, value=value, key=key, on_delivery=on_delivery)
+                break
+            except BufferError:
+                if time.monotonic() >= deadline:
+                    queued = len(self._producer)
+                    raise KafkaDeliveryError(
+                        f"local producer queue stayed full for {self.queue_full_timeout:.0f}s for topic {self.topic!r}",
+                        failed=0,
+                        undelivered=queued,
+                    ) from None
+                self._producer.poll(0.1)
+        self._producer.poll(0)
 
     def flush(self) -> int:
         """Wait for outstanding messages; return the count still in queue."""

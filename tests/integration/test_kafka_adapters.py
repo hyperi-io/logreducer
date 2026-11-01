@@ -98,3 +98,29 @@ def test_a_read_that_stalls_short_of_the_end_raises(kafka_bootstrap):
 
     with pytest.raises(KafkaConsumerError, match="stopped short of the end"):
         list(source)
+
+
+def test_sink_waits_for_queue_space_rather_than_failing(kafka_bootstrap):
+    from logreducer.kafka import KafkaSink, KafkaSource
+
+    topic = _name()
+    lines = [f"INFO line {i}" for i in range(2_000)]
+    # A 10-message local queue fills long before the broker acknowledges anything.
+    sink = KafkaSink(_config(kafka_bootstrap, **{"queue.buffering.max.messages": 10}), topic)
+
+    assert sink.write(lines) == 2_000
+    assert sorted(KafkaSource(kafka_bootstrap, group_id=_name(), topics=topic)) == sorted(lines)
+
+
+def test_sink_flushes_what_it_queued_when_a_produce_fails(kafka_bootstrap):
+    from confluent_kafka import KafkaException
+
+    from logreducer.kafka import KafkaSink
+
+    sink = KafkaSink(kafka_bootstrap, _name())
+    oversized = "x" * 2_000_000  # over librdkafka's default message.max.bytes
+
+    with pytest.raises(KafkaException):
+        sink.write([f"INFO line {i}" for i in range(5)] + [oversized])
+
+    assert len(sink._producer) == 0
