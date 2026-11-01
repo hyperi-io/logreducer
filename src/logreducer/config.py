@@ -47,6 +47,7 @@ class BigDialConfig:
     # measured reductions use tens of MB, so the default is deliberately low
     # and container-friendly.
     max_memory_gb: float = 1.0
+    # Lines exact dedup remembers, and lines the fuzzy index holds. Both drop the oldest first.
     dedup_cache_size: int = 100000
 
     # Speed Control

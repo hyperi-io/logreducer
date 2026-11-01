@@ -7,7 +7,7 @@ It ships as a CLI and as a Python library with an IO-agnostic core.
 ## What it gives you
 
 - A `logreducer` command that reduces a file, a SQL or ClickHouse query, or a Kafka topic, straight from the shell.
-- Pattern mode streams through a bounded dedup cache and template store, so memory grows with the number of distinct templates, not with the line count.
+- Pattern mode streams through a bounded dedup cache, fuzzy index and template store, so memory does not grow with the line count or the number of distinct lines.
 - A memory budget that decides how a file is read: whole, in chunks, or reservoir-sampled once it passes five times the budget.
 - Four modes: pattern (Drain3 template mining), anomaly (Isolation Forest), temporal (one example per template per time window) and hybrid.
 - ERROR, FATAL and CRITICAL lines always come through, one per distinct shape and ahead of the reduced output, in every mode and however a file is read. A SQL or ClickHouse source samples in the database first, so only the lines it returns are seen.
@@ -48,7 +48,7 @@ From the shell it is `logreducer app.log -o reduced.log`. `level` is `standard`,
 
 | Extra | Adds |
 |---|---|
-| `enhanced` | Fuzzy dedup with MinHash LSH, whose index grows with near-unique lines, and faster hashing |
+| `enhanced` | Fuzzy dedup with MinHash LSH, whose index holds the last `dedup_cache_size` near-unique lines, and faster hashing |
 | `sql` | `SQLSource` over SQLAlchemy, with your own DBAPI driver |
 | `clickhouse` | `ClickHouseSource` over clickhouse-connect |
 | `kafka` | `KafkaSource` and `KafkaSink` over confluent-kafka |

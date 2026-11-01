@@ -66,8 +66,9 @@ than pass one, and the reducer would be comparing two populations.
 
 Pattern mode streams end to end. Exact dedup, optional fuzzy dedup and Drain3
 mining run as one generator pipeline, so the unique-line set is never collected
-into a list. Peak memory is the bounded dedup cache plus the Drain3 template
-store, and neither grows with the number of unique lines the source has.
+into a list. Peak memory is the bounded dedup cache, the fuzzy index (the same `dedup_cache_size` window), the Drain3 template store and the results of evicted templates, and none of them grows with the number of unique lines the source has.
+
+An evicted template's result is kept only while it can still make the `max_patterns` cut. Its count stops changing once the dedup cache has dropped the lines that fed it, so from then on it competes for one of `max_patterns` places, and a result that loses one can never win it back. That keeps the output identical to ranking every template ever seen.
 
 Drain3 compares each line with every template stored at the leaf it reaches, so
 time grows with the square of the template count when lines share no tokens.

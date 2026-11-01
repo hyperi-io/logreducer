@@ -2,6 +2,7 @@
 Unit tests for pattern extraction module
 """
 
+import tracemalloc
 from unittest.mock import Mock, patch
 
 import pytest
@@ -242,6 +243,108 @@ class TestStreamingAndBounds:
         lines = [f"SERVICE{i} started on host node{i} pid={p}" for i in range(50) for p in (1, 2)]
         extractor.extract_patterns(lines)
         assert len(extractor.miner.drain.id_to_cluster) <= 5
+
+    def test_fuzzy_index_holds_at_most_max_entries(self):
+        dedup = FuzzyDeduplicator(max_entries=100)
+        if not dedup.enabled:
+            pytest.skip("datasketch not installed")
+
+        kept = list(dedup.deduplicate_stream(_near_unique_lines(1_000)))
+
+        assert len(kept) == 1_000
+        assert len(dedup.lsh.keys) == 100
+
+    def test_near_duplicate_past_the_window_is_admitted_again(self):
+        dedup = FuzzyDeduplicator(max_entries=2)
+        if not dedup.enabled:
+            pytest.skip("datasketch not installed")
+        first, second, third = _near_unique_lines(3)
+
+        kept = list(dedup.deduplicate_stream([first, first, second, third, first]))
+
+        assert kept == [first, second, third, first]
+
+    @pytest.mark.parametrize("max_entries", [0, -1])
+    def test_fuzzy_window_must_hold_one_entry(self, max_entries):
+        with pytest.raises(ValueError, match="max_entries"):
+            FuzzyDeduplicator(max_entries=max_entries)
+
+
+def _near_unique_lines(count: int):
+    """``count`` lines that share no word, so no two are near-duplicates."""
+    return (f"svc{i} req{i * 7} user{i * 13} took{i * 17} path{i * 19} ok{i * 23}" for i in range(count))
+
+
+def _peak_bytes(run) -> int:
+    tracemalloc.start()
+    try:
+        run()
+        return tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+
+
+def _distinct_templates(count: int):
+    """``count`` quiet lines whose first token differs, so each founds its own Drain cluster."""
+    return (f"svc{i} request{i * 7919 % 100003} took {i % 977}ms path{i}" for i in range(count))
+
+
+class TestPeakMemoryDoesNotGrowWithDistinctLines:
+    """Ten times the distinct input costs no more memory once the bounds are full."""
+
+    def test_pattern_store_is_bounded_across_cluster_evictions(self):
+        def run(count: int) -> None:
+            PatternExtractor(BigDialConfig(max_clusters=5, min_pattern_occurrences=1)).extract_patterns(
+                _distinct_templates(count)
+            )
+
+        assert _peak_bytes(lambda: run(50_000)) < _peak_bytes(lambda: run(5_000)) * 1.5
+
+    def test_fuzzy_index_is_bounded(self):
+        if not FuzzyDeduplicator().enabled:
+            pytest.skip("datasketch not installed")
+
+        def run(count: int) -> None:
+            for _ in FuzzyDeduplicator(max_entries=1_000).deduplicate_stream(_near_unique_lines(count)):
+                pass
+
+        assert _peak_bytes(lambda: run(20_000)) < _peak_bytes(lambda: run(2_000)) * 1.5
+
+
+def _evicting_feed(rounds: int) -> list[str]:
+    """Hot lines repeated between bursts of new templates, so their clusters are evicted while they still count."""
+    lines = []
+    for burst in range(rounds):
+        lines.append("INFO heartbeat ok")
+        lines.append(f"INFO tick {burst % 4} done")
+        lines.extend(f"svc{burst}x{n} started worker{n}" for n in range(6))
+        lines.append(f"svc{burst}x0 started worker0")
+    return lines
+
+
+class TestBoundedRankingKeepsTheSameAnswer:
+    """The capped result is the prefix of the uncapped one, so bounding the store changes nothing it returns."""
+
+    @pytest.mark.parametrize("window", [8, 1_000])
+    @pytest.mark.parametrize("cap", [1, 2, 5, 40])
+    @pytest.mark.parametrize("max_clusters", [1, 3, 25])
+    def test_capped_is_prefix_of_uncapped(self, cap, max_clusters, window):
+        lines = _evicting_feed(60)
+
+        def extract(max_patterns: int) -> list[tuple[str, int]]:
+            config = BigDialConfig(max_clusters=max_clusters, max_patterns=max_patterns, dedup_cache_size=window)
+            counted = BoundedDeduplicator(window).deduplicate_counted(lines)
+            return [(p.template, p.count) for p in PatternExtractor(config).extract_counted_patterns(counted)]
+
+        assert extract(cap) == extract(10**9)[:cap]
+
+    def test_evicted_pattern_that_keeps_counting_still_ranks_first(self):
+        config = BigDialConfig(max_clusters=3, max_patterns=1)
+        counted = BoundedDeduplicator(1_000).deduplicate_counted(_evicting_feed(60))
+
+        patterns = PatternExtractor(config).extract_counted_patterns(counted)
+
+        assert [(p.template, p.count) for p in patterns] == [("INFO heartbeat ok", 60)]
 
 
 class TestTypedMasking:

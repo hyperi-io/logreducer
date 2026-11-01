@@ -124,7 +124,7 @@ class LogReducer:
         self.deduplicator = BoundedDeduplicator(self.config.dedup_cache_size, self.config.hash_algorithm)
         self.pattern_extractor = PatternExtractor(self.config)
         if self.config.fuzzy_threshold and self.level != ProcessingLevel.STANDARD:
-            self.fuzzy_dedup = FuzzyDeduplicator(self.config.fuzzy_threshold)
+            self.fuzzy_dedup = FuzzyDeduplicator(self.config.fuzzy_threshold, self.config.dedup_cache_size)
         else:
             self.fuzzy_dedup = None
         if self.mode in [ProcessingMode.TEMPORAL, ProcessingMode.HYBRID]:

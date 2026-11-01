@@ -659,12 +659,25 @@ class _SevereFlood:
         )
 
 
-def _pattern_flood_run(count: int) -> tuple[list[str], int]:
+class _QuietFlood:
+    """A re-iterable source of ``count`` quiet lines that share no word, so each is a new template and fuzzy-unique."""
+
+    def __init__(self, count: int) -> None:
+        self.count = count
+
+    def __iter__(self):
+        return (
+            f"svc{i} req{i * 7919 % 100003} user{i * 31} took{i % 977} path{i * 13} ok{i * 17}"
+            for i in range(self.count)
+        )
+
+
+def _pattern_flood_run(source, level: str = "standard", count: int = 5_000) -> tuple[list[str], int]:
     tracemalloc.start()
     try:
-        out = LogReducer(mode="pattern", max_clusters=5, dedup_cache_size=1000, typed_masking=False).reduce(
-            _SevereFlood(count)
-        )
+        out = LogReducer(
+            level=level, mode="pattern", max_clusters=5, dedup_cache_size=1000, typed_masking=False
+        ).reduce(source(count))
         return out, tracemalloc.get_traced_memory()[1]
     finally:
         tracemalloc.stop()
@@ -672,8 +685,17 @@ def _pattern_flood_run(count: int) -> tuple[list[str], int]:
 
 def test_severe_flood_of_one_shape_gives_one_line_in_bounded_memory():
     """Severe lines are held by the source tap alone, so the pattern miner's store does not grow with them."""
-    _, small_peak = _pattern_flood_run(5_000)
-    out, large_peak = _pattern_flood_run(50_000)
+    _, small_peak = _pattern_flood_run(_SevereFlood, count=5_000)
+    out, large_peak = _pattern_flood_run(_SevereFlood, count=50_000)
 
     assert out == ["ERROR 0 0 0 0 0 0"]
+    assert large_peak < small_peak * 1.5
+
+
+@pytest.mark.parametrize("level", ["standard", "enhanced", "maximum"])
+def test_quiet_flood_of_new_templates_runs_in_bounded_memory(level):
+    """Evicted clusters and the fuzzy index are bounded, so 10x the distinct lines costs no more memory."""
+    _, small_peak = _pattern_flood_run(_QuietFlood, level, count=5_000)
+    _, large_peak = _pattern_flood_run(_QuietFlood, level, count=50_000)
+
     assert large_peak < small_peak * 1.5
