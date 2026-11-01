@@ -71,8 +71,9 @@ class SQLSource:
             yield_per: Server-side cursor batch size (rows fetched per round
                 trip). Larger trades memory for fewer round trips.
             sample: Optional fraction in (0, 1] - return only that fraction of
-                rows via a per-dialect random predicate. Pass ``sample_seed``
-                for a deterministic, re-iterable sample (required for the
+                rows. Pass ``sample_seed`` for a re-iterable sample that keeps a
+                row by a hash of its content, so every pass returns the same rows
+                whatever order the engine reads them in (required for the
                 reducer's multi-pass modes; PostgreSQL/MySQL only). Without a
                 seed the sample is best-effort and not reproducible across passes.
             sample_seed: Seed for a reproducible sample. Raises
@@ -108,9 +109,25 @@ class SQLSource:
         if sample is not None:
             from .sampling import build_sample_sql
 
-            self._sample_setup, self._sample_sql = build_sample_sql(
-                self._engine.dialect.name, query, sample, sample_seed
-            )
+            dialect = self._engine.dialect.name
+            columns = None
+            if sample_seed is not None and dialect in ("mysql", "mariadb"):
+                columns = self._quoted_columns(query, params)
+            self._sample_setup, self._sample_sql = build_sample_sql(dialect, query, sample, sample_seed, columns)
+
+    def _quoted_columns(self, query: str, params: dict[str, Any] | None) -> list[str]:
+        """Return the quoted column names of ``query``, read with a zero-row run of it."""
+        from sqlalchemy import text
+
+        from .sampling import wrap_subquery
+
+        # Risk accepted: the query is the caller's own SELECT, which this source exists to run.
+        # nosemgrep: python.sqlalchemy.security.audit.avoid-sqlalchemy-text.avoid-sqlalchemy-text
+        probe = text(f"SELECT * FROM ({wrap_subquery(query)}) AS _lr_columns LIMIT 0")
+        with self._engine.connect() as conn:
+            names = list(conn.execute(probe, params or {}).keys())
+        quote = self._engine.dialect.identifier_preparer.quote
+        return [f"_lr_sample.{quote(name)}" for name in names]
 
     @classmethod
     def from_table(

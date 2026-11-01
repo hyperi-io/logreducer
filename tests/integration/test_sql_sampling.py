@@ -16,6 +16,31 @@ from logreducer.sql import SQLSource
 pytestmark = pytest.mark.integration
 
 
+@pytest.fixture(params=["pg_logs_engine", "mysql_logs_engine"])
+def reversed_logs(request):
+    """The seeded ``logs`` table and a copy whose rows are stored in the reverse order."""
+    from sqlalchemy import text
+
+    engine = request.getfixturevalue(request.param)
+    with engine.begin() as conn:
+        conn.execute(text("CREATE TABLE logs_reversed AS SELECT * FROM logs ORDER BY id DESC"))
+    try:
+        yield engine
+    finally:
+        with engine.begin() as conn:
+            conn.execute(text("DROP TABLE logs_reversed"))
+
+
+def test_seeded_sample_does_not_depend_on_scan_order(reversed_logs):
+    forward = SQLSource(reversed_logs, "SELECT line FROM logs", sample=0.2, sample_seed=42)
+    backward = SQLSource(reversed_logs, "SELECT line FROM logs_reversed", sample=0.2, sample_seed=42)
+
+    sampled = set(forward)
+
+    assert sampled == set(backward)
+    assert 0 < len(sampled) < 5000
+
+
 class TestPostgreSQLSampling:
     def test_seeded_sample_is_deterministic_across_passes(self, pg_logs_engine):
         source = SQLSource(pg_logs_engine, "SELECT line FROM logs", sample=0.2, sample_seed=42)

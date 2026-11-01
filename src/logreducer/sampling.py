@@ -2,8 +2,8 @@
 
 Three concerns, all pure and server-free so they unit-test without a database:
 
-* ``build_sample_sql`` - wrap an arbitrary user query in a deterministic,
-  per-dialect random predicate so a fraction of rows is returned reproducibly
+* ``build_sample_sql`` - wrap an arbitrary user query in a per-dialect predicate
+  (a seeded row hash, or ``random()`` unseeded) so a fraction of rows is returned
   (needed because ``TABLESAMPLE`` only applies to a base table, not the
   arbitrary ``SELECT`` a Source is given). Mirrors ibis: raise when a seed
   cannot be honoured deterministically rather than fake reproducibility.
@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import math
 import random
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from itertools import islice
 
 
@@ -88,27 +88,40 @@ def wrap_subquery(query: str) -> str:
     return query.rstrip() + "\n"
 
 
-def _pg_sample(query: str, fraction: float, seed: int | None) -> tuple[str | None, str]:
-    # setseed makes random() deterministic for the rest of the connection; it
-    # takes a value in [-1, 1]. Each pass opens a fresh connection and re-seeds,
-    # so the sample is identical across passes (re-iterable). Caveat: strict
-    # identity also depends on PostgreSQL visiting rows in the same order -
-    # synchronized_seqscans on a busy table can rotate the scan start; ORDER BY
-    # in the query if bit-exact re-reads matter.
-    setup = None
-    if seed is not None:
-        s = ((seed % 2_000_000) / 1_000_000.0) - 1.0
-        setup = f"SELECT setseed({s!r})"
-    return setup, f"SELECT * FROM ({wrap_subquery(query)}) AS _lr_sample WHERE random() < {float(fraction)!r}"
+# A seeded sample keeps a row when the first 32 bits of md5(row text + seed) fall under
+# fraction * 2**32, so the same row gets the same verdict however the engine scans.
+_HASH_SPACE = 2**32
 
 
-def _mysql_sample(query: str, fraction: float, seed: int | None) -> tuple[str | None, str]:
-    # RAND(seed) with a constant seed is a repeatable per-row sequence.
-    rand = f"rand({int(seed)})" if seed is not None else "rand()"
-    return None, f"SELECT * FROM ({wrap_subquery(query)}) AS _lr_sample WHERE {rand} < {float(fraction)!r}"
+def _hash_threshold(fraction: float) -> int:
+    return int(float(fraction) * _HASH_SPACE)
 
 
-def _sqlite_sample(query: str, fraction: float, seed: int | None) -> tuple[str | None, str]:
+def _pg_sample(
+    query: str, fraction: float, seed: int | None, columns: Sequence[str] | None = None
+) -> tuple[str | None, str]:
+    wrapped = f"SELECT * FROM ({wrap_subquery(query)}) AS _lr_sample"
+    if seed is None:
+        return None, f"{wrapped} WHERE random() < {float(fraction)!r}"
+    row_hash = f"('x' || lpad(substr(md5(_lr_sample::text || '{int(seed)}'), 1, 8), 16, '0'))::bit(64)::bigint"
+    return None, f"{wrapped} WHERE {row_hash} < {_hash_threshold(fraction)}"
+
+
+def _mysql_sample(
+    query: str, fraction: float, seed: int | None, columns: Sequence[str] | None = None
+) -> tuple[str | None, str]:
+    wrapped = f"SELECT * FROM ({wrap_subquery(query)}) AS _lr_sample"
+    if seed is None:
+        return None, f"{wrapped} WHERE rand() < {float(fraction)!r}"
+    if not columns:
+        raise ValueError("a seeded MySQL sample needs the query's quoted column names")
+    row_text = f"CONCAT_WS(CHAR(31), {', '.join(columns)}, '{int(seed)}')"
+    return None, f"{wrapped} WHERE CONV(SUBSTRING(MD5({row_text}), 1, 8), 16, 10) < {_hash_threshold(fraction)}"
+
+
+def _sqlite_sample(
+    query: str, fraction: float, seed: int | None, columns: Sequence[str] | None = None
+) -> tuple[str | None, str]:
     if seed is not None:
         raise SamplingNotSupported(
             "sqlite has no seedable RNG, so seeded (reproducible) sampling is unsupported; "
@@ -133,20 +146,34 @@ def _check_fraction(fraction: float) -> None:
         raise ValueError(f"sample fraction must be in (0, 1], got {fraction!r}")
 
 
-def build_sample_sql(dialect: str, query: str, fraction: float, seed: int | None = None) -> tuple[str | None, str]:
-    """Wrap ``query`` so it returns ~``fraction`` of its rows, deterministically.
+def build_sample_sql(
+    dialect: str, query: str, fraction: float, seed: int | None = None, columns: Sequence[str] | None = None
+) -> tuple[str | None, str]:
+    """Wrap ``query`` so it returns ~``fraction`` of its rows.
+
+    With a seed, a row is kept by a hash of its content and the seed, so the same
+    rows come back whatever order the engine reads them in.
 
     Returns ``(setup_sql, sampled_sql)`` where ``setup_sql`` is an optional
-    per-connection statement to run first (PostgreSQL ``setseed``), or None.
+    per-connection statement to run first, or None.
 
-    Raises ``ValueError`` for a bad fraction and ``SamplingNotSupported`` for a
-    dialect with no sampler or a seed the dialect cannot honour.
+    Args:
+        dialect: SQLAlchemy dialect name.
+        query: The SELECT to sample.
+        fraction: Share of rows to keep, in (0, 1].
+        seed: Seed for a reproducible sample.
+        columns: The query's column names, quoted. A seeded MySQL sample needs
+            them to hash the row.
+
+    Raises:
+        ValueError: For a bad fraction, or a seeded MySQL sample without ``columns``.
+        SamplingNotSupported: For a dialect with no sampler or a seed it cannot honour.
     """
     _check_fraction(fraction)
     builder = DIALECT_SAMPLERS.get(dialect)
     if builder is None:
         raise SamplingNotSupported(f"no SQL sampler for dialect {dialect!r} (supported: {sorted(DIALECT_SAMPLERS)})")
-    return builder(query, fraction, seed)
+    return builder(query, fraction, seed, columns)
 
 
 def build_sample_batch_sql(dialect: str, query: str, n: int) -> str:
@@ -197,7 +224,11 @@ def build_table_sample_query(
 
     # No TABLESAMPLE on these - a predicate on the table (full scan, but native).
     if dialect in ("mysql", "mariadb"):
-        pred = f"rand({int(seed)}) < {float(fraction)!r}" if seed is not None else f"rand() < {float(fraction)!r}"
+        if seed is None:
+            pred = f"rand() < {float(fraction)!r}"
+        else:
+            row_hash = f"CONV(SUBSTRING(MD5(CONCAT_WS(CHAR(31), {column}, '{int(seed)}')), 1, 8), 16, 10)"
+            pred = f"{row_hash} < {_hash_threshold(fraction)}"
     elif dialect == "sqlite":
         if seed is not None:
             raise SamplingNotSupported("sqlite has no seedable RNG; seeded table sampling is unsupported")
