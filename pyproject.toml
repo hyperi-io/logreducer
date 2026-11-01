@@ -230,10 +230,11 @@ default = true
 
 # ty: Astral type checker, runs alongside mypy.
 [tool.ty.environment]
-python-version = "3.12"
+python-version = "3.14"
 
 [tool.ty.src]
-exclude = ["examples/", "docs/", "scripts/"]
+# build_quiet_golden.py runs under uvx with drain3, which is never a dependency here.
+exclude = ["examples/", "docs/", "scripts/", "tests/testdata/build_quiet_golden.py"]
 
 # Below 80 vulture reports the library's public API and attributes set on
 # third-party config objects, which buries a real leftover.
