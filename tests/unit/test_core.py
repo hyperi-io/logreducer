@@ -637,6 +637,26 @@ def _anomaly_peak_bytes(count: int) -> int:
         tracemalloc.stop()
 
 
+@pytest.mark.parametrize("mode", ["anomaly", "hybrid"])
+@pytest.mark.parametrize("cap", [1, 2, 3, 500])
+def test_a_small_cap_still_returns_quiet_lines(mode, cap):
+    lines = [f"INFO {_letters(n)} request {n} took {n % 7}ms" for n in range(60)] * 2
+
+    out = LogReducer(mode=mode, max_patterns=cap).reduce(lines)
+
+    assert 1 <= len(out) <= cap
+
+
+@pytest.mark.parametrize(("cap", "expected"), [(1, 1), (3, 3), (10, 5)])
+def test_too_few_lines_to_score_fill_the_anomaly_cap(cap, expected):
+    lines = [f"INFO {_letters(n)} started" for n in range(5)]
+
+    out = LogReducer(mode="anomaly", max_patterns=cap).reduce(lines)
+
+    assert len(out) == expected
+    assert set(out) <= set(lines)
+
+
 def test_anomaly_peak_memory_does_not_grow_with_the_input():
     """The detector's input is sampled while the source streams, so 10x the lines costs no more memory."""
     assert _anomaly_peak_bytes(200_000) < _anomaly_peak_bytes(20_000) * 1.5

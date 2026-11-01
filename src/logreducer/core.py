@@ -11,7 +11,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Literal, overload
 
-from .anomaly import AnomalyDetector
+from .anomaly import MIN_SCORED_LINES, AnomalyDetector
 from .config import BigDialConfig, OutputFormat, ProcessingLevel, ProcessingMode, get_preset_config
 from .logging_config import get_logger, setup_logging
 from .memory import BoundedDeduplicator, MemoryMonitor
@@ -390,13 +390,18 @@ class LogReducer:
             self.logger.info("Reading, deduplicating and anomaly detection")
         anomalous, normal = self._detect_quiet_anomalies(self.anomaly_detector, source)
 
-        # Keep all anomalies (capped) + sample of normal
-        result = anomalous[: self.config.max_patterns // 2]
+        cap = self.config.max_patterns
+        if not anomalous and len(normal) < MIN_SCORED_LINES:
+            # Too few lines to score, so they fill the cap.
+            result = []
+            normal_budget = cap
+        else:
+            # Half the cap (rounded up) for anomalies, then a quarter, at least one, for normal context.
+            result = anomalous[: (cap + 1) // 2]
+            normal_budget = min(cap - len(result), max(cap // 4, 1))
 
-        # Add some normal lines for context. Seeded RNG so a re-run over the
-        # same input yields the same sample (consistent with the reproducibility
-        # guarantees elsewhere); there is no security requirement here.
-        normal_sample_size = min(len(normal), self.config.max_patterns // 4)
+        # Seeded so a re-run over the same input yields the same sample.
+        normal_sample_size = min(len(normal), normal_budget)
         if normal_sample_size > 0:
             result.extend(random.Random(0).sample(normal, normal_sample_size))
 
@@ -439,9 +444,10 @@ class LogReducer:
             self.deduplicator = BoundedDeduplicator(self.config.dedup_cache_size, self.config.hash_algorithm)
             anomalous, _ = self._detect_quiet_anomalies(self.anomaly_detector, source)
 
-            # Combine, preferring anomalies
-            result = anomalous[: self.config.max_patterns // 2]
-            result.extend(pattern_lines[: self.config.max_patterns // 2])
+            # Anomalies take half the cap (rounded up), patterns half, at least one, of what is left.
+            cap = self.config.max_patterns
+            result = anomalous[: (cap + 1) // 2]
+            result.extend(pattern_lines[: min(cap - len(result), max(cap // 2, 1))])
         else:
             result = pattern_lines
 

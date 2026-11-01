@@ -4,6 +4,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Fewer lines than this are returned unscored, all of them normal.
+MIN_SCORED_LINES = 10
+
 # Try optional imports
 try:
     from sklearn.ensemble import IsolationForest
@@ -30,7 +33,7 @@ class AnomalyDetector:
         Returns:
             (anomalous_lines, normal_lines)
         """
-        if not self.enabled or len(lines) < 10:
+        if not self.enabled or len(lines) < MIN_SCORED_LINES:
             return [], lines
 
         # Vectorize
