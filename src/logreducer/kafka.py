@@ -13,10 +13,10 @@ Two intentional consumer design choices, because a logreducer ``Source`` must
 be finite and re-iterable (the reducer counts lines by exhausting the source,
 and re-reads it for multi-pass modes):
 
-* **Bounded.** The read stops when every assigned partition has reached its end
-  (``enable.partition.eof`` -> ``_PARTITION_EOF``), which is the deterministic
-  "caught up with the topic" signal. A consecutive-idle-poll count is only a
-  backstop for the never-assigned case (e.g. a missing topic).
+* **Bounded.** The read records each partition's end offset when it is assigned
+  and stops once every partition has reached it, by offset or by
+  ``_PARTITION_EOF``. Messages written after that point wait for the next read.
+  A consecutive-idle-poll count is only a backstop for a stalled broker.
 * **No commit.** Offsets are never committed, so each pass re-reads from the
   earliest offset - that is what makes the source re-iterable. An application
   that needs offset tracking should consume itself and hand the reducer its own
@@ -24,8 +24,6 @@ and re-reads it for multi-pass modes):
 
 Install: ``pip install 'logreducer[kafka]'``.
 """
-
-from __future__ import annotations
 
 import importlib.util
 import time
@@ -53,8 +51,8 @@ CONSUMER_DEFAULTS: dict[str, Any] = {
     "max.poll.interval.ms": 300000,  # 5 minutes max poll interval
     "fetch.min.bytes": 1,  # Return immediately with any data
     "fetch.wait.max.ms": 500,  # Max wait for fetch.min.bytes
-    # logreducer-specific: needed so a drained partition reports EOF, which is
-    # how the bounded read knows it has caught up with the topic.
+    # A partition that ends in records the consumer skips (transaction markers, compacted
+    # offsets) is known to be read through only by its EOF event.
     "enable.partition.eof": True,
 }
 
@@ -119,9 +117,9 @@ def _normalise_config(config: str | dict[str, Any]) -> dict[str, Any]:
 class KafkaSource:
     """A bounded, re-iterable stream of log lines from a Kafka topic.
 
-    Each iteration creates a fresh consumer, subscribes, and reads until every
-    assigned partition reports end-of-partition (i.e. the topic is drained),
-    decoding each message value to a ``str`` line. Offsets are never committed,
+    Each iteration creates a fresh consumer, subscribes, and reads every partition
+    up to the end offset it had when assigned, decoding each message value to a
+    ``str`` line. Offsets are never committed,
     so every pass re-reads from the earliest offset.
     """
 
@@ -172,7 +170,10 @@ class KafkaSource:
 
         consumer = Consumer(self._config)
         consumer.subscribe(self.topics)
-        eof_partitions: set[tuple[str, int]] = set()
+        # End offset of each partition when first assigned: the read stops there, so a write
+        # made during it is left for the next pass.
+        end_offsets: dict[tuple[str, int], int] = {}
+        drained: set[tuple[str, int]] = set()
         empty_polls = 0
         emitted = 0
         # Never-assigned backstop: an unreachable broker, a missing topic, or an
@@ -189,8 +190,12 @@ class KafkaSource:
 
                 msg = consumer.poll(self.poll_timeout)
 
-                if consumer.assignment():
+                assignment = consumer.assignment()
+                if assignment:
                     ever_assigned = True
+                    self._record_end_offsets(consumer, assignment, end_offsets, drained)
+                    if drained >= end_offsets.keys():
+                        break
                 elif not ever_assigned and time.monotonic() >= assignment_deadline:
                     raise KafkaConsumerError(
                         f"no partition assignment within {self.assignment_timeout:.0f}s for "
@@ -201,25 +206,27 @@ class KafkaSource:
                     # Before partitions are assigned an empty poll just means the
                     # group is still joining - don't count it. Once assigned,
                     # repeated empties are the backstop for a never-EOF broker.
-                    if consumer.assignment():
+                    if assignment:
                         empty_polls += 1
                         if empty_polls >= self.idle_polls:
                             break
                     continue
                 empty_polls = 0
 
+                partition_key = (msg.topic(), msg.partition())
                 error = msg.error()
                 if error:
                     if error.code() == KafkaError._PARTITION_EOF:
-                        topic, partition = msg.topic(), msg.partition()
-                        if topic is not None and partition is not None:
-                            eof_partitions.add((topic, partition))
-                        assigned = {(tp.topic, tp.partition) for tp in consumer.assignment()}
-                        # Drained: every partition we hold has reported its end.
-                        if assigned and eof_partitions >= assigned:
-                            break
+                        drained.add(partition_key)
                         continue
                     raise KafkaConsumerError(f"Kafka error: {error.str()}", error_code=error.code())
+
+                end = end_offsets.get(partition_key)
+                offset = msg.offset()
+                if end is not None and offset is not None and offset >= end - 1:
+                    drained.add(partition_key)
+                    if offset >= end:
+                        continue
 
                 value = msg.value()
                 if value is None:
@@ -230,6 +237,28 @@ class KafkaSource:
                     yield line
         finally:
             consumer.close()
+
+    def _record_end_offsets(
+        self,
+        consumer: Any,
+        assignment: list[Any],
+        end_offsets: dict[tuple[str, int], int],
+        drained: set[tuple[str, int]],
+    ) -> None:
+        """Record the high watermark of each newly assigned partition, marking empty ones drained."""
+        from confluent_kafka import KafkaException
+
+        for tp in assignment:
+            key = (tp.topic, tp.partition)
+            if key in end_offsets:
+                continue
+            try:
+                low, high = consumer.get_watermark_offsets(tp, timeout=self.assignment_timeout, cached=False)
+            except KafkaException as exc:
+                raise KafkaConsumerError(f"cannot read the end offset of {key!r}: {exc}") from exc
+            end_offsets[key] = high
+            if high <= low:
+                drained.add(key)
 
     def __repr__(self) -> str:
         return f"KafkaSource(topics={self.topics!r}, config={mask_credentials(self._config)!r})"

@@ -44,3 +44,33 @@ def test_kafka_sink_then_source_roundtrip(kafka_bootstrap):
     result = reducer.reduce(source)
     assert 0 < len(result) < 30
     assert reducer.stats["input_lines"] == 30
+
+
+def _name() -> str:
+    return f"logreducer-it-{uuid.uuid4().hex[:8]}"
+
+
+def _config(bootstrap, **overrides) -> dict:
+    config = {"bootstrap.servers": bootstrap} if isinstance(bootstrap, str) else dict(bootstrap)
+    return {**config, **overrides}
+
+
+# The consumer holds about 1 KB locally, so a paused read is far from the end of the topic.
+THROTTLED = {"queued.max.messages.kbytes": 1, "max.partition.fetch.bytes": 1024}
+
+
+def test_source_stops_at_the_end_offsets_it_started_with(kafka_bootstrap):
+    from logreducer.kafka import KafkaSink, KafkaSource
+
+    topic = _name()
+    lines = [f"INFO first batch {i}" for i in range(2_000)]
+    KafkaSink(kafka_bootstrap, topic).write(lines)
+    source = KafkaSource(_config(kafka_bootstrap, **THROTTLED), group_id=_name(), topics=topic)
+
+    consumed = []
+    for line in source:
+        if not consumed:
+            KafkaSink(kafka_bootstrap, topic).write([f"INFO written during the read {i}" for i in range(50)])
+        consumed.append(line)
+
+    assert consumed == lines
