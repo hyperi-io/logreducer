@@ -3,6 +3,12 @@
 Rendered by CI and committed back at the end of a release -- do not edit by
 hand. Release notes also appear on the GitHub Releases page, one per tag.
 
+## [3.5.5](https://github.com/hyperi-io/logreducer/compare/v3.5.4...v3.5.5) (2026-11-01)
+
+### Bug Fixes
+
+* manual remediation of LLM auto fixes -- keep a lone severe line ([#24](https://github.com/hyperi-io/logreducer/issues/24)) ([84f1988](https://github.com/hyperi-io/logreducer/commit/84f1988c63773766e17d1615acbeabc27752f4cd))
+
 ## [3.5.4](https://github.com/hyperi-io/logreducer/compare/v3.5.3...v3.5.4) (2026-10-31)
 
 ### Bug Fixes
