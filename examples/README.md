@@ -18,7 +18,7 @@ sample log.
 ### Docker container
 
 ```dockerfile
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 RUN pip install logreducer
 
@@ -38,7 +38,7 @@ spec:
     spec:
       containers:
       - name: logreducer
-        image: python:3.12-slim
+        image: python:3.14-slim
         command: ["sh", "-c"]
         args:
         - |
