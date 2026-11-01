@@ -11,6 +11,9 @@ test:
   min_coverage: 75  # currently 80%; ratchet up as coverage improves
   python:
     parallel: auto
+  # The full tier (tests/TESTING.md) runs nightly and before every release.
+  full:
+    required_for_release: true
 
 quality:
   # examples/ are illustrative snippets, not scanned code
