@@ -75,6 +75,24 @@ def test_source_stops_at_the_end_offsets_it_started_with(kafka_bootstrap):
     assert consumed == lines
 
 
+def test_source_reads_from_the_start_whatever_its_group_committed(kafka_bootstrap):
+    from confluent_kafka import Consumer, TopicPartition
+
+    from logreducer.kafka import KafkaSink, KafkaSource
+
+    topic, group = _name(), _name()
+    lines = [f"INFO line {i}" for i in range(100)]
+    KafkaSink(kafka_bootstrap, topic).write(lines)
+    # Another member of the group commits half way through the topic.
+    other = Consumer(_config(kafka_bootstrap, **{"group.id": group}))
+    try:
+        other.commit(offsets=[TopicPartition(topic, 0, 50)], asynchronous=False)
+    finally:
+        other.close()
+
+    assert list(KafkaSource(kafka_bootstrap, group_id=group, topics=topic)) == lines
+
+
 def test_empty_polls_before_the_end_do_not_end_the_read(kafka_bootstrap):
     from logreducer.kafka import KafkaSink, KafkaSource
 

@@ -18,8 +18,9 @@ and re-reads it for multi-pass modes):
   ``_PARTITION_EOF``. Messages written after that point wait for the next read.
   A read that goes ``idle_timeout`` seconds without a message short of those
   offsets raises, so a partial read never looks like a complete one.
-* **No commit.** Offsets are never committed, so each pass re-reads from the
-  earliest offset - that is what makes the source re-iterable. An application
+* **No commit.** Offsets are never committed, and every assigned partition is
+  rewound to its earliest offset whatever the group has committed, so each pass
+  re-reads the whole topic - that is what makes the source re-iterable. An application
   that needs offset tracking should consume itself and hand the reducer its own
   iterable of ``str``.
 
@@ -167,10 +168,16 @@ class KafkaSource:
         self.encoding = encoding
 
     def __iter__(self) -> Iterator[str]:
-        from confluent_kafka import Consumer, KafkaError
+        from confluent_kafka import OFFSET_BEGINNING, Consumer, KafkaError
+
+        def from_the_start(consumer: Any, partitions: list[Any]) -> None:
+            # A committed group offset would skip the history before it.
+            for tp in partitions:
+                tp.offset = OFFSET_BEGINNING
+            consumer.assign(partitions)
 
         consumer = Consumer(self._config)
-        consumer.subscribe(self.topics)
+        consumer.subscribe(self.topics, on_assign=from_the_start)
         # End offset of each partition when first assigned: the read stops there, so a write
         # made during it is left for the next pass.
         end_offsets: dict[tuple[str, int], int] = {}
