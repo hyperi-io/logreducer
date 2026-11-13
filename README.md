@@ -3,7 +3,7 @@
 Reduces gigabytes of logs to a small, representative sample, as a CLI or a Python library.
 
 [![PyPI](https://img.shields.io/pypi/v/logreducer?logo=pypi)](https://pypi.org/project/logreducer/)
-[![Python Version](https://img.shields.io/badge/python-3.14%2B-blue)](https://www.python.org/)
+[![Python Version](https://img.shields.io/python/required-version-toml?tomlFilePath=https://raw.githubusercontent.com/hyperi-io/logreducer/main/pyproject.toml)](pyproject.toml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
 
 ## What it does
@@ -17,7 +17,7 @@ Reduces gigabytes of logs to a small, representative sample, as a CLI or a Pytho
 
 ## Installation
 
-As a tool, isolated from your other Python projects (needs Python 3.14+):
+As a tool, isolated from your other Python projects (needs the Python `requires-python` in `pyproject.toml` names):
 
 ```bash
 uv tool install logreducer        # or: pipx install logreducer
