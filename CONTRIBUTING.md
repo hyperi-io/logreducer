@@ -117,7 +117,7 @@ Individually: `uv run ruff format`, `uv run ruff check --fix`,
 | Share one deduplicator across hybrid's two passes | Rebuild it before the anomaly pass | The pattern pass consumes the seen-set, so the anomaly pass sees everything as seen and no anomalies survive. Hybrid silently degrades to pattern-only (`core.py`) |
 | Assume an unknown config keyword is ignored | Read the `ValueError` and fix the name | A silently dropped override means a user's tuning quietly does nothing (`core.py`) |
 | Assume every template is the final Drain3 one | Allow for a cluster the `max_clusters` cap evicted | `extract_patterns` re-reads each template from the live cluster once the feed ends, so a varying cluster carries its `<*>` slots and the priority boost counts them. A cluster LRU-evicted mid-feed is gone by then and keeps the template it had when first seen (`patterns.py`) |
-| Hand-edit the version | Land a conventional commit and let semantic-release do it | The old regime wrote `VERSION` by hand and took five commits to get tagging working. CONTRIBUTING makes it a standing rule |
+| Hand-edit the version | Land a conventional commit and let semantic-release do it | semantic-release writes `VERSION`, the changelog and the tag from the commit type, so a hand edit is overwritten at the next release |
 
 ### Where this sits
 
