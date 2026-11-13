@@ -67,7 +67,7 @@ Pattern mode streams, and its memory is fixed by the knobs below, not by lines o
 
 - `max_memory_gb` - the overall cap (also sizes file read strategy and the watchdog). Presets: 0.5 / 1 / 2 GB by level. Values above 70% of available RAM are clamped with a warning.
 - `dedup_cache_size` - the lines exact dedup remembers, and at enhanced and maximum the lines the fuzzy index holds. Both drop the oldest first, so a repeat or near-repeat older than the window comes through again.
-- `max_clusters` - LRU-bound the Drain3 template store (10,000 by default, `None` for unbounded, which also keeps every evicted template's result). Mining time grows with the square of the number of templates a line is compared with, so a lower value also speeds up high-cardinality sources.
+- `max_clusters` - LRU-bound the Drain3 template store (10,000 by default, `None` for unbounded, which also keeps every evicted template's result). A lower value bounds the template store and cuts the work per line on high-cardinality sources.
 - `anomaly_max_rows` - reservoir-cap the rows fed to anomaly detection (off by default, and it trades anomaly recall for a bounded matrix).
 
 ```python

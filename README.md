@@ -10,7 +10,7 @@ Reduces gigabytes of logs to a small, representative sample, as a CLI or a Pytho
 
 - By default you get a couple of examples of each recurring pattern, and the repeats are dropped. In a DFE deployment dfe-engine's sampler uses it for the smart and anomaly samples of a source's data.
 - A `logreducer` command that reduces a file, a SQL or ClickHouse query, or a Kafka topic, straight from the shell.
-- Four modes: pattern (Drain3 template mining), anomaly (Isolation Forest), temporal (one example per template per time window) and hybrid.
+- Four modes: pattern (Drain3 template mining), anomaly (Isolation Forest), temporal (one candidate per template per time window, ranked, up to `max_patterns`) and hybrid.
 - Pattern mode streams through a bounded dedup cache, fuzzy index and template store, so memory does not grow with the line count or the number of distinct lines.
 - Lines naming ERROR, FATAL or CRITICAL as a whole word always come through, one per distinct shape and ahead of the reduced output, in every mode.
 - A core with no IO dependencies: anything re-iterable that yields `str` lines is a source, and anything with `write(lines)` is a sink. SQL, ClickHouse and Kafka adapters are extras, so you install only the one you use.
@@ -98,7 +98,7 @@ The anomaly branch is the one part that cannot stream (Isolation Forest is batch
 |------|-------------|----------|
 | `pattern` | Drain3 template mining | Structured and application logs (fastest) |
 | `anomaly` | Isolation Forest outlier detection, needs 10 or more unique lines | Security and error logs |
-| `temporal` | One example per time window and template, most important first | Time-series and monitoring logs |
+| `temporal` | One candidate per time window and template, most important first, up to `max_patterns` (`temporal_window_minutes`) | Time-series and monitoring logs |
 | `hybrid` | Pattern plus anomaly | Maximum coverage |
 
 | Level | Speed | Memory cap | Features |
