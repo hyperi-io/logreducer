@@ -1,74 +1,47 @@
 # LogReducer
 
+Reduces gigabytes of logs to a small, representative sample, as a CLI or a Python library.
+
 [![PyPI](https://img.shields.io/pypi/v/logreducer?logo=pypi)](https://pypi.org/project/logreducer/)
 [![Python Version](https://img.shields.io/badge/python-3.14%2B-blue)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
 
-Reduce gigabytes of logs to a small, representative sample. By default you get a couple of examples of each recurring pattern, and the repeats are dropped. In a DFE deployment dfe-engine's sampler uses it for the smart and anomaly samples of a source's data.
+## What it does
 
-It ships as a CLI and as a Python library with an IO-agnostic core.
-
-## What it gives you
-
+- By default you get a couple of examples of each recurring pattern, and the repeats are dropped. In a DFE deployment dfe-engine's sampler uses it for the smart and anomaly samples of a source's data.
 - A `logreducer` command that reduces a file, a SQL or ClickHouse query, or a Kafka topic, straight from the shell.
+- Four modes: pattern (Drain3 template mining), anomaly (Isolation Forest), temporal (one candidate per template per time window, ranked, up to `max_patterns`) and hybrid.
 - Pattern mode streams through a bounded dedup cache, fuzzy index and template store, so memory does not grow with the line count or the number of distinct lines.
-- Four modes: pattern (Drain3 template mining), anomaly (Isolation Forest), temporal (one example per template per time window) and hybrid.
-- Lines naming ERROR, FATAL or CRITICAL as a whole word, in any case, always come through, one per distinct shape and ahead of the reduced output, in every mode and however a file is read. A SQL or ClickHouse source samples in the database first, so only the lines it returns are seen.
-- A core with no IO dependencies: anything re-iterable that yields `str` lines is a source, and anything with `write(lines)` is a sink.
-- Seeded SQL sampling and ClickHouse `SAMPLE` for tables too big to scan in full.
-- Adapters for SQL, ClickHouse and Kafka as extras, so you install only the one you use.
-- Injection points for a host application's own config cascade and logging.
+- Lines naming ERROR, FATAL or CRITICAL as a whole word always come through, one per distinct shape and ahead of the reduced output, in every mode.
+- A core with no IO dependencies: anything re-iterable that yields `str` lines is a source, and anything with `write(lines)` is a sink. SQL, ClickHouse and Kafka adapters are extras, so you install only the one you use.
 
 ## Installation
 
-### As a CLI tool
-
-Install it as an isolated tool so its dependencies never clash with your other Python projects (needs Python 3.14+):
+As a tool, isolated from your other Python projects (needs Python 3.14+):
 
 ```bash
-uv tool install logreducer     # recommended (uv)
-# or
-pipx install logreducer        # recommended (pipx)
+uv tool install logreducer        # or: pipx install logreducer
+uv tool install "logreducer[clickhouse]"   # with an adapter extra
 ```
 
-To bundle an adapter extra with the tool: `uv tool install "logreducer[clickhouse]"`.
-
-### As a library
+As a library:
 
 ```bash
-uv add logreducer
-# or
-pip install logreducer
+uv add logreducer                 # or: pip install logreducer
+uv add "logreducer[enhanced]"     # fuzzy dedup, faster hashing
+uv add "logreducer[sql]"          # SQLSource (SQLAlchemy), bring your own DBAPI driver
+uv add "logreducer[clickhouse]"   # ClickHouseSource (clickhouse-connect)
+uv add "logreducer[kafka]"        # KafkaSource and KafkaSink (confluent-kafka)
 ```
 
-Optional extras (install only what you need):
+## Quick start
 
 ```bash
-uv add "logreducer[enhanced]"    # fuzzy dedup, faster hashing
-uv add "logreducer[sql]"         # SQLSource (SQLAlchemy) - bring your own DBAPI driver
-uv add "logreducer[clickhouse]"  # ClickHouseSource (clickhouse-connect)
-uv add "logreducer[kafka]"       # KafkaSource / KafkaSink (confluent-kafka)
-```
-
-> The `logreducer` command works under any install method (project venv, `pip install --user`, pipx/uv tool, system-wide). `pipx` / `uv tool` is the recommendation for end users - isolation without a manual venv.
-
-## Quick Start
-
-### Command line
-
-```bash
-# Reduce a file to stdout, or to a file with -o
-logreducer app.log
+logreducer app.log                                    # reduced lines to stdout
 logreducer app.log -o reduced.log -l enhanced -m hybrid
-
-# JSON output, with run stats on stderr
-logreducer app.log --format json -o result.json --stats
-
-# Cap memory, estimate first
-logreducer huge.log --max-memory 2 --estimate
+logreducer app.log --format json -o result.json --stats   # run stats on stderr
+logreducer huge.log --max-memory 2 --estimate         # cap memory, estimate first
 ```
-
-### Library
 
 ```python
 from logreducer import LogReducer
@@ -79,16 +52,26 @@ reducer = LogReducer(level="standard")
 reduced = reducer.process_file("app.log", output_file="reduced.log")
 print(f"{len(reduced)} representative lines")
 
-# Reduce any re-iterable of lines - no file needed
+# Reduce any re-iterable of lines, no file needed
 lines = ["ERROR timeout upstream=payments", "INFO ok", "ERROR timeout upstream=payments"]
 reduced = reducer.reduce(lines)
 ```
 
 `reduce()` returns the reduced lines in memory. Pass `return_metadata=True` for a dict of `{"lines", "stats", "config"}`.
 
+A database or a Kafka topic is a source too. The CLI dispatches on the `--dsn` scheme, and a library caller constructs the source directly:
+
+```bash
+logreducer --dsn postgresql://user@host/db --query "SELECT message FROM logs"    # logreducer[sql] + a driver
+logreducer --dsn clickhouse://user@host:8123/db --query "SELECT message FROM logs"
+logreducer --dsn kafka://broker:9092 --topic app-logs --group logreducer
+```
+
+The query selects the log line as its first column. Sources are re-iterable (the engine makes several passes), so a database source re-runs its query per pass and a Kafka source re-reads from the earliest offset without committing.
+
 ## How it works
 
-Pattern mode streams: lines flow through dedup and template mining as one generator pipeline, so the unique-line set is never materialised. A template the store evicts keeps its place in the ranking only while it can still make the `max_patterns` cut, so memory is set by `max_clusters`, `max_patterns` and `dedup_cache_size`, not by the input.
+Pattern mode streams: lines flow through dedup and template mining as one generator pipeline, so the unique-line set is never materialised. Memory is set by `max_clusters`, `max_patterns` and `dedup_cache_size`, not by the input.
 
 ```mermaid
 flowchart LR
@@ -109,316 +92,35 @@ flowchart LR
     O --> out["stdout / file + meta.json / Sink"]
 ```
 
-The anomaly branch is the one part that cannot stream (Isolation Forest is batch ML); cap its input with `anomaly_max_rows` when reducing very high-cardinality sources.
-
-## Choosing a mode and level
-
-```mermaid
-flowchart TD
-    Q{"What matters<br/>in the output?"} -->|"recurring structure,<br/>smallest output"| P["mode=pattern<br/>(default, fastest)"]
-    Q -->|"rare or unusual<br/>events"| A["mode=anomaly"]
-    Q -->|"bursts and<br/>time windows"| T["mode=temporal"]
-    Q -->|"unsure /<br/>maximum coverage"| H["mode=hybrid"]
-    A -.-> N1["needs >= 10 unique lines,<br/>else everything passes through"]
-    P -.-> N2["fuzzy dedup joins in<br/>at enhanced/maximum"]
-```
+The anomaly branch is the one part that cannot stream (Isolation Forest is batch ML). Cap its input with `anomaly_max_rows` on very high-cardinality sources.
 
 | Mode | Description | Best for |
 |------|-------------|----------|
-| `pattern` | Drain3 template mining | Structured / application logs (fastest) |
-| `anomaly` | Isolation Forest outlier detection | Security and error logs |
-| `temporal` | One example per time window and template, most important first (`temporal_window_minutes`, capped by `max_patterns`) | Time-series and monitoring logs |
-| `hybrid` | Pattern + anomaly combined | Maximum coverage |
+| `pattern` | Drain3 template mining | Structured and application logs (fastest) |
+| `anomaly` | Isolation Forest outlier detection, needs 10 or more unique lines | Security and error logs |
+| `temporal` | One candidate per time window and template, most important first, up to `max_patterns` (`temporal_window_minutes`) | Time-series and monitoring logs |
+| `hybrid` | Pattern plus anomaly | Maximum coverage |
 
 | Level | Speed | Memory cap | Features |
 |-------|-------|-----------|----------|
-| `standard` | Fast | 0.5 GB | Deduplication + pattern extraction |
-| `enhanced` | Moderate | 1 GB | + fuzzy dedup |
-| `maximum` | Thorough | 2 GB | + wider pattern budget |
+| `standard` | Fast | 0.5 GB | Deduplication plus pattern extraction |
+| `enhanced` | Moderate | 1 GB | plus fuzzy dedup |
+| `maximum` | Thorough | 2 GB | plus a wider pattern budget |
 
-## Reducing from a database or Kafka
+## Documentation
 
-The CLI dispatches on the `--dsn` scheme; a library caller constructs the source directly.
+- [docs/library-guide.md](docs/library-guide.md): sampling large tables, collecting a target number of lines, bounding memory, your own sources and sinks, embedding in a host app, every config field, logging.
+- [docs/architecture.md](docs/architecture.md): how the pieces fit.
+- [docs/pypi.md](docs/pypi.md): the PyPI page.
 
-```bash
-# PostgreSQL / MySQL / SQLite via SQLAlchemy (needs logreducer[sql] + a driver)
-logreducer --dsn postgresql://user@host/db --query "SELECT message FROM logs"
+## Help and contributing
 
-# ClickHouse via the native driver (needs logreducer[clickhouse])
-logreducer --dsn clickhouse://user@host:8123/db --query "SELECT message FROM logs"
+How to work in this repo, the toolchain, the test layout (including the real-log corpora under `tests/testdata/`) and how the integration tests find their services are in [CONTRIBUTING.md](CONTRIBUTING.md). A question that is not a bug goes in a new issue.
 
-# Kafka topic (needs logreducer[kafka])
-logreducer --dsn kafka://broker:9092 --topic app-logs --group logreducer
-```
-
-```python
-from logreducer import LogReducer
-from logreducer.clickhouse import ClickHouseSource
-
-reducer = LogReducer(level="enhanced", mode="hybrid")
-with ClickHouseSource("clickhouse://user@host:8123/db", "SELECT message FROM logs") as source:
-    reduced = reducer.reduce(source)
-```
-
-The query selects the log line as its **first column**. Sources are re-iterable (the engine makes multiple passes), so a database source re-runs its query per pass and a Kafka source re-reads from the earliest offset without committing.
-
-## Sampling large sources
-
-For a table too large to scan in full, sample a fraction of rows. SQL sampling is deterministic when you pass a seed (so the reducer's multi-pass modes see a stable input); ClickHouse uses its native `SAMPLE` clause.
-
-```python
-from logreducer.sql import SQLSource
-
-# Wrap any query in a seeded random predicate (PostgreSQL/MySQL)
-source = SQLSource("postgresql://user@host/db", "SELECT msg FROM logs", sample=0.01, sample_seed=42)
-
-# Or sample a TABLE with the engine's native sampler - PostgreSQL
-# TABLESAMPLE SYSTEM is page-level and genuinely sub-linear:
-source = SQLSource.from_table("postgresql://user@host/db", "logs", "msg", sample=0.01, sample_seed=42)
-```
-
-```bash
-logreducer --dsn postgresql://user@host/db --query "SELECT msg FROM logs" --sample 0.01 --sample-seed 42
-```
-
-Notes: SQLite has no seedable RNG, so a seeded sample raises `SamplingNotSupported` (unseeded, best-effort sampling still works). ClickHouse `SAMPLE` needs the table to declare a `SAMPLE BY` key. For an arbitrary complex query, put the sampling clause in your own SQL instead.
-
-## Collecting a target number of lines
-
-When you want *about N* representative lines rather than "reduce everything", `reduce_to_target` pulls fresh random batches and reduces each, accumulating distinct representatives until a stop condition fires. Peak memory is bounded to roughly one batch plus the accumulator.
-
-```mermaid
-flowchart TD
-    PULL["pull fresh random batch<br/>(sample_batch in-engine,<br/>else client-side reservoir)"] --> E{empty?}
-    E -->|yes| SE([stop: exhausted])
-    E -->|no| SIZE["resize next batch from<br/>observed avg row bytes"]
-    SIZE --> RED["reduce the batch"]
-    RED --> ACC["add new distinct<br/>representatives"]
-    ACC --> TGT{"target<br/>reached?"}
-    TGT -->|yes| ST([stop: target])
-    TGT -->|no| PLAT{"no new lines for<br/>plateau_rounds?"}
-    PLAT -->|yes| SP([stop: plateau])
-    PLAT -->|no| MEM{"memory<br/>watchdog"}
-    MEM -->|"soft: shrink batch"| FET
-    MEM -->|"hard limit"| SM([stop: memory])
-    FET{"max_fetches<br/>hit?"} -->|yes| SF([stop: max_fetches])
-    FET -->|no| PULL
-```
-
-```python
-from logreducer import LogReducer, reduce_to_target
-from logreducer.sql import SQLSource
-
-reducer = LogReducer(level="enhanced", mode="hybrid")
-source = SQLSource("postgresql://user@host/db", "SELECT msg FROM logs")
-outcome = reduce_to_target(source, reducer, target_rows=5000, max_batch_memory_gb=1.0)
-print(outcome["stats"]["stop_reason"])   # target / exhausted / max_fetches / plateau / memory
-lines = outcome["lines"]
-```
-
-```bash
-logreducer --dsn postgresql://user@host/db --query "SELECT msg FROM logs" \
-    --target-rows 5000 --max-fetches 50 --max-batch-memory 1.0
-```
-
-## Bounding memory
-
-Pattern mode streams, and its memory is fixed by the knobs below, not by lines or distinct templates. Temporal mode holds the whole source in memory, and anomaly mode holds its unique lines. The knobs:
-
-- `max_memory_gb` - the overall cap (also sizes file read strategy and the watchdog). Presets: 0.5 / 1 / 2 GB by level; values above 70% of available RAM are clamped with a warning.
-- `dedup_cache_size` - the lines exact dedup remembers, and at enhanced and maximum the lines the fuzzy index holds. Both drop the oldest first, so a repeat or near-repeat older than the window comes through again.
-- `max_clusters` - LRU-bound the Drain3 template store (10,000 by default, `None` for unbounded, which also keeps every evicted template's result). Mining time grows with the square of the number of templates a line is compared with, so a lower value also speeds up high-cardinality sources.
-- `anomaly_max_rows` - reservoir-cap the rows fed to anomaly detection (off by default; trades anomaly recall for a bounded matrix).
-
-```python
-reducer = LogReducer(level="enhanced", mode="hybrid", max_clusters=50_000, anomaly_max_rows=200_000)
-```
-
-## Sources and sinks
-
-The engine is built around two tiny structural protocols - that is the whole integration surface:
-
-```mermaid
-flowchart LR
-    subgraph inputs ["Sources"]
-        direction TB
-        FS["FileSource"]
-        SS["SQLSource  [sql]"]
-        CS["ClickHouseSource  [clickhouse]"]
-        KS["KafkaSource  [kafka]"]
-        MY["your own re-iterable"]
-    end
-    subgraph core ["LogReducer core"]
-        C["zero IO dependencies<br/>Source in -> list[str] out"]
-    end
-    subgraph outputs ["Sinks"]
-        direction TB
-        FK["FileSink"]
-        KK["KafkaSink  [kafka]"]
-        MS["your own write()"]
-    end
-    inputs -->|"__iter__() -> str<br/>fresh iterator per pass"| core
-    core -->|"write(lines) -> int"| outputs
-```
-
-An application can hand the reducer its own IO - anything that yields `str` and can be iterated more than once is a `Source`:
-
-```python
-class MySource:
-    def __iter__(self):
-        yield from open_my_stream()  # must return a FRESH iterator each call
-
-reducer.reduce(MySource())
-```
-
-Output works the same way through a `Sink` (`write(lines) -> int`):
-
-```python
-from logreducer import LogReducer, FileSink
-
-reducer.reduce(source, sink=FileSink("reduced.jsonl", output_format="jsonl"))
-```
-
-## Embedding in a host application
-
-A host app that owns its own config cascade and logging standard drives logreducer with three seams - no logreducer-side knowledge of the host required:
-
-```python
-import logreducer
-
-# 1. Config: build it from YOUR cascade and inject it (kwargs still win on top)...
-cfg = logreducer.BigDialConfig(max_memory_gb=0.5, max_patterns=800)
-reducer = logreducer.LogReducer(mode="hybrid", config=cfg)
-
-# ...or let logreducer read your env cascade directly: prefixed beats bare.
-cfg = logreducer.BigDialConfig.from_env("MYAPP", "LOGREDUCER")   # MYAPP_MAX_MEMORY_GB wins
-
-# 2. Logging: your app owns the stdlib logging handlers; logreducer attaches
-#    nothing and its records flow through YOUR handlers, at YOUR level,
-#    formatted by YOUR standard.
-logreducer.setup_logging(enable=True, own_sinks=False)
-```
-
-## Configuration
-
-Override any config field as a keyword argument (unknown names raise - typos never silently no-op):
-
-```python
-reducer = LogReducer(
-    level="enhanced",
-    mode="hybrid",
-    max_memory_gb=1.0,          # memory ceiling (clamped to 70% of available RAM)
-    dedup_cache_size=100000,    # bounded dedup cache and fuzzy index
-    drain_similarity=0.4,       # pattern similarity threshold
-    fuzzy_threshold=0.8,        # fuzzy-dedup threshold (enhanced/maximum)
-    anomaly_contamination=0.1,  # expected anomaly fraction
-    temporal_window_minutes=60, # grouping window for temporal mode
-    max_patterns=2000,          # cap on extracted patterns
-    min_pattern_occurrences=2,  # patterns seen fewer times are dropped, except CRITICAL/FATAL/ERROR ones
-)
-```
-
-## Logging
-
-Logging is off by default. Enable it and pick a format via env vars:
-
-```bash
-LOG_LEVEL=DEBUG LOG_FORMAT=json logreducer app.log --log
-```
-
-Logging is the standard library `logging` module, under the `logreducer` logger. `LOG_FORMAT=json` emits one JSON object per line for log aggregators (keys `timestamp`, `level`, `target`, `function`, `line_number`, `message`, `fields`); the default is human-readable (coloured in a terminal, plain in CI/containers). Embedding? See `own_sinks=False` above.
-
-## Development
-
-```bash
-git clone https://github.com/hyperi-io/logreducer.git
-cd logreducer
-uv sync --all-extras
-```
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the toolchain, test layout (including the real-log corpora under `tests/testdata/`) and how the integration tests find their services.
+Open bugs: [this repo](https://github.com/hyperi-io/logreducer/issues?q=is%3Aopen+is%3Aissue+type%3ABug+-label%3Abacklog+-label%3Anext-minor) | [whole DFE suite](https://github.com/search?type=issues&q=is%3Aopen+is%3Aissue+type%3ABug+-label%3Abacklog+-label%3Anext-minor+repo%3Ahyperi-io%2Fdfe-infra+repo%3Ahyperi-io%2Fdfe-docker+repo%3Ahyperi-io%2Fdfe-deploy+repo%3Ahyperi-io%2Fdfe-engine+repo%3Ahyperi-io%2Fdfe-loader+repo%3Ahyperi-io%2Fdfe-receiver+repo%3Ahyperi-io%2Fdfe-fetcher+repo%3Ahyperi-io%2Fdfe-archiver+repo%3Ahyperi-io%2Fdfe-transform-vrl+repo%3Ahyperi-io%2Fdfe-transform-vector+repo%3Ahyperi-io%2Fdfe-transform-elastic+repo%3Ahyperi-io%2Fdfe-ui+repo%3Ahyperi-io%2Fdfe-hyperdx+repo%3Ahyperi-io%2Fscalo-rs+repo%3Ahyperi-io%2Fscalo-py+repo%3Ahyperi-io%2Flogreducer+repo%3Ahyperi-io%2Fdfe-schemas+repo%3Ahyperi-io%2Fvector-vrl+repo%3Ahyperi-io%2Fculvert+repo%3Ahyperi-io%2Fdfe-clickhouse-rs+repo%3Ahyperi-io%2Ffactbook-rs)
 
 ## License
 
-[Apache-2.0](LICENSE). Third-party attributions are recorded in [NOTICE](NOTICE).
-
-Copyright 2026 HYPERI PTY LIMITED.
+[Apache-2.0](LICENSE). Third-party attributions are recorded in [NOTICE](NOTICE). Copyright 2026 HYPERI PTY LIMITED.
 
 Credits: template mining (`src/logreducer/template_mining.py`) is derived from [Drain3](https://github.com/logpai/Drain3), Copyright (c) 2020-2022 International Business Machines and the Drain3 project contributors, MIT licence. Drain3 builds on the Drain parser in LogPAI's [logparser](https://github.com/logpai/logparser). The module header carries Drain3's licence text in full.
-
-## Context
-
-Depth: [docs/architecture.md](docs/architecture.md).
-
-### What this is
-
-A reduction engine over an abstraction, plus a CLI on top of it. The core carries
-zero IO dependencies and reduces any re-iterable stream of `str` lines, so it
-never owns a connection or a loading path. It is not a log shipper, not a parser,
-and not an aggregator front end -- it picks a representative subset of the lines
-it is given and drops the rest.
-
-### Where things live
-
-| Path | Holds |
-|---|---|
-| `src/logreducer/core.py` | `LogReducer` -- the four modes, the multi-pass orchestration, stats, output |
-| `src/logreducer/sources.py`, `sinks.py` | the two structural protocols that ARE the integration surface, plus `FileSource` and `FileSink` |
-| `src/logreducer/sql.py`, `clickhouse.py`, `kafka.py` | the optional adapters, one extra each |
-| `src/logreducer/patterns.py`, `anomaly.py`, `temporal.py` | Drain3 mining and fuzzy dedup, Isolation Forest, time-window grouping |
-| `src/logreducer/template_mining.py` | the Drain template miner, derived from Drain3 (credited under License) |
-| `src/logreducer/memory.py` | `MemoryMonitor`, `BoundedDeduplicator`, the file read strategies |
-| `src/logreducer/sampling.py`, `target.py` | dialect-aware SQL sampling, and the `reduce_to_target` batch loop |
-| `src/logreducer/config.py` | `BigDialConfig`, the level presets, the `from_env` cascade |
-| `src/logreducer/cli.py` | the `logreducer` entry point, dispatching on the `--dsn` scheme |
-| `tests/unit/`, `tests/integration/` | server-free, and `integration`-marked against real services |
-| `tests/testdata/` | gzipped, PII-cleansed slices of real public log datasets, with a manifest and a rebuild tool |
-
-### Commands that prove a change
-
-```bash
-uv sync --all-extras
-hyperi-ci check        # the canonical local gate -- there is no Makefile
-```
-
-Individually: `uv run ruff format`, `uv run ruff check --fix`,
-`uv run mypy src/logreducer`, `uv run ty check src/logreducer`,
-`uv run pytest -q`, `uv build`. Three ways green lies:
-
-| It looks like | It is actually |
-|---|---|
-| `pytest -q` covered the adapters | Nothing is deselected by default -- `addopts` is only `-ra -q --strict-markers --strict-config`, so `tests/integration/` is collected and then SKIPS when there is neither a configured endpoint nor Docker. CI sets no env vars, so CI always takes the docker path and a local run may not have |
-| the tree tells you the version | It does not. `pyproject.toml` and `VERSION` both say 3.4.0 while the newest tag is v3.5.0 and PyPI serves 3.5.0. semantic-release resolves the version at release time |
-| coverage is at the stated floor | `min_coverage: 75` gates, and its own comment says actual is 80. `vulture` is set to `warn`, not fail, because a library's public API reads as unused to dead-code analysis |
-
-### What tends to bite
-
-| Don't | Do | Why |
-|---|---|---|
-| Hand `reduce()` a bare generator | Hand it something whose `__iter__` returns a FRESH iterator each call | `reduce()` counts lines in one pass then re-reads to process, and hybrid reads again. A one-shot iterator is drained by the count and leaves nothing behind, so it now raises `TypeError` rather than returning an empty result (`core.py`) |
-| Assume a reused `LogReducer` starts clean | Nothing -- `_reset_components()` rebuilds them per run | The dedup seen-set, both Drain3 miners and the fuzzy LSH accumulate per line. Carried into the next run they drop every line as already-seen and return empty (`core.py`) |
-| Share one deduplicator across hybrid's two passes | Rebuild it before the anomaly pass | The pattern pass consumes the seen-set, so the anomaly pass sees everything as seen and no anomalies survive. Hybrid silently degrades to pattern-only (`core.py`) |
-| Assume an unknown config keyword is ignored | Read the `ValueError` and fix the name | A silently dropped override means a user's tuning quietly does nothing (`core.py`) |
-| Assume every template is the final Drain3 one | Allow for a cluster the `max_clusters` cap evicted | `extract_patterns` re-reads each template from the live cluster once the feed ends, so a varying cluster carries its `<*>` slots and the priority boost counts them. A cluster LRU-evicted mid-feed is gone by then and keeps the template it had when first seen (`patterns.py`) |
-| Hand-edit the version | Land a conventional commit and let semantic-release do it | The old regime wrote `VERSION` by hand and took five commits to get tagging working. CONTRIBUTING makes it a standing rule |
-
-### Where this sits
-
-One declared edge in `dfe-infra/suite.yaml`.
-
-| Repo | Direction | Kind | Mechanism |
-|---|---|---|---|
-| dfe-engine | outbound | `python-dep` | dfe-engine declares `logreducer[enhanced]` by range in its `pyproject.toml` and imports it lazily, inside the `smart` and `anomaly` sampler modes: `LogReducer` and `logreducer.clickhouse` in `sampling/service.py`, `logreducer.kafka` in `sampling/kafka_reader.py`. A new release is checked against that range, then taken with `uv lock --upgrade-package logreducer` and the engine's tests |
-
-`dfe-stack suite --consumer logreducer` returns an empty edge list: no repo in
-that graph is something this library depends on. The runtime dependencies
-(psutil, numpy, scikit-learn, typer) are packages, declared in
-`pyproject.toml`, which is where they belong.
-
-The reason dfe-engine gives for not declaring the dependency -- pin it "once it
-hits public PyPI" -- has been met since 3.4.0 was published on 2026-07-03, so
-expect that edge to become an ordinary pinned dependency.
-
-## Issues
-
-Open bugs: [this repo](https://github.com/hyperi-io/logreducer/issues?q=is%3Aopen+is%3Aissue+type%3ABug+-label%3Abacklog+-label%3Anext-minor) | [whole DFE suite](https://github.com/search?type=issues&q=is%3Aopen+is%3Aissue+type%3ABug+-label%3Abacklog+-label%3Anext-minor+repo%3Ahyperi-io%2Fdfe-infra+repo%3Ahyperi-io%2Fdfe-docker+repo%3Ahyperi-io%2Fdfe-deploy+repo%3Ahyperi-io%2Fdfe-engine+repo%3Ahyperi-io%2Fdfe-loader+repo%3Ahyperi-io%2Fdfe-receiver+repo%3Ahyperi-io%2Fdfe-fetcher+repo%3Ahyperi-io%2Fdfe-archiver+repo%3Ahyperi-io%2Fdfe-transform-vrl+repo%3Ahyperi-io%2Fdfe-transform-vector+repo%3Ahyperi-io%2Fdfe-transform-elastic+repo%3Ahyperi-io%2Fdfe-ui+repo%3Ahyperi-io%2Fdfe-hyperdx+repo%3Ahyperi-io%2Fscalo-rs+repo%3Ahyperi-io%2Fscalo-py+repo%3Ahyperi-io%2Flogreducer+repo%3Ahyperi-io%2Fdfe-schemas+repo%3Ahyperi-io%2Fvector-vrl+repo%3Ahyperi-io%2Fculvert+repo%3Ahyperi-io%2Fdfe-clickhouse-rs+repo%3Ahyperi-io%2Ffactbook-rs)
