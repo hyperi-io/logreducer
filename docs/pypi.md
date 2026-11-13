@@ -55,4 +55,4 @@ From the shell it is `logreducer app.log -o reduced.log`. `level` is `standard`,
 
 Template mining is derived from [Drain3](https://github.com/logpai/Drain3), MIT licence, with its licence text in the module header.
 
-Docs and source are at <https://github.com/hyperi-io/logreducer>. Requires Python 3.14 or later. Licensed Apache-2.0: <https://github.com/hyperi-io/logreducer/blob/main/LICENSE>.
+Docs and source are at <https://github.com/hyperi-io/logreducer>. The Python floor is `requires-python` in `pyproject.toml`. Licensed Apache-2.0: <https://github.com/hyperi-io/logreducer/blob/main/LICENSE>.
