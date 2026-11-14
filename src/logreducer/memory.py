@@ -136,7 +136,7 @@ class StreamingProcessor:
 
         The memory check runs on its own line counter, NOT on chunk-flush
         boundaries - a flush count and a line count almost never coincide, so
-        gating the check on both used to make this fallback effectively dead.
+        gating the check on both would make this fallback dead.
         """
         chunk: list[str] = []
         check_every = 100_000

@@ -5,7 +5,7 @@ integration tests to verify reduction on varied, messy, real-world logs. Each
 `*.log.gz` is a truncated, PII-cleansed slice; `manifest.json` records the
 source, licence, line count and sha256 for each.
 
-These are committed in **plain git** (not LFS) - they are small (~4 MB total)
+These are committed in **plain git** (not LFS) - they are small
 and write-once. Attribution and licences are in the top-level [NOTICE](../../NOTICE).
 
 ## Why real, messy data
