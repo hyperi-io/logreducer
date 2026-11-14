@@ -17,9 +17,7 @@ readme = "docs/pypi.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
 requires-python = ">=3.14"
-# Python version policy: requires-python enforces the minimum. Do NOT add
-# version-specific classifiers (3.12, 3.13, ...) - "3 :: Only" avoids churn
-# on every new Python release.
+# No per-version classifiers: requires-python sets the minimum.
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
@@ -72,7 +70,6 @@ logreducer = "logreducer.cli:main"
 module-name = "logreducer"
 module-root = "src"
 
-# Ruff: lint + format (replaces black + flake8 + isort). Line length 120.
 [tool.ruff]
 target-version = "py314"
 line-length = 120
@@ -139,10 +136,7 @@ indent-style = "space"
 skip-magic-trailing-comma = false
 line-ending = "auto"
 
-# MyPy: KEPT STRICT (logreducer is small and already clean-typed).
-# ignore_missing_imports only silences third-party libs without stubs
-# (datasketch, ...); our own code stays fully typed via
-# disallow_untyped_defs below.
+# Strict. ignore_missing_imports covers third-party libs without stubs.
 [tool.mypy]
 python_version = "3.14"
 ignore_missing_imports = true
@@ -215,9 +209,7 @@ skips = ["B101", "B603"]
 # when transitive deps pin older lower bounds; revisit each /deps pass.
 [tool.uv]
 index-strategy = "unsafe-best-match"
-# Supply-chain cooldown (standards/universal/ci.md): never resolve a package
-# version published in the last 7 days. A CVE fix bypasses it through a
-# temporary per-package exclude-newer-package entry, not by lowering this.
+# Supply-chain cooldown. A CVE fix bypasses it with a per-package entry.
 exclude-newer = "7 days"
 # scalo 2.32.4 carries the shared test services the suite needs, released 2026-11-01. A
 # per-package entry replaces the global span rather than widening it, so remove this one on 2026-11-08.
@@ -251,11 +243,7 @@ no_tips = true
 # Allow asserts in test files
 skips = ["*test*.py", "*tests*.py"]
 
-# Dependency groups (PEP 735): local dev + docs tooling. These are NOT part
-# of the published package - never installed by `pip install logreducer`,
-# and not advertised as extras in the wheel metadata. `uv sync` installs the
-# `dev` group by default. Only `enhanced` (a real user feature) stays in
-# [project.optional-dependencies].
+# Local dev and test tooling, not in the published wheel.
 [dependency-groups]
 dev = [
     "pytest>=9.0.0",         # Test framework (9.0 changed warning/path semantics)

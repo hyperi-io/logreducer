@@ -59,7 +59,7 @@ open a pull request to `main`.
 
 ## Code style
 
-- Python 3.14+, [ruff](https://docs.astral.sh/ruff/) formatted (line length 120).
+- Python at the `requires-python` floor, [ruff](https://docs.astral.sh/ruff/) formatted at the `line-length` in `pyproject.toml`.
 - Fully typed - `mypy` runs strict; annotate new code.
 - Australian English in prose; ASCII-only in comments, commit messages and docs.
 
@@ -105,8 +105,8 @@ Individually: `uv run ruff format`, `uv run ruff check --fix`,
 | It looks like | It is actually |
 |---|---|
 | `pytest -q` covered the adapters | Nothing is deselected by default -- `addopts` is only `-ra -q --strict-markers --strict-config`, so `tests/integration/` is collected and then SKIPS when there is neither a configured endpoint nor Docker. CI sets no env vars, so CI always takes the docker path and a local run may not have |
-| the tree tells you the version | It does not. `pyproject.toml` and `VERSION` both say 3.4.0 while the newest tag is v3.5.0 and PyPI serves 3.5.0. semantic-release resolves the version at release time |
-| coverage is at the stated floor | `min_coverage: 75` gates, and its own comment says actual is 80. `vulture` is set to `warn`, not fail, because a library's public API reads as unused to dead-code analysis |
+| the tree tells you the version | It does not. The version in `pyproject.toml` and `VERSION` lags the newest tag and PyPI. semantic-release resolves the version at release time |
+| coverage is at the stated floor | `min_coverage` is the gate, not the measured figure. `vulture` is set to `warn`, not fail, because a library's public API reads as unused to dead-code analysis |
 
 ### What tends to bite
 

@@ -8,7 +8,7 @@ release:
   enabled: true
 
 test:
-  min_coverage: 75  # currently 80%; ratchet up as coverage improves
+  min_coverage: 75
   python:
     parallel: auto
   # The full tier (tests/TESTING.md) runs nightly and before every release.
