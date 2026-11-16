@@ -201,8 +201,6 @@ skips = ["B101", "B603"]
 index-strategy = "unsafe-best-match"
 # Supply-chain cooldown. A CVE fix bypasses it with a per-package entry.
 exclude-newer = "7 days"
-# Lets in the scalo release the test suite needs before the cooldown would.
-exclude-newer-package = { scalo = "2026-11-01T06:00:00Z" }
 override-dependencies = []
 
 [[tool.uv.index]]
