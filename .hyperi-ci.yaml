@@ -1,4 +1,3 @@
-# HyperI CI configuration -- logreducer
 # Only values that differ from the hyperi-ci defaults.
 classification: oss
 
