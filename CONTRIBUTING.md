@@ -54,14 +54,14 @@ open a pull request to `main`.
 ## Pull requests
 
 1. Branch from `main` (e.g. `fix/memory-leak`, `feat/clickhouse-source`).
-2. Make your change with tests; keep `hyperi-ci check` green.
+2. Make your change with tests, and keep `hyperi-ci check` passing.
 3. Open a pull request to `main`.
 
 ## Code style
 
 - Python at the `requires-python` floor, [ruff](https://docs.astral.sh/ruff/) formatted at the `line-length` in `pyproject.toml`.
-- Fully typed - `mypy` runs strict; annotate new code.
-- Australian English in prose; ASCII-only in comments, commit messages and docs.
+- Fully typed. `mypy` runs strict, so annotate new code.
+- Australian English in prose, and ASCII only in comments, commit messages and docs.
 
 ## Context
 
@@ -112,7 +112,7 @@ Individually: `uv run ruff format`, `uv run ruff check --fix`,
 
 | Don't | Do | Why |
 |---|---|---|
-| Hand `reduce()` a bare generator | Hand it something whose `__iter__` returns a FRESH iterator each call | `reduce()` counts lines in one pass then re-reads to process, and hybrid reads again. A one-shot iterator is drained by the count and leaves nothing behind, so it now raises `TypeError` rather than returning an empty result (`core.py`) |
+| Hand `reduce()` a bare generator | Hand it something whose `__iter__` returns a FRESH iterator each call | `reduce()` counts lines in one pass then re-reads to process, and hybrid reads again. A one-shot iterator is drained by the count and leaves nothing behind, so it raises `TypeError` rather than returning an empty result (`core.py`) |
 | Assume a reused `LogReducer` starts clean | Nothing -- `_reset_components()` rebuilds them per run | The dedup seen-set, both Drain3 miners and the fuzzy LSH accumulate per line. Carried into the next run they drop every line as already-seen and return empty (`core.py`) |
 | Share one deduplicator across hybrid's two passes | Rebuild it before the anomaly pass | The pattern pass consumes the seen-set, so the anomaly pass sees everything as seen and no anomalies survive. Hybrid silently degrades to pattern-only (`core.py`) |
 | Assume an unknown config keyword is ignored | Read the `ValueError` and fix the name | A silently dropped override means a user's tuning quietly does nothing (`core.py`) |
@@ -125,13 +125,9 @@ One declared edge in `dfe-infra/suite.yaml`.
 
 | Repo | Direction | Kind | Mechanism |
 |---|---|---|---|
-| dfe-engine | outbound | `python-dep` | dfe-engine declares `logreducer[enhanced]` by range in its `pyproject.toml` and imports it lazily, inside the `smart` and `anomaly` sampler modes: `LogReducer` and `logreducer.clickhouse` in `sampling/service.py`, `logreducer.kafka` in `sampling/kafka_reader.py`. A new release is checked against that range, then taken with `uv lock --upgrade-package logreducer` and the engine's tests |
+| dfe-engine | outbound | `python-dep` | dfe-engine declares `logreducer[enhanced]` with a version floor in its `pyproject.toml` and imports it lazily, inside the `smart` and `anomaly` sampler modes: `LogReducer` and `logreducer.clickhouse` in `src/dfe_engine/sampling/service.py`, `logreducer.kafka` in `src/dfe_engine/sampling/kafka_reader.py`. A new release is checked against that floor, then taken with `uv lock --upgrade-package logreducer` and the engine's tests |
 
 `dfe-stack suite --consumer logreducer` returns an empty edge list: no repo in
 that graph is something this library depends on. The runtime dependencies
 (psutil, numpy, scikit-learn, typer) are packages, declared in
 `pyproject.toml`, which is where they belong.
-
-The reason dfe-engine gives for not declaring the dependency -- pin it "once it
-hits public PyPI" -- has been met since 3.4.0 was published on 2026-07-03, so
-expect that edge to become an ordinary pinned dependency.

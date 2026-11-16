@@ -7,8 +7,7 @@
 [extend]
 useDefault = true
 
-# Sample log files and test fixtures contain token-like strings that are not
-# real secrets - logreducer's whole job is chewing through log lines.
+# Sample logs and test fixtures hold token-like strings that are not secrets.
 [[allowlists]]
 description = "logreducer false positives"
 paths = [
@@ -16,8 +15,7 @@ paths = [
     '''tests/.*''',
 ]
 
-# docs/JIRA_OAUTH_SETUP.md shows a curl example with the literal placeholder
-# ACCESS_TOKEN in an Authorization header - documentation, not a credential.
+# A placeholder ACCESS_TOKEN in a curl example, not a credential.
 [[allowlists]]
 description = "doc placeholder tokens in curl examples"
 paths = [

@@ -31,30 +31,26 @@ classifiers = [
 ]
 keywords = ["log", "logging", "reduction", "analysis", "pattern-extraction", "memory-efficient", "streaming", "anomaly-detection"]
 dependencies = [
-    "psutil>=7.2.2",        # memory monitoring (MemoryMonitor)
+    "psutil>=7.2.2",
     "numpy>=2.5.3",
-    "scikit-learn>=1.9.1",  # imports as sklearn
-    "typer>=0.27.3",        # CLI
+    "scikit-learn>=1.9.1",
+    "typer>=0.27.3",
 ]
 
+# What each extra adds: docs/pypi.md "Extras".
 [project.optional-dependencies]
 enhanced = [
-    "xxhash>=4.0.1",      # Fast xxh64 dedup hashing (memory.BoundedDeduplicator)
-    "datasketch>=2.0.0",  # MinHash/LSH similarity in fuzzy dedup
+    "xxhash>=4.0.1",
+    "datasketch>=2.0.0",
 ]
-
-# IO adapters - thin OPTIONAL conveniences over the Source/Sink abstraction.
-# The core engine has zero IO deps; these only matter to the CLI or an app that
-# wants a ready-made source/sink. Each needs its own running service, so they
-# are covered by docker-gated integration tests.
 sql = [
-    "sqlalchemy>=2.1.3",          # cross-DB server-side-cursor streaming (SQLSource)
+    "sqlalchemy>=2.1.3",
 ]
 clickhouse = [
-    "clickhouse-connect>=1.9.0",  # native block streaming (ClickHouseSource)
+    "clickhouse-connect>=1.9.0",
 ]
 kafka = [
-    "confluent-kafka>=2.15.1",    # librdkafka client (KafkaSource/Sink)
+    "confluent-kafka>=2.15.1",
 ]
 [project.urls]
 Homepage = "https://github.com/hyperi-io/logreducer"
@@ -90,15 +86,14 @@ ignore = [
     "SIM105", "SIM108", "SIM102",
     "F821", "F601",
     "TRY300", "C901", "UP035", "W191",
-    # Intentional security relaxations in this codebase
-    "S104",   # bind-all-interfaces (containers)
-    "S110",   # try-except-pass (intentional error handling)
-    "S112",   # try-except-continue (intentional skip)
-    "S311",   # non-crypto random (jitter/sampling)
-    "S603",   # subprocess without shell=True (helper scripts)
-    "S607",   # partial executable path (helper scripts)
-    "S608",   # hardcoded SQL (query builders, not user input)
-    "T201",   # print (CLI output)
+    "S104",
+    "S110",
+    "S112",
+    "S311",   # sampling, never anything secret
+    "S603",   # the template-mining test runs a subprocess
+    "S607",
+    "S608",   # the samplers build SQL around the caller's query
+    "T201",   # the CLI prints its output
     "RUF012", "RUF059", "RUF001", "RUF002", "RUF005", "RUF006",
     "N806", "N818",
     "PIE810",
@@ -136,7 +131,7 @@ indent-style = "space"
 skip-magic-trailing-comma = false
 line-ending = "auto"
 
-# Strict. ignore_missing_imports covers third-party libs without stubs.
+# ignore_missing_imports: datasketch and other third-party libs ship no stubs.
 [tool.mypy]
 python_version = "3.14"
 ignore_missing_imports = true
@@ -153,7 +148,6 @@ warn_no_return = true
 warn_unreachable = true
 strict_equality = true
 
-# pytest configuration
 [tool.pytest.ini_options]
 minversion = "8.0.0"
 addopts = "-ra -q --strict-markers --strict-config"
@@ -167,7 +161,6 @@ markers = [
 ]
 shared_service_repo = "logreducer"
 
-# Coverage configuration  
 [tool.coverage.run]
 source = ["logreducer"]
 omit = [
@@ -191,7 +184,6 @@ exclude_lines = [
     "@(abc\\.)?abstractmethod",
 ]
 
-# Bandit security linting configuration
 [tool.bandit]
 exclude_dirs = [
     "tests",
@@ -205,14 +197,11 @@ exclude_dirs = [
 ]
 skips = ["B101", "B603"]
 
-# uv dependency resolution. Bleeding-edge policy: force latest majors even
-# when transitive deps pin older lower bounds; revisit each /deps pass.
 [tool.uv]
 index-strategy = "unsafe-best-match"
 # Supply-chain cooldown. A CVE fix bypasses it with a per-package entry.
 exclude-newer = "7 days"
-# scalo 2.32.4 carries the shared test services the suite needs, released 2026-11-01. A
-# per-package entry replaces the global span rather than widening it, so remove this one on 2026-11-08.
+# Lets in the scalo release the test suite needs before the cooldown would.
 exclude-newer-package = { scalo = "2026-11-01T06:00:00Z" }
 override-dependencies = []
 
@@ -221,7 +210,6 @@ name = "pypi"
 url = "https://pypi.org/simple"
 default = true
 
-# ty: Astral type checker, runs alongside mypy.
 [tool.ty.environment]
 python-version = "3.14"
 
@@ -234,38 +222,34 @@ exclude = ["examples/", "docs/", "scripts/", "tests/testdata/build_quiet_golden.
 [tool.vulture]
 min_confidence = 80
 
-# vermin: verify no syntax/features newer than the minimum Python.
 [tool.vermin]
 targets = ["3.14"]
 no_tips = true
 
 [tool.bandit.assert_used]
-# Allow asserts in test files
 skips = ["*test*.py", "*tests*.py"]
 
-# Local dev and test tooling, not in the published wheel.
 [dependency-groups]
 dev = [
-    "pytest>=9.0.0",         # Test framework (9.0 changed warning/path semantics)
-    "pytest-cov>=7.0.0",     # Coverage reporting
-    "pytest-xdist>=3.8.0",   # Parallel test workers (hyperi-ci adds -n)
-    "ruff>=0.16.10",         # Lint + format (replaces black/flake8/isort)
-    "ty>=0.0.34",            # Astral type checker (runs alongside mypy)
-    "mypy>=2.0",             # Static type checking (strict; 2.0 flipped defaults)
-    "bandit[toml]>=1.7.0",   # Security linting
-    "pip-audit>=2.6.0",      # Dependency vulnerability scanning
-    "vulture>=2.16",         # Dead-code detection
-    "vermin>=1.6.0",         # Python version-compat detection
-    # Adapter + integration test deps (TEST ONLY - never in the published
-    # wheel; these mirror the optional extras so the adapters can be exercised).
-    "xxhash>=4.0.2",              # enhanced extra: xxh64 dedup hashing
-    "datasketch>=2.0.0",          # enhanced extra: MinHash/LSH fuzzy dedup
-    "sqlalchemy>=2.1.3",          # SQLSource against SQLite (real, no server)
-    "clickhouse-connect>=1.9.0",  # ClickHouseSource (local cluster or docker)
-    "confluent-kafka>=2.15.1",    # KafkaSource/KafkaSink
-    "scalo>=2.32.4",              # the run's shared ClickHouse and Kafka (scalo.deployment.test_support)
-    "testcontainers[postgres,mysql]>=4.15.0",  # PostgreSQL and MySQL, which scalo does not provide
-    "psycopg[binary]>=3.2",       # PostgreSQL driver (real TABLESAMPLE/setseed sampling tests)
-    "pymysql>=1.1.0",             # MySQL driver (real RAND(seed) sampling tests)
-    "python-dotenv>=1.0.0",       # load the local .env (CLICKHOUSE_*) in tests
+    "pytest>=9.0.0",
+    "pytest-cov>=7.0.0",
+    "pytest-xdist>=3.8.0",   # hyperi-ci adds -n
+    "ruff>=0.16.10",
+    "ty>=0.0.34",
+    "mypy>=2.0",
+    "bandit[toml]>=1.7.0",
+    "pip-audit>=2.6.0",
+    "vulture>=2.16",
+    "vermin>=1.6.0",
+    # The extras again, so the adapter tests run. Test services: tests/TESTING.md.
+    "xxhash>=4.0.2",
+    "datasketch>=2.0.0",
+    "sqlalchemy>=2.1.3",
+    "clickhouse-connect>=1.9.0",
+    "confluent-kafka>=2.15.1",
+    "scalo>=2.32.4",
+    "testcontainers[postgres,mysql]>=4.15.0",
+    "psycopg[binary]>=3.2",
+    "pymysql>=1.1.0",
+    "python-dotenv>=1.0.0",       # tests/conftest.py loads a local .env
 ]

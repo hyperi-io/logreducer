@@ -10,10 +10,9 @@ It ships as a CLI and as a Python library with an IO-agnostic core.
 - Pattern mode streams through a bounded dedup cache, fuzzy index and template store, so memory does not grow with the line count or the number of distinct lines.
 - A memory budget that decides how a file is read: whole, in chunks, or reservoir-sampled once it passes five times the budget.
 - Four modes: pattern (Drain3 template mining), anomaly (Isolation Forest), temporal (one example per template per time window) and hybrid.
-- Lines naming ERROR, FATAL or CRITICAL as a whole word, in any case, always come through, one per distinct shape and ahead of the reduced output, in every mode and however a file is read. A SQL or ClickHouse source samples in the database first, so only the lines it returns are seen.
+- Lines naming ERROR, FATAL or CRITICAL as a whole word, in any case, always come through, one per distinct message once standalone numbers, IPs, UUIDs, hex IDs and ISO timestamps are masked, ahead of the reduced output, in every mode and however a file is read. A SQL or ClickHouse source samples in the database first, so only the lines it returns are seen.
 - A core with no IO dependencies: anything re-iterable that yields `str` lines is a source, and anything with `write(lines)` is a sink.
-- Seeded SQL sampling and ClickHouse `SAMPLE` for tables too big to scan in full.
-- `reduce_to_target` to collect about N representative lines from a large source, holding roughly one batch in memory.
+- Seeded SQL sampling, PostgreSQL `TABLESAMPLE` and ClickHouse `SAMPLE` for tables too big to reduce in full, and `reduce_to_target` to collect about N representative lines from a large source, holding roughly one batch in memory.
 - Injection points for a host application's own config cascade and logging.
 
 ## Example
@@ -34,7 +33,7 @@ for line in reduced:
     print(line)
 ```
 
-```text
+```console
 540 -> 4
 WARN slow query table=events ms=300
 WARN slow query table=events ms=301
@@ -55,4 +54,4 @@ From the shell it is `logreducer app.log -o reduced.log`. `level` is `standard`,
 
 Template mining is derived from [Drain3](https://github.com/logpai/Drain3), MIT licence, with its licence text in the module header.
 
-Docs and source are at <https://github.com/hyperi-io/logreducer>. The Python floor is `requires-python` in `pyproject.toml`. Licensed Apache-2.0: <https://github.com/hyperi-io/logreducer/blob/main/LICENSE>.
+Docs and source are at <https://github.com/hyperi-io/logreducer>. PyPI lists the Python floor under Meta. Licensed Apache-2.0: <https://github.com/hyperi-io/logreducer/blob/main/LICENSE>.
