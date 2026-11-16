@@ -27,7 +27,7 @@ Notes: SQLite has no seedable RNG, so a seeded sample raises `SamplingNotSupport
 
 When you want *about N* representative lines rather than "reduce everything", `reduce_to_target` pulls fresh random batches and reduces each, accumulating distinct representatives until a stop condition fires. Peak memory is bounded to roughly one batch plus the accumulator.
 
-This diagram shows one round of the loop.
+Each round pulls a fresh random batch and keeps its new lines, and the loop stops on an empty batch or a stop condition.
 
 ```mermaid
 flowchart LR
@@ -90,7 +90,7 @@ reducer = LogReducer(level="enhanced", mode="hybrid", max_clusters=50_000, anoma
 
 The engine is built around two structural protocols, `Source` and `Sink`, and they are its whole IO surface.
 
-This diagram shows the built-in sources and sinks on either side of the reducer.
+Any built-in source, or a re-iterable you write, feeds the core, and the core writes to a built-in sink or one you write.
 
 ```mermaid
 flowchart LR

@@ -35,7 +35,7 @@ credential inside it. The adapters that DO own connections -- SQLAlchemy,
 clickhouse-connect, confluent-kafka -- sit behind optional extras, and the core
 never imports them.
 
-This diagram shows the parts of logreducer and what passes between them.
+Sources hand lines to the core on every pass, and the core returns the reduced lines and can write them to a sink.
 
 ```mermaid
 flowchart LR
