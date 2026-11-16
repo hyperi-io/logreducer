@@ -84,7 +84,7 @@ The query selects the log line as its first column. Sources are re-iterable (the
 
 Pattern mode streams: lines flow through dedup and template mining as one generator pipeline, so the unique-line set is never materialised. Memory is set by `max_clusters`, `max_patterns` and `dedup_cache_size`, not by the input.
 
-This diagram shows the two paths a line can take through the reducer.
+Every line goes through exact dedup first, then down the pattern path or the anomaly path.
 
 ```mermaid
 flowchart LR
@@ -116,7 +116,7 @@ Pattern mode takes the solid path, anomaly mode the dotted one, and hybrid both.
 
 The anomaly path and temporal mode do not stream. Isolation Forest is batch ML, so cap its input with `anomaly_max_rows` on very high-cardinality sources. Temporal mode holds every line in memory to group them by time window.
 
-This diagram shows which mode to pick.
+Pattern suits recurring structure, anomaly rare events, temporal bursts in time, and hybrid fits when you're unsure.
 
 ```mermaid
 flowchart LR
