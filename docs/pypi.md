@@ -10,12 +10,12 @@ It ships as a CLI and as a Python library with an IO-agnostic core.
 - Pattern mode streams through a bounded dedup cache, fuzzy index and template store, so memory does not grow with the line count or the number of distinct lines.
 - A memory budget that decides how a file is read: whole, in chunks, or reservoir-sampled once it passes five times the budget.
 - Four modes: pattern (Drain3 template mining), anomaly (Isolation Forest), temporal (one example per template per time window) and hybrid.
-- Lines naming ERROR, FATAL or CRITICAL as a whole word, in any case, always come through, one per distinct message once standalone numbers, IPs, UUIDs, hex IDs and ISO timestamps are masked, ahead of the reduced output, in every mode and however a file is read. A SQL or ClickHouse source samples in the database first, so only the lines it returns are seen.
+- Lines naming ERROR, FATAL or CRITICAL as a whole word, in any case, always come through, one per distinct message once standalone numbers, IPs, UUIDs, hex IDs and ISO timestamps are masked, ahead of the reduced output, in every mode and however a file is read. A SQL or ClickHouse source samples in the database first, so a line the sample drops is never seen.
 - A core with no IO dependencies: anything re-iterable that yields `str` lines is a source, and anything with `write(lines)` is a sink.
-- Seeded SQL sampling, PostgreSQL `TABLESAMPLE` and ClickHouse `SAMPLE` for tables too big to reduce in full, and `reduce_to_target` to collect about N representative lines from a large source, holding roughly one batch in memory.
-- Injection points for a host application's own config cascade and logging.
+- Seeded SQL sampling, PostgreSQL `TABLESAMPLE` and ClickHouse `SAMPLE` for large tables, and `reduce_to_target` to collect about N representative lines from a large source, holding roughly one batch in memory.
+- Injection points for a host application's config cascade and logging.
 
-## Example
+Install it and reduce a list of lines:
 
 ```console
 uv add logreducer
@@ -43,12 +43,12 @@ INFO GET /health 200 req=1
 
 From the shell it is `logreducer app.log -o reduced.log`. `level` is `standard`, `enhanced` or `maximum`, trading speed for wider coverage on a 0.5, 1 or 2 GB budget.
 
-## Extras
+Extras add adapters and fuzzy dedup:
 
 | Extra | Adds |
 |---|---|
-| `enhanced` | Fuzzy dedup with MinHash LSH, whose index holds the last `dedup_cache_size` near-unique lines, and faster hashing |
-| `sql` | `SQLSource` over SQLAlchemy, with your own DBAPI driver |
+| `enhanced` | Fuzzy dedup with MinHash LSH (the index holds the last `dedup_cache_size` near-unique lines) and faster hashing |
+| `sql` | `SQLSource` over SQLAlchemy, with a DBAPI driver you install |
 | `clickhouse` | `ClickHouseSource` over clickhouse-connect |
 | `kafka` | `KafkaSource` and `KafkaSink` over confluent-kafka |
 

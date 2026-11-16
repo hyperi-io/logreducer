@@ -4,7 +4,7 @@ The README covers the install, the CLI and the first `LogReducer` call. This pag
 
 ## Sampling large sources
 
-For a table too large to scan in full, sample a fraction of rows. SQL sampling is deterministic when you pass a seed (so the reducer's multi-pass modes see a stable input). ClickHouse uses its native `SAMPLE` clause.
+For a large table, sample a fraction of rows. SQL sampling is deterministic when you pass a seed (so the reducer's multi-pass modes see a stable input). ClickHouse uses its native `SAMPLE` clause.
 
 ```python
 from logreducer.sql import SQLSource
@@ -21,7 +21,7 @@ source = SQLSource.from_table("postgresql://user@host/db", "logs", "msg", sample
 logreducer --dsn postgresql://user@host/db --query "SELECT msg FROM logs" --sample 0.01 --sample-seed 42
 ```
 
-Notes: SQLite has no seedable RNG, so a seeded sample raises `SamplingNotSupported` (unseeded, best-effort sampling still works). ClickHouse `SAMPLE` needs the table to declare a `SAMPLE BY` key, and `sample=` takes a plain `SELECT ... FROM table` (`ClickHouseSource.from_table` adds a `where`). For any other query, put the sampling clause in your own SQL.
+Notes: SQLite has no seedable RNG, so a seeded sample raises `SamplingNotSupported` (unseeded, best-effort sampling still works). ClickHouse `SAMPLE` needs the table to declare a `SAMPLE BY` key, and `sample=` takes a plain `SELECT ... FROM table` (`ClickHouseSource.from_table` adds a `where`). For any other query, put the sampling clause in your SQL.
 
 ## Collecting a target number of lines
 
@@ -55,7 +55,7 @@ flowchart LR
 
 *Figure 1. L4 Detail -- Collecting a target. The dotted arrow back to the start is the next round.* Up: [L3 Components -- logreducer](architecture.md#a-reduction-engine-behind-two-protocols).
 
-A batch comes from the source's own `sample_batch` where it has one (SQL, ClickHouse), else from a client-side reservoir over the whole source. Unless `batch_rows` fixes it, the average row size of a batch sets the next batch size. The stop conditions run in this order: `target` reached, `plateau` after `plateau_rounds` batches with no new line, then the memory watchdog. Still past the soft limit after a garbage collection, it halves the next batch, to no fewer than 1,000 rows, and past the hard limit it stops with `memory`. The loop ends with `max_fetches` once that many batches have been pulled.
+A batch comes from the source's `sample_batch` where it has one (SQL, ClickHouse), else from a client-side reservoir over the whole source. Unless `batch_rows` fixes it, the average row size of a batch sets the next batch size. The stop conditions run in this order: `target` reached, `plateau` after `plateau_rounds` batches that add no unseen line, then the memory watchdog. Still past the soft limit after a garbage collection, it halves the next batch, to no fewer than 1,000 rows, and past the hard limit it stops with `memory`. The loop ends with `max_fetches` once that many batches have been pulled.
 
 ```python
 from logreducer import LogReducer, reduce_to_target
@@ -77,7 +77,7 @@ logreducer --dsn postgresql://user@host/db --query "SELECT msg FROM logs" \
 
 Pattern mode streams, and its memory is fixed by the knobs below, not by lines or distinct templates. Temporal mode holds the whole source in memory, and anomaly mode holds its unique lines. The knobs:
 
-- `max_memory_gb` - the overall cap (also sizes file read strategy and the watchdog). Presets: 0.5 / 1 / 2 GB by level. Values above 70% of available RAM are clamped with a warning.
+- `max_memory_gb` - the overall cap, which sets the file read strategy and the watchdog. Presets: 0.5 / 1 / 2 GB by level. Values above 70% of available RAM are clamped with a warning.
 - `dedup_cache_size` - the lines exact dedup remembers, and at enhanced and maximum the lines the fuzzy index holds. Both drop the oldest first, so a repeat or near-repeat older than the window comes through again.
 - `max_clusters` - LRU-bound the Drain3 template store (10,000 by default, `None` for unbounded, so no template is evicted). A lower value bounds the template store and cuts the work per line on high-cardinality sources.
 - `anomaly_max_rows` - reservoir-cap the rows fed to anomaly detection (off by default, and it trades anomaly recall for a bounded matrix).
@@ -129,7 +129,7 @@ flowchart LR
 
 *Figure 2. L4 Detail -- Sources and sinks. SQLSource, ClickHouseSource and the Kafka pair each need their extra.* Up: [L3 Components -- logreducer](architecture.md#a-reduction-engine-behind-two-protocols).
 
-An application can hand the reducer its own IO - anything that yields `str` and can be iterated more than once is a `Source`:
+An application can hand the reducer custom IO - anything that yields `str` and can be iterated more than once is a `Source`:
 
 ```python
 class MySource:
@@ -147,9 +147,9 @@ from logreducer import LogReducer, FileSink
 reducer.reduce(source, sink=FileSink("reduced.jsonl", output_format="jsonl"))
 ```
 
-## Embedding in a host application
+## Configuration, logging and embedding
 
-A host app that owns its own config cascade and logging standard drives logreducer with three hooks - no logreducer-side knowledge of the host required:
+A host app with its config cascade and logging standard drives logreducer with three hooks - no logreducer-side knowledge of the host required:
 
 ```python
 import logreducer
@@ -167,9 +167,7 @@ cfg = logreducer.BigDialConfig.from_env("MYAPP", "LOGREDUCER")   # MYAPP_MAX_MEM
 logreducer.setup_logging(enable=True, own_sinks=False)
 ```
 
-## Configuration
-
-Override any config field as a keyword argument (unknown names raise - typos never silently no-op):
+Any config field can be overridden as a keyword argument, and unknown names raise, so a typo never silently does nothing:
 
 ```python
 reducer = LogReducer(
@@ -187,8 +185,6 @@ reducer = LogReducer(
     min_pattern_occurrences=2,  # patterns seen fewer times are dropped, except CRITICAL/FATAL/ERROR ones
 )
 ```
-
-## Logging
 
 Logging is off by default. Enable it and pick a format via env vars:
 

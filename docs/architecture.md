@@ -20,13 +20,13 @@ Two constraints make that harder than picking a sample.
 
 ## A reduction engine behind two protocols
 
-The core does no IO at all. Input is a `Source` -- anything whose `__iter__`
+The core does no IO at all. Input is a `Source` -- anything with an `__iter__` that
 yields `str` and can be iterated more than once. Output is a `Sink` --
 `write(lines) -> int`. Those two structural protocols are the whole IO
 surface.
 
-They are protocols rather than base classes on purpose. A `list[str]` is already
-a `Source`, and an application's own object becomes one without importing
+They are protocols rather than base classes on purpose. A `list[str]` is a `Source`
+as it stands, and an application's object becomes one without importing
 anything from here.
 
 The point of that boundary is ownership. The engine never manages a connection,
@@ -81,20 +81,20 @@ Pattern mode streams. Exact dedup, optional fuzzy dedup and Drain3
 mining run as one generator pipeline, so the unique-line set is never collected
 into a list. Peak memory is the bounded dedup cache, the fuzzy index (the same `dedup_cache_size` window), the Drain3 template store and the results of evicted templates, and none of them grows with the number of unique lines the source has. The one exception is the severe-line store, which keeps one line per distinct ERROR, FATAL or CRITICAL message in every mode.
 
-An evicted template's result is kept only while it can still make the `max_patterns` cut. Its count stops changing once the dedup cache has dropped the lines that fed it, so from then on it competes for one of `max_patterns` places, and a result that loses one can never win it back. That keeps the output identical to ranking every template ever seen.
+An evicted template's result is kept as long as it can still make the `max_patterns` cut. Its count stops changing once the dedup cache has dropped the lines that fed it, so from then on it competes for one of `max_patterns` places, and a result that loses one can never win it back. That keeps the output identical to ranking every template ever seen.
 
-In a test run the fuzzy index used about 1.8 KB per entry, so the preset windows hold about 180 MB at enhanced (100K lines) and 360 MB at maximum (200K), inside their 1 GB and 2 GB budgets.
+In a 2026-11-01 test run the fuzzy index used about 1.8 KB per entry, so the preset windows hold about 180 MB at enhanced (100K lines) and 360 MB at maximum (200K), inside their 1 GB and 2 GB budgets.
 
 Drain3 compares each line with every template stored at the leaf it reaches, so
 time grows with the square of the template count when lines share no tokens.
 `max_clusters` (10,000 by default) bounds the template store and with it the
-comparisons per line. Measured on 16,000 lines that share nothing, 86 s with no
-bound and 4.6 s with `max_clusters=500`, so 10,000 caps growth on long inputs
+comparisons per line. A 2026-10-31 test run on 16,000 lines that share nothing ran about 19 times
+slower with no bound than with `max_clusters=500`, so 10,000 caps growth on long inputs
 and a lower value is the speed setting for high-cardinality sources.
 
 Temporal mode returns one example per time window and template, ranked by severity and count, and does not stream. It reads every line and a parsed entry per line
-into memory before grouping, so it ignores `max_memory_gb`. Measured on an 80 MB
-file, 832 MB peak against 156 MB for pattern mode.
+into memory before grouping, so it ignores `max_memory_gb`. A 2026-10-31 test run on an 80 MB
+file peaked at 832 MB, against 156 MB for pattern mode.
 
 Anomaly mode cannot stream. Isolation Forest over a TF-IDF matrix is batch ML and
 needs its rows at once. That is the one place a hard memory ceiling needs an
@@ -118,17 +118,17 @@ mean very different things about the answer you are holding.
 
 Every sample the engine draws itself is seeded. The anomaly reservoir, the
 normal-context sample and a sampled `FileSource` use a fixed seed. A SQL sample
-is reproducible only with `sample_seed`: an unseeded one is accepted and may
+is reproducible when you pass `sample_seed`: an unseeded one is accepted and may
 differ between passes. ClickHouse `SAMPLE` is deterministic with no seed.
 `reduce_to_target` is the exception:
 each round wants fresh rows, so a database draws its batch unseeded, and the
-client-side reservoir for any other source is seeded only when you pass `seed`.
+client-side reservoir for any other source is seeded when you pass `seed`, and unseeded otherwise.
 
 That is not a security property, and there is no security requirement in picking
 log lines. It is a correctness property the multi-pass design depends on: pass
 two has to see what pass one saw.
 
-It is also why SQLite raises `SamplingNotSupported` for a seeded sample instead
+The same property is why SQLite raises `SamplingNotSupported` for a seeded sample instead
 of quietly giving an unseeded one. SQLite has no seedable RNG, so it cannot keep
 the promise, and pretending otherwise would produce a result that looks
 reproducible and is not.
@@ -139,7 +139,7 @@ Three hooks, none of which needs the library to know anything about the host.
 
 | Hook | How |
 |---|---|
-| Config | Build a `BigDialConfig` from the host's own cascade and inject it, or call `BigDialConfig.from_env(prefix, fallback)` where the prefixed name beats the bare one. Keyword arguments still win on top |
+| Config | Build a `BigDialConfig` from the host's cascade and inject it, or call `BigDialConfig.from_env(prefix, fallback)` where the prefixed name beats the bare one. Keyword arguments still win on top |
 | Logging | Off by default. `own_sinks=False` registers nothing, so records flow through the host's handlers formatted by the host's standard |
 | IO | The `Source` and `Sink` protocols above |
 
@@ -147,10 +147,10 @@ Three hooks, none of which needs the library to know anything about the host.
 
 1. `__iter__` returns a fresh iterator, checked at the entry point rather than documented and hoped for.
 2. The core imports no IO library. An adapter's dependency is an extra, and the core never imports the adapter modules.
-3. Analysis state is per run. `_reset_components()` rebuilds the dedup seen-set, both Drain3 miners and the fuzzy LSH, so one `LogReducer` is reusable across calls and hybrid's two passes cannot poison each other. Without it every line reads as already-seen and the result is empty.
+3. Analysis state is per run. `_reset_components()` rebuilds the dedup seen-set, both Drain3 miners and the fuzzy LSH, so one `LogReducer` is reusable across calls and hybrid's two passes cannot poison each other. Without it every line reads as seen and the result is empty.
 4. An unknown config keyword raises. A silently dropped override is tuning that quietly does nothing, which is worse than a failure.
 5. The row-to-line convention is shared. The database adapters take the FIRST column, skip NULLs and skip blank lines, matching `FileSource`, so the same data reduces identically whichever source carried it.
-6. The engine's own samples are seeded, and a SQL sample is reproducible only with `sample_seed`. See above.
+6. Samples the engine draws are seeded, and a SQL sample is reproducible when you pass `sample_seed`. See above.
 7. Config enums serialise as their `.value`, so metadata survives `json.dumps` and no `OutputFormat.LINE`-style repr leaks into output.
 8. A memory ceiling above 70% of available RAM is clamped with a warning rather than accepted, whether it comes from the config or a `LogReducer` argument.
 
