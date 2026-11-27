@@ -3,6 +3,13 @@
 Rendered by CI and committed back at the end of a release -- do not edit by
 hand. Release notes also appear on the GitHub Releases page, one per tag.
 
+## [3.5.7](https://github.com/hyperi-io/logreducer/compare/v3.5.6...v3.5.7) (2026-11-27)
+
+### Bug Fixes
+
+* **deps:** drop the expired scalo cooldown exception ([2dd2820](https://github.com/hyperi-io/logreducer/commit/2dd2820852f44fccd0b8be184e2b882858d531b3))
+* limit template mining, anomaly memory and severe lines ([17ea2b5](https://github.com/hyperi-io/logreducer/commit/17ea2b5c2fa834767fac69fb20f924c0ddc33a16))
+
 ## [3.5.6](https://github.com/hyperi-io/logreducer/compare/v3.5.5...v3.5.6) (2026-11-01)
 
 ### Bug Fixes
