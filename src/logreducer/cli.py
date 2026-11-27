@@ -88,7 +88,12 @@ def _reduce(
     pretty_json: bool = typer.Option(False, "--pretty-json", help="Pretty-print JSON output"),
     level: str = typer.Option("standard", "--level", "-l", help="Processing level: standard, enhanced, maximum"),
     mode: str = typer.Option("pattern", "--mode", "-m", help="Processing mode: pattern, anomaly, temporal, hybrid"),
-    dsn: str | None = typer.Option(None, "--dsn", help="Source DSN: postgresql://, clickhouse://, kafka://, ..."),
+    dsn: str | None = typer.Option(
+        None,
+        "--dsn",
+        envvar="LOGREDUCER_DSN",
+        help="Source DSN: postgresql://, clickhouse://, kafka://, ... Read from LOGREDUCER_DSN when unset",
+    ),
     query: str | None = typer.Option(None, "--query", help="SQL SELECT (first column is the log line) for --dsn"),
     topic: str | None = typer.Option(None, "--topic", help="Kafka topic (with a kafka:// --dsn)"),
     group: str | None = typer.Option(None, "--group", help="Kafka consumer group (with a kafka:// --dsn)"),
@@ -258,7 +263,9 @@ def _run_target(
         elif input_file:
             from .sources import FileSource
 
-            source = FileSource(input_file, max_memory_gb=reducer.config.max_memory_gb)
+            source = FileSource(
+                input_file, max_memory_gb=reducer.config.max_memory_gb, max_severe_shapes=reducer.max_severe_shapes
+            )
         else:
             _err("Error: --target-rows needs a log file, or --dsn with --query (SQL/ClickHouse)")
             raise typer.Exit(1)

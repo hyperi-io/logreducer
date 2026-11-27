@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from .template_mining import TemplateMiner
+from .template_mining import TemplateMiner, TemplateMinerConfig
 
 
 @dataclass
@@ -74,14 +74,21 @@ class TimestampParser:
 
 
 class TemporalProcessor:
-    """Time-aware log processing."""
+    """Time-aware log processing.
 
-    def __init__(self, window_minutes: int = 60):
+    Each time window, and the lines with no timestamp, get a template miner bounded
+    by ``max_clusters`` and ``max_leaf_clusters`` (see :class:`~logreducer.template_mining.Drain`).
+    """
+
+    def __init__(self, window_minutes: int = 60, max_clusters: int | None = None, max_leaf_clusters: int | None = None):
         if window_minutes < 1:
             raise ValueError(f"window_minutes must be at least 1, got {window_minutes!r}")
         self.window_minutes = window_minutes
         self.parser = TimestampParser()
         self.miners_by_window: dict[int, TemplateMiner] = {}
+        self._miner_config = TemplateMinerConfig(
+            drain_max_clusters=max_clusters, drain_max_leaf_clusters=max_leaf_clusters
+        )
 
     def process_temporal(self, lines: list[str]) -> dict:
         """Process with temporal awareness."""
@@ -122,7 +129,7 @@ class TemporalProcessor:
         # One pattern per template within each window.
         for window_key, window_entries in windows.items():
             if window_key not in self.miners_by_window:
-                self.miners_by_window[window_key] = TemplateMiner()
+                self.miners_by_window[window_key] = TemplateMiner(self._miner_config)
 
             for pattern in self._summarise(self.miners_by_window[window_key], window_entries):
                 patterns.append({**pattern, "window": window_key})
@@ -131,7 +138,7 @@ class TemporalProcessor:
 
     def _extract_timeless_patterns(self, entries: list[LogEntry]) -> list[dict]:
         """Extract patterns without timestamps."""
-        return self._summarise(TemplateMiner(), entries)
+        return self._summarise(TemplateMiner(self._miner_config), entries)
 
     @staticmethod
     def _summarise(miner: TemplateMiner, entries: list[LogEntry]) -> list[dict]:

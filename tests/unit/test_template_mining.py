@@ -137,6 +137,31 @@ class TestClustering:
 
         assert len(miner.drain._one_token_ids) < 20
 
+    def test_leaf_offers_at_most_max_leaf_clusters(self):
+        # Same first token and length, no shared word: every line starts a cluster at one leaf.
+        miner = TemplateMiner(TemplateMinerConfig(drain_max_leaf_clusters=8))
+        for i in range(100):
+            miner.add_log_message(f"GET w{i}a w{i}b w{i}c")
+
+        leaf = miner.drain.root_node.key_to_child_node["4"].key_to_child_node["GET"]
+        assert len(leaf.cluster_ids) == 8
+        assert len(miner.drain.clusters) == 100
+
+    def test_leaf_drops_its_least_recently_used_cluster(self):
+        miner = TemplateMiner(TemplateMinerConfig(drain_max_leaf_clusters=2))
+        busy = miner.add_log_message("GET alpha one")
+        miner.add_log_message("GET beta two")
+        miner.add_log_message("GET alpha one")
+        miner.add_log_message("GET gamma three")
+
+        assert miner.add_log_message("GET alpha one") is busy
+        assert miner.add_log_message("GET beta two").cluster_id == 4
+
+    @pytest.mark.parametrize("bad", [0, -1])
+    def test_max_leaf_clusters_below_one_is_rejected(self, bad):
+        with pytest.raises(ValueError, match="max_leaf_clusters must be at least 1"):
+            Drain(max_leaf_clusters=bad)
+
     def test_cluster_ids_are_sequential(self):
         miner = TemplateMiner()
         ids = [miner.add_log_message(line).cluster_id for line in ("a", "b c", "d e f")]

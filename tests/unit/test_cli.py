@@ -98,6 +98,11 @@ def test_cli_sqlite_dsn_end_to_end(monkeypatch, capsys, tmp_path):
     assert _run_cli(monkeypatch, ["--dsn", url, "--query", "SELECT line FROM logs"]) == 0
     assert capsys.readouterr().out.strip()
 
+    # The DSN can carry a password, so it can come from the environment instead.
+    monkeypatch.setenv("LOGREDUCER_DSN", url)
+    assert _run_cli(monkeypatch, ["--query", "SELECT line FROM logs"]) == 0
+    assert capsys.readouterr().out.strip()
+
 
 def _sqlite_url_with_logs(tmp_path):
     from sqlalchemy import create_engine, text

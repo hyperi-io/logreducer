@@ -1,16 +1,27 @@
 """Anomaly detection utilities."""
 
 import logging
+from typing import Any
+
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
 # Fewer lines than this are returned unscored, all of them normal.
 MIN_SCORED_LINES = 10
 
+# Hashed n-gram columns. Hashing keeps no vocabulary, so memory follows the
+# line count, not the number of distinct terms the lines carry.
+HASHED_FEATURES = 2**20
+
+# Scored columns: the most frequent hashed terms in at least two lines and at most this share of them.
+MAX_SCORED_FEATURES = 1000
+MAX_DOC_SHARE = 0.9
+
 # Try optional imports
 try:
     from sklearn.ensemble import IsolationForest
-    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.feature_extraction.text import HashingVectorizer, TfidfTransformer
 
     SKLEARN_AVAILABLE = True
 except ImportError:
@@ -36,24 +47,15 @@ class AnomalyDetector:
         if not self.enabled or len(lines) < MIN_SCORED_LINES:
             return [], lines
 
-        # Vectorize
-        vectorizer = TfidfVectorizer(
-            max_features=min(1000, len(lines) // 10),
-            ngram_range=(1, 3),
-            max_df=0.9,
-            min_df=2 if len(lines) > 100 else 1,
-        )
-
-        try:
-            # Keep the TF-IDF matrix SPARSE - IsolationForest accepts sparse
-            # input directly. Densifying (.toarray()) would allocate
-            # n_lines x n_features x 8 bytes, which dwarfs the sparse matrix and
-            # can blow the memory budget on a large unique-line set.
-            X = vectorizer.fit_transform(lines)
-        except ValueError:
-            # Empty vocabulary (every term filtered by min_df/max_df) - nothing
-            # to score, so treat all lines as normal rather than failing.
+        # The matrix stays sparse: densified it is lines x HASHED_FEATURES x 8 bytes.
+        counts = HashingVectorizer(
+            n_features=HASHED_FEATURES, ngram_range=(1, 3), alternate_sign=False, norm=None
+        ).transform(lines)
+        columns = _scored_columns(counts, len(lines))
+        if columns.size == 0:
+            # No term is shared by enough lines to score, so every line is normal.
             return [], lines
+        X = TfidfTransformer().fit_transform(counts[:, columns])
 
         iso_forest = IsolationForest(contamination=self.contamination, random_state=42, n_estimators=100)
         labels = iso_forest.fit_predict(X)
@@ -75,3 +77,19 @@ class AnomalyDetector:
         logger.info(f"Found {len(anomalous)} anomalies out of {len(lines)} lines")
 
         return anomalous, normal
+
+
+def _scored_columns(counts: Any, line_count: int) -> np.ndarray:
+    """Pick the hashed columns to score, as a vocabulary with ``min_df``, ``max_df`` and ``max_features`` would.
+
+    A term in a single line, a request id say, isolates that line in one split, so it
+    says nothing about how unusual the line is. A term in nearly every line separates none.
+    """
+    min_lines = 2 if line_count > 100 else 1
+    doc_freq = counts.getnnz(axis=0)
+    shared = np.flatnonzero((doc_freq >= min_lines) & (doc_freq <= MAX_DOC_SHARE * line_count))
+    limit = min(MAX_SCORED_FEATURES, line_count // 10)
+    if shared.size <= limit:
+        return shared
+    term_freq = np.asarray(counts[:, shared].sum(axis=0)).ravel()
+    return np.sort(shared[np.argsort(-term_freq, kind="stable")[:limit]])

@@ -130,7 +130,9 @@ class LogReducer:
         else:
             self.fuzzy_dedup = None
         if self.mode in [ProcessingMode.TEMPORAL, ProcessingMode.HYBRID]:
-            self.temporal_processor = TemporalProcessor(self.config.temporal_window_minutes)
+            self.temporal_processor = TemporalProcessor(
+                self.config.temporal_window_minutes, self.config.max_clusters, self.config.max_leaf_clusters
+            )
         else:
             self.temporal_processor = None
 
@@ -216,13 +218,17 @@ class LogReducer:
         # Count input lines for the reduction ratio (one pass over the source).
         # Note: a size-sampled FileSource yields its sampled line count, so for
         # very large files the ratio and input_lines stat are approximate.
-        shapes = SevereShapes()
+        severe_cap = self.max_severe_shapes
+        shapes = SevereShapes(severe_cap)
         input_lines = 0
         for line in source:
             input_lines += 1
             shapes.add(line)
         # A FileSource taps its own reads, which see the lines it samples away.
         shapes = getattr(source, "severe_shapes", shapes)
+        # A FileSource built elsewhere may keep more shapes than this reducer allows.
+        severe_lines = shapes.lines[:severe_cap]
+        severe_dropped = shapes.dropped + len(shapes.lines) - len(severe_lines)
 
         size_bytes = getattr(source, "size_bytes", None)
         file_size_mb = size_bytes / (1024 * 1024) if size_bytes else None
@@ -245,9 +251,8 @@ class LogReducer:
         else:  # HYBRID
             result_lines = self._process_hybrid_mode(source)
 
-        # Modes return quiet lines under their caps. Severe lines are one per shape, outside every
-        # cap, so the output is bounded by the caps plus the number of distinct severe shapes.
-        result_lines = shapes.lines + result_lines
+        # Modes return quiet lines under their caps. Severe lines are one per shape, under max_severe_shapes.
+        result_lines = severe_lines + result_lines
 
         # Calculate stats
         processing_time = time.time() - start_time
@@ -259,6 +264,7 @@ class LogReducer:
             "input_lines": input_lines,
             "input_size_mb": file_size_mb,
             "output_lines": output_lines,
+            "severe_dropped": severe_dropped,
             "reduction_percent": reduction_percent,
             "processing_time_seconds": processing_time,
             "processing_rate_mb_per_sec": (
@@ -328,8 +334,16 @@ class LogReducer:
         """
         if not os.path.exists(input_file):
             raise FileNotFoundError(f"File not found: {input_file}")
-        source = FileSource(input_file, max_memory_gb=self.config.max_memory_gb)
+        source = FileSource(
+            input_file, max_memory_gb=self.config.max_memory_gb, max_severe_shapes=self.max_severe_shapes
+        )
         return self.reduce(source, output_file=output_file, return_metadata=return_metadata)
+
+    @property
+    def max_severe_shapes(self) -> int:
+        """Severe lines a run keeps, one per shape: ``max_severe_shapes``, else ``max_patterns``."""
+        configured = self.config.max_severe_shapes
+        return configured if configured is not None else self.config.max_patterns
 
     def _process_pattern_mode(self, source: Source) -> list[str]:
         """Process using pattern extraction, streaming end to end.

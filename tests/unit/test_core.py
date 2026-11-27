@@ -330,7 +330,7 @@ class TestLogReducerInternalMethods:
 
     def test_cap_for_anomaly_no_cap_returns_input(self):
         """With no cap configured, the unique lines pass through untouched."""
-        reducer = LogReducer(mode="anomaly", level="standard")
+        reducer = LogReducer(mode="anomaly", level="standard", anomaly_max_rows=None)
         lines = [f"line {i}" for i in range(50)]
         assert reducer._cap_for_anomaly(lines) is lines
 
@@ -623,6 +623,30 @@ class TestOneSevereShapeGivesOneLine:
         out = LogReducer(mode=mode, **overrides).reduce(lines)
 
         assert len([line for line in out if _is_severe_line(line)]) == 1
+
+
+@pytest.mark.parametrize(
+    ("overrides", "kept", "dropped"),
+    [
+        pytest.param({}, 500, 100, id="max-patterns-by-default"),
+        pytest.param({"max_severe_shapes": 50}, 50, 550, id="configured"),
+        pytest.param({"max_severe_shapes": 1000}, 600, 0, id="under-the-cap"),
+    ],
+)
+@pytest.mark.parametrize("from_file", [False, True], ids=["list", "file"])
+def test_severe_shapes_stop_at_the_cap(tmp_path, overrides, kept, dropped, from_file):
+    lines = [f"ERROR {_letters(n)} failed" for n in range(600)]
+    reducer = LogReducer(mode="pattern", level="standard", **overrides)
+
+    if from_file:
+        path = tmp_path / "severe.log"
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        out = reducer.process_file(str(path))
+    else:
+        out = reducer.reduce(lines)
+
+    assert out == lines[:kept]
+    assert reducer.stats["severe_dropped"] == dropped
 
 
 class _UniqueLines:

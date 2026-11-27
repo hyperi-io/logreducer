@@ -5,8 +5,11 @@ helpers, plus the never-assigned backstop (which deliberately points at a dead
 address), so they run in the normal (non-integration) suite.
 """
 
+import warnings
+
 import pytest
 
+from logreducer import kafka
 from logreducer.kafka import (
     CONSUMER_DEFAULTS,
     PRODUCER_DEFAULTS,
@@ -27,7 +30,8 @@ def test_merge_config_user_overrides_defaults():
     assert merged["bootstrap.servers"] == "b:9092"
 
 
-def test_merge_config_disables_ssl_verify():
+def test_merge_config_disables_ssl_verify(monkeypatch):
+    monkeypatch.setattr(kafka, "_warned_unverified", True)
     merged = merge_config({}, CONSUMER_DEFAULTS, verify_ssl=False)
     assert merged["enable.ssl.certificate.verification"] == "false"
 
@@ -39,10 +43,41 @@ def test_consumer_defaults_never_commit_and_report_eof():
     assert CONSUMER_DEFAULTS["auto.offset.reset"] == "earliest"
 
 
-def test_mask_credentials_hides_secrets():
-    masked = mask_credentials({"sasl.password": "hunter2", "bootstrap.servers": "b:9092"})
-    assert masked["sasl.password"] == "***"
-    assert masked["bootstrap.servers"] == "b:9092"
+@pytest.mark.parametrize(
+    ("key", "masked"),
+    [
+        ("sasl.password", True),
+        ("sasl.username", True),
+        ("ssl.keystore.password", True),
+        ("ssl.key.pem", True),
+        ("sasl.oauthbearer.client.secret", True),
+        ("sasl.oauthbearer.config", True),
+        ("ssl.private.key.location", True),
+        ("SASL.PASSWORD", True),
+        ("bootstrap.servers", False),
+        ("security.protocol", False),
+        ("ssl.key.location", False),
+    ],
+)
+def test_mask_credentials(key, masked):
+    assert (mask_credentials({key: "hunter2"})[key] == "***") is masked
+
+
+def test_mask_credentials_keeps_an_empty_value():
+    assert mask_credentials({"sasl.password": ""}) == {"sasl.password": ""}
+
+
+def test_unverified_tls_warns_once_per_process(monkeypatch):
+    monkeypatch.setattr(kafka, "_warned_unverified", False)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        merge_config({}, CONSUMER_DEFAULTS, verify_ssl=False)
+        merge_config({}, CONSUMER_DEFAULTS, verify_ssl=False)
+        merge_config({}, CONSUMER_DEFAULTS)
+
+    assert [str(w.message) for w in caught] == [
+        "Kafka TLS certificate verification is off, so the broker's identity is not checked"
+    ]
 
 
 def test_normalise_config_string_is_bootstrap():

@@ -30,8 +30,10 @@ QUIET_GOLDEN: dict[str, Any] = json.loads(
 
 
 def _config(label: str) -> BigDialConfig:
-    # Keep every cluster, so the comparison covers the whole template set.
-    return BigDialConfig(min_pattern_occurrences=1, max_patterns=10**9, **GOLDEN["configs"][label])
+    # Keep every cluster, and offer a line every cluster at its leaf as drain3 does.
+    return BigDialConfig(
+        min_pattern_occurrences=1, max_patterns=10**9, max_leaf_clusters=None, **GOLDEN["configs"][label]
+    )
 
 
 def test_golden_covers_every_corpus():

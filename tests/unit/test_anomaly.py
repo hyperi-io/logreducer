@@ -2,11 +2,15 @@
 Unit tests for anomaly detection module
 """
 
-from unittest.mock import Mock, patch
+import random
+import string
+import tracemalloc
 
 import pytest
+from sklearn.feature_extraction.text import HashingVectorizer
 
-from logreducer.anomaly import AnomalyDetector
+from logreducer import anomaly
+from logreducer.anomaly import HASHED_FEATURES, AnomalyDetector, _scored_columns
 
 
 class TestAnomalyDetector:
@@ -25,9 +29,9 @@ class TestAnomalyDetector:
 
         assert detector.contamination == 0.05
 
-    @patch("logreducer.anomaly.SKLEARN_AVAILABLE", False)
-    def test_sklearn_unavailable(self):
+    def test_sklearn_unavailable(self, monkeypatch):
         """Test behavior when sklearn is unavailable"""
+        monkeypatch.setattr(anomaly, "SKLEARN_AVAILABLE", False)
         detector = AnomalyDetector()
 
         assert not detector.enabled
@@ -60,71 +64,50 @@ class TestAnomalyDetector:
         assert anomalies == []
         assert normal == lines
 
-    @patch("logreducer.anomaly.SKLEARN_AVAILABLE", True)
-    @patch("logreducer.anomaly.TfidfVectorizer")
-    @patch("logreducer.anomaly.IsolationForest")
-    def test_detect_anomalies_sufficient_data_mocked(self, mock_isolation_forest, mock_tfidf):
-        """Test anomaly detection with mocked ML components"""
-        # Mock TfidfVectorizer
-        mock_vectorizer = Mock()
-        mock_vectorizer.fit_transform.return_value.toarray.return_value = [
-            [1, 0],
-            [0, 1],
-            [1, 1],
-        ]
-        mock_tfidf.return_value = mock_vectorizer
+    def test_lines_sharing_unusual_terms_are_anomalies(self):
+        routine = [f"INFO GET /health 200 req={i}" for i in range(300)]
+        unusual = [f"NOTICE rotated keys for tenant t{n} using vault backend" for n in range(5)]
 
-        # Mock IsolationForest
-        mock_model = Mock()
-        mock_model.fit.return_value = None
-        mock_model.fit_predict.return_value = [1] * 10 + [-1]  # Most normal, 1 anomaly
-        mock_model.score_samples.return_value = [0.1] * 11  # Dummy scores
-        mock_isolation_forest.return_value = mock_model
+        anomalies, normal = AnomalyDetector().detect_anomalies(routine + unusual)
 
-        detector = AnomalyDetector()
-        detector.enabled = True  # Force enable for test
+        assert set(unusual) <= set(anomalies)
+        assert len(anomalies) + len(normal) == len(routine) + len(unusual)
 
-        lines = [
-            "Normal log line 1",
-            "Normal log line 2",
-            "Anomalous log line",
-            "Another normal line",
-            "Yet another normal line",
-            "More normal content",
-            "Regular operation log",
-            "Standard system message",
-            "Typical application log",
-            "Usual process information",
-            "Critical system failure unusual pattern",  # Should be anomaly
-        ]
+    def test_memory_does_not_follow_the_distinct_terms(self):
+        """A vocabulary of 300K distinct n-grams cost about 80x the input, hashed columns about 14x."""
+        rng = random.Random(3)
+        words = ["".join(rng.choice(string.ascii_lowercase) for _ in range(8)) for _ in range(200_000)]
+        lines = [" ".join(words[row * 100 : row * 100 + 100]) for row in range(2000)]
 
-        anomalies, normal = detector.detect_anomalies(lines)
+        tracemalloc.start()
+        try:
+            AnomalyDetector().detect_anomalies(lines)
+            peak = tracemalloc.get_traced_memory()[1]
+        finally:
+            tracemalloc.stop()
 
-        # Verify results structure
-        assert isinstance(anomalies, list)
-        assert isinstance(normal, list)
-        assert len(anomalies) + len(normal) == len(lines)
+        assert peak < 30 * sum(map(len, lines))
 
-    @patch("logreducer.anomaly.SKLEARN_AVAILABLE", True)
-    @patch("logreducer.anomaly.TfidfVectorizer")
-    def test_detect_anomalies_vectorization_error(self, mock_tfidf):
-        """An empty-vocabulary ValueError degrades to 'all normal', not a crash."""
-        # The real failure mode of fit_transform is ValueError (empty vocabulary).
-        # detect_anomalies catches exactly that; other exceptions surface as bugs.
-        mock_vectorizer = Mock()
-        mock_vectorizer.fit_transform.side_effect = ValueError("empty vocabulary")
-        mock_tfidf.return_value = mock_vectorizer
+    def test_no_shared_term_leaves_every_line_normal(self):
+        # The one term is in every line, so no column separates them.
+        lines = ["same words here"] * 15
 
-        detector = AnomalyDetector()
-        detector.enabled = True
+        assert AnomalyDetector().detect_anomalies(lines) == ([], lines)
 
-        lines = ["Line " + str(i) for i in range(15)]  # Enough lines to trigger processing
+    @pytest.mark.parametrize(
+        ("lines", "scored"),
+        [
+            pytest.param([f"alpha beta req{i}" for i in range(200)], 0, id="every-line-term-and-one-line-ids-dropped"),
+            pytest.param([f"w{i % 50} req{i}" for i in range(200)], 20, id="capped-at-a-tenth-of-the-lines"),
+            pytest.param([f"w{i % 5} req{i}" for i in range(200)], 5, id="shared-terms-kept"),
+        ],
+    )
+    def test_scored_columns(self, lines, scored):
+        counts = HashingVectorizer(
+            n_features=HASHED_FEATURES, ngram_range=(1, 3), alternate_sign=False, norm=None
+        ).transform(lines)
 
-        anomalies, normal = detector.detect_anomalies(lines)
-
-        # Should handle error gracefully and return all as normal
-        assert anomalies == []
-        assert normal == lines
+        assert len(_scored_columns(counts, len(lines))) == scored
 
     def test_detect_anomalies_real_sklearn_if_available(self):
         """Test with real sklearn if available"""

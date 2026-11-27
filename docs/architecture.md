@@ -79,7 +79,7 @@ than pass one, and the reducer then compares two populations.
 
 Pattern mode streams. Exact dedup, optional fuzzy dedup and Drain3
 mining run as one generator pipeline, so the unique-line set is never collected
-into a list. Peak memory is the bounded dedup cache, the fuzzy index (the same `dedup_cache_size` window), the Drain3 template store and the results of evicted templates, and none of them grows with the number of unique lines the source has. The one exception is the severe-line store, which keeps one line per distinct ERROR, FATAL or CRITICAL message in every mode.
+into a list. Peak memory is the bounded dedup cache, the fuzzy index (the same `dedup_cache_size` window), the Drain3 template store and the results of evicted templates, and none of them grows with the number of unique lines the source has. The one exception is the severe-line store, which keeps one line per distinct ERROR, FATAL or CRITICAL message in every mode, up to `max_severe_shapes` (`max_patterns` by default).
 
 An evicted template's result is kept as long as it can still make the `max_patterns` cut. Its count stops changing once the dedup cache has dropped the lines that fed it, so from then on it competes for one of `max_patterns` places, and a result that loses one can never win it back. That keeps the output identical to ranking every template ever seen.
 
@@ -87,21 +87,20 @@ In a 2026-11-01 test run the fuzzy index used about 1.8 KB per entry, so the pre
 
 Drain3 compares each line with every template stored at the leaf it reaches, so
 time grows with the square of the template count when lines share no tokens.
-`max_clusters` (10,000 by default) bounds the template store and with it the
-comparisons per line. A 2026-10-31 test run on 16,000 lines that share nothing ran about 19 times
-slower with no bound than with `max_clusters=500`, so 10,000 caps growth on long inputs
-and a lower value is the speed setting for high-cardinality sources. One-token lines,
-compact JSON among them, are looked up by token instead.
+`max_leaf_clusters` (128 by default) compares a line with the templates at its leaf
+that last took a line, and `max_clusters` (10,000) bounds the store. A 2026-11-27
+test run on the 40,000-line HealthApp corpus took 1.8 s with the cap and 23 s without,
+for 2% more templates. One-token lines, compact JSON among them, are looked up by token.
 
 Temporal mode returns one example per time window and template, ranked by severity and count, and does not stream. It reads every line and a parsed entry per line
 into memory before grouping, so it ignores `max_memory_gb`. A 2026-10-31 test run on an 80 MB
 file peaked at 832 MB, against 156 MB for pattern mode.
 
 Anomaly mode cannot stream. Isolation Forest over a TF-IDF matrix is batch ML and
-needs its rows at once. That is the one place a hard memory ceiling needs an
-explicit sample, which is exactly what `anomaly_max_rows` is -- a reservoir cap
-with a fixed seed, trading anomaly recall for a bounded matrix, and off unless
-asked for.
+needs its rows at once, so `anomaly_max_rows` reservoir-samples them with a fixed
+seed, 10,000 by default, trading anomaly recall for a bounded matrix. Terms are
+hashed into columns rather than held in a vocabulary, so memory follows the rows,
+not the distinct terms.
 
 ## Collecting a target instead of reducing everything
 
