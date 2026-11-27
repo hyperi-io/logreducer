@@ -633,15 +633,19 @@ class TestOneSevereShapeGivesOneLine:
         pytest.param({"max_severe_shapes": 1000}, 600, 0, id="under-the-cap"),
     ],
 )
-@pytest.mark.parametrize("from_file", [False, True], ids=["list", "file"])
-def test_severe_shapes_stop_at_the_cap(tmp_path, overrides, kept, dropped, from_file):
+@pytest.mark.parametrize("entry", ["list", "process_file", "file_source"])
+def test_severe_shapes_stop_at_the_cap(tmp_path, overrides, kept, dropped, entry):
     lines = [f"ERROR {_letters(n)} failed" for n in range(600)]
     reducer = LogReducer(mode="pattern", level="standard", **overrides)
+    path = tmp_path / "severe.log"
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
-    if from_file:
-        path = tmp_path / "severe.log"
-        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    if entry == "process_file":
         out = reducer.process_file(str(path))
+    elif entry == "file_source":
+        source = FileSource(path)
+        out = reducer.reduce(source)
+        assert len(source.severe_shapes.lines) == kept
     else:
         out = reducer.reduce(lines)
 

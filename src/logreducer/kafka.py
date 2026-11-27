@@ -74,19 +74,21 @@ _INSTALL_HINT = (
 def merge_config(user_config: dict[str, Any], defaults: dict[str, Any], verify_ssl: bool = True) -> dict[str, Any]:
     """Overlay ``user_config`` on ``defaults``; optionally disable TLS verify.
 
-    User values win over defaults. Turning verification off warns once per process.
+    User values win over defaults. Verification turned off, by ``verify_ssl`` or by the
+    config, warns once per process.
     """
     global _warned_unverified
     merged = {**defaults, **user_config}
     if not verify_ssl:
         merged["enable.ssl.certificate.verification"] = "false"
-        if not _warned_unverified:
-            _warned_unverified = True
-            warnings.warn(
-                "Kafka TLS certificate verification is off, so the broker's identity is not checked",
-                RuntimeWarning,
-                stacklevel=3,
-            )
+    verification = str(merged.get("enable.ssl.certificate.verification", "true")).strip().lower()
+    if verification in ("false", "0") and not _warned_unverified:
+        _warned_unverified = True
+        warnings.warn(
+            "Kafka TLS certificate verification is off, so the broker's identity is not checked",
+            RuntimeWarning,
+            stacklevel=3,
+        )
     return merged
 
 

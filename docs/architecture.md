@@ -99,8 +99,8 @@ file peaked at 832 MB, against 156 MB for pattern mode.
 Anomaly mode cannot stream. Isolation Forest over a TF-IDF matrix is batch ML and
 needs its rows at once, so `anomaly_max_rows` reservoir-samples them with a fixed
 seed, 10,000 by default, trading anomaly recall for a bounded matrix. Terms are
-hashed into columns rather than held in a vocabulary, so memory follows the rows,
-not the distinct terms.
+hashed into columns rather than held in a vocabulary, so memory follows the rows
+and their length, not the distinct terms.
 
 ## Collecting a target instead of reducing everything
 

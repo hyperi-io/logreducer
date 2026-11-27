@@ -63,6 +63,7 @@ class FileSource:
         severe_shapes: One severe line per shape, from every line the latest pass read,
             including the ones that pass sampled away.
         max_severe_shapes: Shapes ``severe_shapes`` keeps. ``None`` keeps every shape.
+            ``LogReducer.reduce`` lowers it to the reducer's own cap.
     """
 
     def __init__(

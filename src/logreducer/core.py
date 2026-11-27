@@ -219,6 +219,11 @@ class LogReducer:
         # Note: a size-sampled FileSource yields its sampled line count, so for
         # very large files the ratio and input_lines stat are approximate.
         severe_cap = self.max_severe_shapes
+        # A FileSource collects severe shapes as it reads, so it takes this run's cap first.
+        if isinstance(source, FileSource):
+            own_cap = source.max_severe_shapes
+            if own_cap is None or own_cap > severe_cap:
+                source.max_severe_shapes = severe_cap
         shapes = SevereShapes(severe_cap)
         input_lines = 0
         for line in source:
@@ -226,9 +231,8 @@ class LogReducer:
             shapes.add(line)
         # A FileSource taps its own reads, which see the lines it samples away.
         shapes = getattr(source, "severe_shapes", shapes)
-        # A FileSource built elsewhere may keep more shapes than this reducer allows.
-        severe_lines = shapes.lines[:severe_cap]
-        severe_dropped = shapes.dropped + len(shapes.lines) - len(severe_lines)
+        severe_lines = shapes.lines
+        severe_dropped = shapes.dropped
 
         size_bytes = getattr(source, "size_bytes", None)
         file_size_mb = size_bytes / (1024 * 1024) if size_bytes else None

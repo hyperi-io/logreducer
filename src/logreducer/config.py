@@ -61,11 +61,9 @@ class BigDialConfig:
     # Bound the Drain3 template store (LRU-evict beyond this many templates).
     # None = unbounded (the store then grows with distinct templates).
     max_clusters: int | None = 10_000
-    # Templates a line is compared with: the most recently used at its leaf of
-    # the template tree. None compares it with every template there.
+    # Templates a line is compared with at its leaf, the last to take a line. None = all.
     max_leaf_clusters: int | None = 128
-    # Cap the rows fed to anomaly detection (reservoir-sampled), at the cost of
-    # anomaly recall (rare lines may be sampled out). None = every unique line.
+    # Rows anomaly detection scores, reservoir-sampled at some cost in recall. None = all.
     anomaly_max_rows: int | None = 10_000
     # Typed Drain3 masking: replace well-known value shapes (IPv4/IPv6, MAC,
     # UUID, hex tokens, numbers) with typed template slots (<IP>, <NUM>, ...)

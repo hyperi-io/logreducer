@@ -67,13 +67,21 @@ def test_mask_credentials_keeps_an_empty_value():
     assert mask_credentials({"sasl.password": ""}) == {"sasl.password": ""}
 
 
-def test_unverified_tls_warns_once_per_process(monkeypatch):
+@pytest.mark.parametrize(
+    ("user_config", "verify_ssl"),
+    [
+        pytest.param({}, False, id="argument"),
+        pytest.param({"enable.ssl.certificate.verification": "false"}, True, id="config-string"),
+        pytest.param({"enable.ssl.certificate.verification": False}, True, id="config-bool"),
+    ],
+)
+def test_unverified_tls_warns_once_per_process(monkeypatch, user_config, verify_ssl):
     monkeypatch.setattr(kafka, "_warned_unverified", False)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        merge_config({}, CONSUMER_DEFAULTS, verify_ssl=False)
-        merge_config({}, CONSUMER_DEFAULTS, verify_ssl=False)
         merge_config({}, CONSUMER_DEFAULTS)
+        merge_config(user_config, CONSUMER_DEFAULTS, verify_ssl=verify_ssl)
+        merge_config(user_config, CONSUMER_DEFAULTS, verify_ssl=verify_ssl)
 
     assert [str(w.message) for w in caught] == [
         "Kafka TLS certificate verification is off, so the broker's identity is not checked"
