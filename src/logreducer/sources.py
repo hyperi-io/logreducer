@@ -62,10 +62,15 @@ class FileSource:
     Attributes:
         severe_shapes: One severe line per shape, from every line the latest pass read,
             including the ones that pass sampled away.
+        max_severe_shapes: Shapes ``severe_shapes`` keeps. ``None`` keeps every shape.
+            ``LogReducer.reduce`` lowers it to the reducer's own cap.
     """
 
-    def __init__(self, path: str | os.PathLike[str], *, max_memory_gb: float = 1.0) -> None:
+    def __init__(
+        self, path: str | os.PathLike[str], *, max_memory_gb: float = 1.0, max_severe_shapes: int | None = None
+    ) -> None:
         self.path = os.fspath(path)
+        self.max_severe_shapes = max_severe_shapes
         # A pipe or device can be read once, but reduce() reads a source more than
         # once, so the second pass would see nothing and return an empty result.
         if os.path.exists(self.path) and not os.path.isfile(self.path):
@@ -74,11 +79,11 @@ class FileSource:
                 "so write it to a file first (e.g. redirect into a temp file)."
             )
         self._processor = StreamingProcessor(MemoryMonitor(max_memory_gb))
-        self.severe_shapes = SevereShapes()
+        self.severe_shapes = SevereShapes(max_severe_shapes)
 
     def __iter__(self) -> Iterator[str]:
         # A fresh tap per pass: it sees every line of the file, however the pass samples.
-        self.severe_shapes = SevereShapes()
+        self.severe_shapes = SevereShapes(self.max_severe_shapes)
         return self._processor.read_file_streaming(self.path, self.severe_shapes.add)
 
     @property

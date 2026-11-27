@@ -3,6 +3,7 @@
 import json
 import os
 import random
+import reprlib
 import time
 from collections.abc import Iterable
 from dataclasses import replace
@@ -20,6 +21,9 @@ from .sampling import reservoir_sample
 from .sinks import Sink
 from .sources import FileSource, Source
 from .temporal import TemporalProcessor
+
+# Names a source in stats and logs without copying the lines of a list source.
+_SOURCE_LABEL = reprlib.Repr(maxother=200)
 
 
 class LogReducer:
@@ -49,7 +53,7 @@ class LogReducer:
             config: A fully-built BigDialConfig to use INSTEAD of the level
                 preset - the injection seam for a host application that owns
                 its own config cascade (build the config however you like and
-                hand it over; kwargs still apply on top). Copied, so the
+                hand it over, and kwargs still apply on top). Copied, so the
                 caller's object is never mutated. ``level`` then only selects
                 the fuzzy-dedup gate, not preset values.
             **kwargs: Additional config overrides
@@ -93,7 +97,6 @@ class LogReducer:
         # Get logger for this module
         self.logger = get_logger("logreducer.core")
 
-        # Initialize components
         self.memory_monitor = MemoryMonitor(self.config.max_memory_gb)
 
         if mode in [ProcessingMode.ANOMALY, ProcessingMode.HYBRID]:
@@ -127,7 +130,9 @@ class LogReducer:
         else:
             self.fuzzy_dedup = None
         if self.mode in [ProcessingMode.TEMPORAL, ProcessingMode.HYBRID]:
-            self.temporal_processor = TemporalProcessor(self.config.temporal_window_minutes)
+            self.temporal_processor = TemporalProcessor(
+                self.config.temporal_window_minutes, self.config.max_clusters, self.config.max_leaf_clusters
+            )
         else:
             self.temporal_processor = None
 
@@ -213,20 +218,30 @@ class LogReducer:
         # Count input lines for the reduction ratio (one pass over the source).
         # Note: a size-sampled FileSource yields its sampled line count, so for
         # very large files the ratio and input_lines stat are approximate.
-        shapes = SevereShapes()
+        severe_cap = self.max_severe_shapes
+        # A FileSource collects severe shapes as it reads, so it takes this run's cap first.
+        if isinstance(source, FileSource):
+            own_cap = source.max_severe_shapes
+            if own_cap is None or own_cap > severe_cap:
+                source.max_severe_shapes = severe_cap
+        shapes = SevereShapes(severe_cap)
         input_lines = 0
         for line in source:
             input_lines += 1
             shapes.add(line)
         # A FileSource taps its own reads, which see the lines it samples away.
         shapes = getattr(source, "severe_shapes", shapes)
+        severe_lines = shapes.lines
+        severe_dropped = shapes.dropped
 
         size_bytes = getattr(source, "size_bytes", None)
         file_size_mb = size_bytes / (1024 * 1024) if size_bytes else None
+        input_path = getattr(source, "path", None)
+        input_label = str(input_path) if input_path is not None else _SOURCE_LABEL.repr(source)
 
         if self.config.enable_logging:
             where = f"{file_size_mb:.1f} MB" if file_size_mb is not None else f"{input_lines:,} lines"
-            self.logger.info(f"Reducing {source!r} ({where})")
+            self.logger.info(f"Reducing {input_label} ({where})")
             self.logger.info(f"Mode: {self.mode.value}, Level: {self.level.value}")
             self.logger.info(f"Memory limit: {self.config.max_memory_gb:.1f} GB")
 
@@ -240,21 +255,20 @@ class LogReducer:
         else:  # HYBRID
             result_lines = self._process_hybrid_mode(source)
 
-        # Modes return quiet lines under their caps. Severe lines are one per shape, outside every
-        # cap, so the output is bounded by the caps plus the number of distinct severe shapes.
-        result_lines = shapes.lines + result_lines
+        # Modes return quiet lines under their caps. Severe lines are one per shape, under max_severe_shapes.
+        result_lines = severe_lines + result_lines
 
         # Calculate stats
         processing_time = time.time() - start_time
         output_lines = len(result_lines)
         reduction_percent = (1 - output_lines / max(input_lines, 1)) * 100 if input_lines > 0 else 0
-        input_label = getattr(source, "path", None)
 
         self.stats = {
-            "input_file": str(input_label) if input_label is not None else repr(source),
+            "input_file": input_label,
             "input_lines": input_lines,
             "input_size_mb": file_size_mb,
             "output_lines": output_lines,
+            "severe_dropped": severe_dropped,
             "reduction_percent": reduction_percent,
             "processing_time_seconds": processing_time,
             "processing_rate_mb_per_sec": (
@@ -324,8 +338,16 @@ class LogReducer:
         """
         if not os.path.exists(input_file):
             raise FileNotFoundError(f"File not found: {input_file}")
-        source = FileSource(input_file, max_memory_gb=self.config.max_memory_gb)
+        source = FileSource(
+            input_file, max_memory_gb=self.config.max_memory_gb, max_severe_shapes=self.max_severe_shapes
+        )
         return self.reduce(source, output_file=output_file, return_metadata=return_metadata)
+
+    @property
+    def max_severe_shapes(self) -> int:
+        """Severe lines a run keeps, one per shape: ``max_severe_shapes``, else ``max_patterns``."""
+        configured = self.config.max_severe_shapes
+        return configured if configured is not None else self.config.max_patterns
 
     def _process_pattern_mode(self, source: Source) -> list[str]:
         """Process using pattern extraction, streaming end to end.
@@ -433,7 +455,6 @@ class LogReducer:
         if self.config.enable_logging:
             self.logger.info("Hybrid mode: combining pattern and anomaly detection")
 
-        # Get patterns
         pattern_lines = self._process_pattern_mode(source)
 
         # Get anomalies if available

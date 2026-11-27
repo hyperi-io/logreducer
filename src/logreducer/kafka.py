@@ -29,6 +29,7 @@ Install: ``pip install 'logreducer[kafka]'``.
 
 import importlib.util
 import time
+import warnings
 from collections.abc import Iterable, Iterator
 from typing import Any, Self
 
@@ -57,15 +58,13 @@ CONSUMER_DEFAULTS: dict[str, Any] = {
     "enable.partition.eof": True,
 }
 
-_CREDENTIAL_KEYS: frozenset[str] = frozenset(
-    {
-        "sasl.password",
-        "sasl.username",
-        "ssl.key.password",
-        "ssl.keystore.password",
-        "ssl.truststore.password",
-    }
-)
+# A key is a credential when it is listed, ends in one of the suffixes, or holds one of the parts.
+_CREDENTIAL_KEYS = frozenset({"sasl.username"})
+_CREDENTIAL_SUFFIXES = (".password", ".secret", ".pem")
+_CREDENTIAL_PARTS = ("oauthbearer.config", "private.key")
+
+# Set once a config has turned TLS verification off, so the warning shows once per process.
+_warned_unverified = False
 
 _INSTALL_HINT = (
     "logreducer's Kafka source/sink needs confluent-kafka. Install the extra:\n    pip install 'logreducer[kafka]'"
@@ -75,12 +74,27 @@ _INSTALL_HINT = (
 def merge_config(user_config: dict[str, Any], defaults: dict[str, Any], verify_ssl: bool = True) -> dict[str, Any]:
     """Overlay ``user_config`` on ``defaults``; optionally disable TLS verify.
 
-    User values win over defaults.
+    User values win over defaults. Verification turned off, by ``verify_ssl`` or by the
+    config, warns once per process.
     """
+    global _warned_unverified
     merged = {**defaults, **user_config}
     if not verify_ssl:
         merged["enable.ssl.certificate.verification"] = "false"
+    verification = str(merged.get("enable.ssl.certificate.verification", "true")).strip().lower()
+    if verification in ("false", "0") and not _warned_unverified:
+        _warned_unverified = True
+        warnings.warn(
+            "Kafka TLS certificate verification is off, so the broker's identity is not checked",
+            RuntimeWarning,
+            stacklevel=3,
+        )
     return merged
+
+
+def _is_credential(key: str) -> bool:
+    key = key.lower()
+    return key in _CREDENTIAL_KEYS or key.endswith(_CREDENTIAL_SUFFIXES) or any(p in key for p in _CREDENTIAL_PARTS)
 
 
 def mask_credentials(config: dict[str, Any]) -> dict[str, Any]:
@@ -88,7 +102,7 @@ def mask_credentials(config: dict[str, Any]) -> dict[str, Any]:
 
     Used in ``__repr__`` so a Kafka config never leaks secrets into logs.
     """
-    return {k: ("***" if k in _CREDENTIAL_KEYS and v not in (None, "") else v) for k, v in config.items()}
+    return {k: ("***" if _is_credential(k) and v not in (None, "") else v) for k, v in config.items()}
 
 
 class KafkaConsumerError(Exception):

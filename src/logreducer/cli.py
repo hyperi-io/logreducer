@@ -14,6 +14,7 @@ nothing. Built on typer.
 """
 
 import json
+import os
 import sys
 from typing import Any
 
@@ -88,7 +89,11 @@ def _reduce(
     pretty_json: bool = typer.Option(False, "--pretty-json", help="Pretty-print JSON output"),
     level: str = typer.Option("standard", "--level", "-l", help="Processing level: standard, enhanced, maximum"),
     mode: str = typer.Option("pattern", "--mode", "-m", help="Processing mode: pattern, anomaly, temporal, hybrid"),
-    dsn: str | None = typer.Option(None, "--dsn", help="Source DSN: postgresql://, clickhouse://, kafka://, ..."),
+    dsn: str | None = typer.Option(
+        None,
+        "--dsn",
+        help="Source DSN: postgresql://, clickhouse://, kafka://, ... With no file or --dsn, read from LOGREDUCER_DSN",
+    ),
     query: str | None = typer.Option(None, "--query", help="SQL SELECT (first column is the log line) for --dsn"),
     topic: str | None = typer.Option(None, "--topic", help="Kafka topic (with a kafka:// --dsn)"),
     group: str | None = typer.Option(None, "--group", help="Kafka consumer group (with a kafka:// --dsn)"),
@@ -118,6 +123,10 @@ def _reduce(
     ),
 ) -> None:
     """Reduce a log source to a representative sample."""
+    # The environment keeps a password off the command line, and a named file or --dsn wins over it.
+    if dsn is None and input_file is None:
+        dsn = os.environ.get("LOGREDUCER_DSN") or None
+
     # Build reducer config overrides, dropping unset values.
     overrides: dict[str, Any] = {
         "max_memory_gb": max_memory,
@@ -258,7 +267,9 @@ def _run_target(
         elif input_file:
             from .sources import FileSource
 
-            source = FileSource(input_file, max_memory_gb=reducer.config.max_memory_gb)
+            source = FileSource(
+                input_file, max_memory_gb=reducer.config.max_memory_gb, max_severe_shapes=reducer.max_severe_shapes
+            )
         else:
             _err("Error: --target-rows needs a log file, or --dsn with --query (SQL/ClickHouse)")
             raise typer.Exit(1)

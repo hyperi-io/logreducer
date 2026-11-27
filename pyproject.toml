@@ -23,7 +23,7 @@ classifiers = [
     "Intended Audience :: Developers",
     "Intended Audience :: System Administrators",
     "Topic :: System :: Logging",
-    "Topic :: System :: Systems Administration", 
+    "Topic :: System :: Systems Administration",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
@@ -187,7 +187,7 @@ exclude_lines = [
 [tool.bandit]
 exclude_dirs = [
     "tests",
-    "test", 
+    "test",
     ".venv",
     "venv",
     ".tox",

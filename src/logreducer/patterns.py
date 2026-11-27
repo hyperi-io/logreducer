@@ -112,21 +112,32 @@ class SevereShapes:
     Numbers, IPs, hex runs and ISO-8601 timestamps do not change a shape, and digits inside an
     identifier do (``E1`` and ``E2`` are two shapes). The reducer feeds it every line as the
     source is read, before any sampling or dedup, so a severe line cannot be lost to either.
-    It holds one line per distinct shape.
+    It holds one line per distinct shape, up to ``cap`` shapes.
+
+    Attributes:
+        cap: Shapes kept, the first to appear. ``None`` keeps every shape.
+        dropped: Severe lines of a new shape that arrived once ``cap`` shapes were kept.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, cap: int | None = None) -> None:
+        self.cap = cap
+        self.dropped = 0
         self._masks = _typed_masking_instructions(timestamp=True)
         self._first_of_shape: dict[str, str] = {}
 
     def add(self, line: str) -> None:
-        """Remember ``line`` when it is severe and its shape is new."""
+        """Remember ``line`` when it is severe and its shape is new, while under ``cap``."""
         if not is_severe(line):
             return
         shape = line
         for mask in self._masks:
             shape = mask.mask(shape)
-        self._first_of_shape.setdefault(shape, line)
+        if shape in self._first_of_shape:
+            return
+        if self.cap is not None and len(self._first_of_shape) >= self.cap:
+            self.dropped += 1
+            return
+        self._first_of_shape[shape] = line
 
     @property
     def lines(self) -> list[str]:
@@ -246,6 +257,7 @@ class PatternExtractor:
             # Bound the template store when configured: the miner LRU-evicts beyond
             # drain_max_clusters, keeping memory flat on high-cardinality logs.
             drain_max_clusters=self.config.max_clusters,
+            drain_max_leaf_clusters=self.config.max_leaf_clusters,
             masking_instructions=masking,
             drain_is_severe=is_severe,
         )

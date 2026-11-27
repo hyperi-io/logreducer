@@ -61,10 +61,10 @@ class BigDialConfig:
     # Bound the Drain3 template store (LRU-evict beyond this many templates).
     # None = unbounded (the store then grows with distinct templates).
     max_clusters: int | None = 10_000
-    # Cap the rows fed to anomaly detection (reservoir-sampled). Bounds the
-    # TF-IDF matrix on a huge unique-line set, at the cost of anomaly recall
-    # (rare lines may be sampled out). None = no cap (use every unique line).
-    anomaly_max_rows: int | None = None
+    # Templates a line is compared with at its leaf, the last to take a line. None = all.
+    max_leaf_clusters: int | None = 128
+    # Rows anomaly detection scores, reservoir-sampled at some cost in recall. None = all.
+    anomaly_max_rows: int | None = 10_000
     # Typed Drain3 masking: replace well-known value shapes (IPv4/IPv6, MAC,
     # UUID, hex tokens, numbers) with typed template slots (<IP>, <NUM>, ...)
     # before clustering, instead of the bare <*>. Opt-in: masking normalises
@@ -78,6 +78,8 @@ class BigDialConfig:
     # Sampling Control
     max_patterns: int = 1000
     examples_per_pattern: int = 3
+    # Severe lines kept, one per shape, outside max_patterns. None = max_patterns.
+    max_severe_shapes: int | None = None
 
     # Logging Control
     enable_logging: bool = False  # Logging disabled by default
@@ -138,7 +140,7 @@ def validate_config(config: BigDialConfig) -> None:
     for name in ("dedup_cache_size", "temporal_window_minutes", "max_patterns", "examples_per_pattern"):
         if getattr(config, name) < 1:
             raise ValueError(f"{name} must be at least 1, got {getattr(config, name)!r}")
-    for name in ("max_clusters", "anomaly_max_rows"):
+    for name in ("max_clusters", "max_leaf_clusters", "anomaly_max_rows", "max_severe_shapes"):
         value = getattr(config, name)
         if value is not None and value < 1:
             raise ValueError(f"{name} must be at least 1 or None, got {value!r}")

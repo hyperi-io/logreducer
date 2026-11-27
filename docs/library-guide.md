@@ -53,7 +53,7 @@ flowchart LR
     class empty,check decision
 ```
 
-*Figure 1. L4 Detail -- Collecting a target. The dotted arrow back to the start is the next round.* Up: [L3 Components -- logreducer](architecture.md#a-reduction-engine-behind-two-protocols).
+*Figure 1. L4 Detail -- Collecting a target. The arrow from the stop check back to the pull is the next round.* Up: [L3 Components -- logreducer](architecture.md#a-reduction-engine-behind-two-protocols).
 
 A batch comes from the source's `sample_batch` where it has one (SQL, ClickHouse), else from a client-side reservoir over the whole source. Unless `batch_rows` fixes it, the average row size of a batch sets the next batch size. The stop conditions run in this order: `target` reached, `plateau` after `plateau_rounds` batches that add no unseen line, then the memory watchdog. Still past the soft limit after a garbage collection, it halves the next batch, to no fewer than 1,000 rows, and past the hard limit it stops with `memory`. The loop ends with `max_fetches` once that many batches have been pulled.
 
@@ -75,12 +75,14 @@ logreducer --dsn postgresql://user@host/db --query "SELECT msg FROM logs" \
 
 ## Bounding memory
 
-Pattern mode streams, and its memory is fixed by the knobs below, not by lines or distinct templates. Temporal mode holds the whole source in memory, and anomaly mode holds its unique lines. The knobs:
+Pattern mode streams, and the knobs below set its memory. Temporal mode holds the whole source in memory, and anomaly mode holds up to `anomaly_max_rows` of its unique lines. The knobs:
 
 - `max_memory_gb` - the overall cap, which sets the file read strategy and the watchdog. Presets: 0.5 / 1 / 2 GB by level. Values above 70% of available RAM are clamped with a warning.
 - `dedup_cache_size` - the lines exact dedup remembers, and at enhanced and maximum the lines the fuzzy index holds. Both drop the oldest first, so a repeat or near-repeat older than the window comes through again.
-- `max_clusters` - LRU-bound the Drain3 template store (10,000 by default, `None` for unbounded, so no template is evicted). A lower value bounds the template store and cuts the work per line on high-cardinality sources.
-- `anomaly_max_rows` - reservoir-cap the rows fed to anomaly detection (off by default, and it trades anomaly recall for a bounded matrix).
+- `max_clusters` - LRU-bound the Drain3 template store (10,000 by default, `None` for unbounded, so no template is evicted).
+- `max_leaf_clusters` - the templates a line is compared with, those at its leaf that last took a line (128 by default, `None` compares with all of them). It sets the work per line on high-cardinality sources.
+- `anomaly_max_rows` - reservoir-cap the rows fed to anomaly detection (10,000 by default, `None` for every unique line, and it trades anomaly recall for a bounded matrix).
+- `max_severe_shapes` - the severe lines kept, one per distinct message (`max_patterns` by default). `severe_dropped` in the stats counts the severe lines of a message that arrived once the cap was full.
 
 ```python
 reducer = LogReducer(level="enhanced", mode="hybrid", max_clusters=50_000, anomaly_max_rows=200_000)
@@ -155,15 +157,16 @@ A host app with its config cascade and logging standard drives logreducer with t
 import logreducer
 
 # 1. Config: build it from YOUR cascade and inject it (kwargs still win on top)...
-cfg = logreducer.BigDialConfig(max_memory_gb=0.5, max_patterns=800)
+cfg = logreducer.BigDialConfig(max_memory_gb=0.5, max_patterns=800, enable_logging=True)
 reducer = logreducer.LogReducer(mode="hybrid", config=cfg)
 
 # ...or let logreducer read your env cascade directly: prefixed beats bare.
 cfg = logreducer.BigDialConfig.from_env("MYAPP", "LOGREDUCER")   # MYAPP_MAX_MEMORY_GB wins
 
-# 2. Logging: your app owns the stdlib logging handlers; logreducer attaches
-#    nothing and its records flow through YOUR handlers, at YOUR level,
-#    formatted by YOUR standard.
+# 2. Logging: with enable_logging on and no log_file, logreducer attaches no
+#    handler, so its records flow through YOUR handlers, formatted by YOUR
+#    standard. Building a reducer applies its config's logging, so hand the
+#    level to your app after the reducer is built.
 logreducer.setup_logging(enable=True, own_sinks=False)
 ```
 

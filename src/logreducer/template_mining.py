@@ -41,7 +41,7 @@ Derived from Drain3 at commit 0fb6d6e1828838fa05c8f6fa5cda878e02ea79c7. It keeps
 only the streaming path logreducer drives: mask a line, route it through a
 fixed-depth prefix tree, and merge it into the most similar cluster of the same
 token count, widening differing tokens to ``<*>``. Drain3's copyright and MIT
-licence notice are in the header above; the README credits Drain3 and logparser.
+licence notice are in the header above, and the README credits Drain3 and logparser.
 """
 
 import re
@@ -49,7 +49,7 @@ from collections import OrderedDict
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 
-# Wildcard a widened template slot carries; masks render as <NAME> in the same shape.
+# Wildcard a widened template slot carries. Masks render as <NAME> in the same shape.
 _PARAM_STR = "<*>"
 
 
@@ -62,15 +62,17 @@ class LogCluster:
         size: Lines merged into this cluster.
         severe: Whether the line that founded the cluster was severe, as judged by
             the miner's ``is_severe`` predicate. Every merged line shares it.
+        last_used: The miner's line number when the cluster last took a line.
     """
 
-    __slots__ = ("cluster_id", "log_template_tokens", "severe", "size")
+    __slots__ = ("cluster_id", "last_used", "log_template_tokens", "severe", "size")
 
     def __init__(self, log_template_tokens: Iterable[str], cluster_id: int, severe: bool = False) -> None:
         self.log_template_tokens = tuple(log_template_tokens)
         self.cluster_id = cluster_id
         self.size = 1
         self.severe = severe
+        self.last_used = 0
 
     def get_template(self) -> str:
         """Return the template as one space-joined string."""
@@ -80,7 +82,7 @@ class LogCluster:
 class ClusterStore:
     """Cluster id to cluster map, optionally bounded by least-recently-used eviction.
 
-    Storing and ``touch`` mark a cluster as used; ``get`` and ``in`` only look, so
+    Storing and ``touch`` mark a cluster as used. ``get`` and ``in`` only look, so
     scoring candidate clusters never changes which one is evicted next.
     """
 
@@ -152,6 +154,8 @@ class Drain:
         max_node_depth: Depth of the leaf nodes, counting the token-count level as 1.
         sim_th: Minimum share of matching tokens to join an existing cluster.
         max_children: Children a tree node holds before new tokens share ``<*>``.
+        max_leaf_clusters: Clusters a leaf offers a line, the most recently used
+            kept. ``None`` offers every live cluster, which is Drain3's behaviour.
         is_severe: Predicate that marks a line as severe. A severe line never
             joins a non-severe cluster, and the reverse, so a level word is never
             widened to ``<*>`` by a non-severe neighbour. ``None`` treats every
@@ -159,6 +163,10 @@ class Drain:
         root_node: Root of the prefix tree.
         id_to_cluster: Every live cluster, keyed by id.
         clusters_counter: The id given to the newest cluster.
+
+    One-token lines all reach the same leaf, and with ``sim_th`` above 0 they can
+    only join the cluster holding the same token, so they are looked up by token
+    instead of scored against every cluster at that leaf.
     """
 
     def __init__(
@@ -168,6 +176,7 @@ class Drain:
         max_children: int = 100,
         max_clusters: int | None = None,
         is_severe: Callable[[str], bool] | None = None,
+        max_leaf_clusters: int | None = None,
     ) -> None:
         """Create an empty miner.
 
@@ -180,19 +189,34 @@ class Drain:
                 ``None`` keeps every cluster.
             is_severe: Predicate that keeps severe and non-severe lines in
                 separate clusters. ``None`` treats every line alike.
+            max_leaf_clusters: Clusters a leaf offers a line, which bounds the
+                comparisons per line. Past it the leaf drops its least recently
+                used cluster, which stays live but takes no more lines. ``None``
+                offers every live cluster.
 
         Raises:
-            ValueError: If ``depth`` is below 3 or ``max_clusters`` is below 1.
+            ValueError: If ``depth`` is below 3, or ``max_clusters`` or
+                ``max_leaf_clusters`` is below 1.
         """
         if depth < 3:
             raise ValueError(f"depth must be at least 3, not {depth}")
+        if max_leaf_clusters is not None and max_leaf_clusters < 1:
+            raise ValueError(f"max_leaf_clusters must be at least 1, not {max_leaf_clusters}")
         self.max_node_depth = depth - 2
         self.sim_th = sim_th
         self.max_children = max_children
+        self.max_leaf_clusters = max_leaf_clusters
         self.is_severe = is_severe
         self.root_node = Node()
         self.id_to_cluster = ClusterStore(max_clusters)
         self.clusters_counter = 0
+        self._lines_seen = 0
+        # (token, severe) to cluster id for one-token clusters, which may name evicted ids.
+        self._one_token_ids: dict[tuple[str, bool], int] = {}
+
+    def _indexes_one_token(self, token: str) -> bool:
+        """True when a one-token line can only join the cluster holding the same token."""
+        return 0 < self.sim_th <= 1 and token != _PARAM_STR
 
     @property
     def clusters(self) -> list[LogCluster]:
@@ -211,16 +235,19 @@ class Drain:
         content_tokens = content.split()
         severe = self.is_severe is not None and self.is_severe(content)
         match_cluster = self.tree_search(content_tokens, severe)
+        self._lines_seen += 1
 
         if match_cluster is None:
             self.clusters_counter += 1
             match_cluster = LogCluster(content_tokens, self.clusters_counter, severe)
+            match_cluster.last_used = self._lines_seen
             self.id_to_cluster[match_cluster.cluster_id] = match_cluster
             self.add_seq_to_prefix_tree(match_cluster)
             return match_cluster
 
         match_cluster.log_template_tokens = self.create_template(content_tokens, match_cluster.log_template_tokens)
         match_cluster.size += 1
+        match_cluster.last_used = self._lines_seen
         self.id_to_cluster.touch(match_cluster.cluster_id)
         return match_cluster
 
@@ -242,6 +269,10 @@ class Drain:
         # Empty lines share the single cluster stored at their token-count node.
         if token_count == 0:
             return self.id_to_cluster.get(cur_node.cluster_ids[0])
+
+        if token_count == 1 and self._indexes_one_token(tokens[0]):
+            cluster_id = self._one_token_ids.get((tokens[0], severe))
+            return None if cluster_id is None else self.id_to_cluster.get(cluster_id)
 
         cur_node_depth = 1
         for token in tokens:
@@ -273,13 +304,31 @@ class Drain:
             cur_node.cluster_ids = [cluster.cluster_id]
             return
 
+        if token_count == 1 and self._indexes_one_token(cluster.log_template_tokens[0]):
+            self._one_token_ids[(cluster.log_template_tokens[0], cluster.severe)] = cluster.cluster_id
+            # Dropping evicted ids at twice the live count costs O(1) per line, amortised.
+            if len(self._one_token_ids) >= 2 * len(self.id_to_cluster):
+                self._one_token_ids = {
+                    key: cluster_id
+                    for key, cluster_id in self._one_token_ids.items()
+                    if cluster_id in self.id_to_cluster
+                }
+            return
+
         current_depth = 1
         for token in cluster.log_template_tokens:
             if current_depth >= self.max_node_depth or current_depth >= token_count:
                 # Drop ids the store has evicted before adding the new one.
-                live_ids = [cluster_id for cluster_id in cur_node.cluster_ids if cluster_id in self.id_to_cluster]
-                live_ids.append(cluster.cluster_id)
-                cur_node.cluster_ids = live_ids
+                live: list[LogCluster] = []
+                for cluster_id in cur_node.cluster_ids:
+                    kept = self.id_to_cluster.get(cluster_id)
+                    if kept is not None:
+                        live.append(kept)
+                if self.max_leaf_clusters is not None and len(live) >= self.max_leaf_clusters:
+                    # Removed in place, because list order breaks ties in fast_match.
+                    live.remove(min(live, key=lambda candidate: candidate.last_used))
+                cur_node.cluster_ids = [kept.cluster_id for kept in live]
+                cur_node.cluster_ids.append(cluster.cluster_id)
                 break
 
             children = cur_node.key_to_child_node
@@ -416,6 +465,8 @@ class TemplateMinerConfig:
         drain_max_children: Children a tree node holds before new tokens share ``<*>``.
         drain_max_clusters: Clusters kept before the least recently used is evicted.
             ``None`` keeps every cluster.
+        drain_max_leaf_clusters: Clusters a leaf offers a line (see :class:`Drain`).
+            ``None`` offers every live cluster.
         masking_instructions: Masks applied to each line in order, before clustering.
         drain_is_severe: Predicate that keeps severe and non-severe lines in
             separate clusters (see :class:`Drain`). ``None`` treats every line alike.
@@ -425,6 +476,7 @@ class TemplateMinerConfig:
     drain_depth: int = 4
     drain_max_children: int = 100
     drain_max_clusters: int | None = None
+    drain_max_leaf_clusters: int | None = None
     masking_instructions: tuple[MaskingInstruction, ...] = ()
     drain_is_severe: Callable[[str], bool] | None = None
 
@@ -441,7 +493,7 @@ class TemplateMiner:
         """Create an empty miner.
 
         Args:
-            config: Tuning; ``None`` uses the :class:`TemplateMinerConfig` defaults.
+            config: Tuning. ``None`` uses the :class:`TemplateMinerConfig` defaults.
         """
         self.config = config if config is not None else TemplateMinerConfig()
         self.drain = Drain(
@@ -450,6 +502,7 @@ class TemplateMiner:
             max_children=self.config.drain_max_children,
             max_clusters=self.config.drain_max_clusters,
             is_severe=self.config.drain_is_severe,
+            max_leaf_clusters=self.config.drain_max_leaf_clusters,
         )
 
     def add_log_message(self, log_message: str) -> LogCluster:

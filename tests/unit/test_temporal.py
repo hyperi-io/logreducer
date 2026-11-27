@@ -107,6 +107,18 @@ class TestTemporalProcessor:
 
         assert processor.window_minutes == 30
 
+    def test_window_miners_take_the_reducer_bounds(self):
+        reducer = LogReducer(mode="temporal", max_clusters=7, max_leaf_clusters=3)
+        lines = [f"2026-01-01 00:{n % 60:02d}:00 GET w{n}a w{n}b" for n in range(50)] + ["no stamp here"]
+        reducer.reduce(lines)
+
+        processor = reducer.temporal_processor
+        assert processor is not None
+        miners = [*processor.miners_by_window.values()]
+        assert miners
+        for miner in miners:
+            assert (miner.config.drain_max_clusters, miner.config.drain_max_leaf_clusters) == (7, 3)
+
     def test_process_temporal_empty_lines(self):
         """Test processing empty line list"""
         processor = TemporalProcessor()

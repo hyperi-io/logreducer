@@ -20,7 +20,7 @@ from logreducer.template_mining import (
     TemplateMinerConfig,
 )
 
-# Packages the miner replaced; none may be imported or declared any more.
+# Packages the miner replaced. None may be imported or declared any more.
 REPLACED = {"drain3", "jsonpickle", "cachetools", "loguru"}
 
 
@@ -114,6 +114,53 @@ class TestClustering:
 
         assert first is second
         assert second.get_template() == "a b c"
+
+    @pytest.mark.parametrize(
+        ("config", "lines", "ids", "templates"),
+        [
+            pytest.param({}, ["a1", "b2", "a1"], [1, 2, 1], ["b2", "a1"], id="repeat-joins-its-token"),
+            pytest.param({}, ["<*>", "<*>"], [1, 2], ["<*>", "<*>"], id="literal-wildcard-never-joins"),
+            pytest.param({"drain_sim_th": 0.0}, ["a", "b"], [1, 1], ["<*>"], id="zero-threshold-widens"),
+            pytest.param({"drain_max_clusters": 1}, ["a", "b", "a"], [1, 2, 3], ["a"], id="evicted-token-starts-over"),
+        ],
+    )
+    def test_one_token_lines(self, config, lines, ids, templates):
+        miner = TemplateMiner(TemplateMinerConfig(**config))
+
+        assert [miner.add_log_message(line).cluster_id for line in lines] == ids
+        assert [c.get_template() for c in miner.drain.clusters] == templates
+
+    def test_one_token_index_drops_evicted_ids(self):
+        miner = TemplateMiner(TemplateMinerConfig(drain_max_clusters=10))
+        for i in range(1000):
+            miner.add_log_message(f"token{i}")
+
+        assert len(miner.drain._one_token_ids) < 20
+
+    def test_leaf_offers_at_most_max_leaf_clusters(self):
+        # Same first token and length, no shared word: every line starts a cluster at one leaf.
+        miner = TemplateMiner(TemplateMinerConfig(drain_max_leaf_clusters=8))
+        for i in range(100):
+            miner.add_log_message(f"GET w{i}a w{i}b w{i}c")
+
+        leaf = miner.drain.root_node.key_to_child_node["4"].key_to_child_node["GET"]
+        assert len(leaf.cluster_ids) == 8
+        assert len(miner.drain.clusters) == 100
+
+    def test_leaf_drops_its_least_recently_used_cluster(self):
+        miner = TemplateMiner(TemplateMinerConfig(drain_max_leaf_clusters=2))
+        busy = miner.add_log_message("GET alpha one")
+        miner.add_log_message("GET beta two")
+        miner.add_log_message("GET alpha one")
+        miner.add_log_message("GET gamma three")
+
+        assert miner.add_log_message("GET alpha one") is busy
+        assert miner.add_log_message("GET beta two").cluster_id == 4
+
+    @pytest.mark.parametrize("bad", [0, -1])
+    def test_max_leaf_clusters_below_one_is_rejected(self, bad):
+        with pytest.raises(ValueError, match="max_leaf_clusters must be at least 1"):
+            Drain(max_leaf_clusters=bad)
 
     def test_cluster_ids_are_sequential(self):
         miner = TemplateMiner()

@@ -54,7 +54,7 @@ _DISABLED_LEVEL = logging.CRITICAL + 1
 _FILE_MAX_BYTES = 10 * 1024 * 1024
 _FILE_BACKUPS = 7
 
-# Every attribute a bare LogRecord carries; anything else came from the caller's ``extra=``.
+# Every attribute a bare LogRecord carries. Anything else came from the caller's ``extra=``.
 _STANDARD_RECORD_ATTRS = frozenset(logging.LogRecord("", 0, "", 0, "", (), None).__dict__) | {"message", "asctime"}
 
 # Handlers this module has attached, so re-configuring only tears down our own
@@ -180,7 +180,8 @@ def setup_logging(
             at the host's level. This is the embedding seam: a host app that owns
             logging calls ``setup_logging(enable=True, own_sinks=False)`` and
             logreducer's output lands in the host's sinks, formatted by the
-            host's standard.
+            host's standard. Building a ``LogReducer`` applies its config's
+            logging, so call this after the reducer is built.
 
     Raises:
         ValueError: If the resolved level is not a ``logging`` level name.
