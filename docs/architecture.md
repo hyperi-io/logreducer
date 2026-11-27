@@ -90,7 +90,7 @@ time grows with the square of the template count when lines share no tokens.
 `max_leaf_clusters` (128 by default) compares a line with the templates at its leaf
 that last took a line, and `max_clusters` (10,000) bounds the store. A 2026-11-27
 test run on the 40,000-line HealthApp corpus took 1.8 s with the cap and 23 s without,
-for 2% more templates. One-token lines, compact JSON among them, are looked up by token.
+and the cap found 2% more templates. One-token lines, compact JSON among them, are looked up by token.
 
 Temporal mode returns one example per time window and template, ranked by severity and count, and does not stream. It reads every line and a parsed entry per line
 into memory before grouping, so it ignores `max_memory_gb`. A 2026-10-31 test run on an 80 MB

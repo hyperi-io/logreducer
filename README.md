@@ -11,8 +11,8 @@ Reduces gigabytes of logs to a small, representative sample, as a CLI or a Pytho
 - By default you get a couple of examples of each recurring pattern, and the repeats are dropped. In a DFE deployment dfe-engine's sampler uses it for the smart and anomaly samples of a source's data.
 - A `logreducer` command that reduces a file, a SQL or ClickHouse query, or a Kafka topic, straight from the shell.
 - Four modes: pattern (Drain3 template mining), anomaly (Isolation Forest), temporal (one candidate per template per time window, ranked, up to `max_patterns`) and hybrid.
-- Pattern mode streams through a bounded dedup cache, fuzzy index and template store, so memory does not grow with the line count.
-- Lines naming ERROR, FATAL or CRITICAL as a whole word, in any case, come through ahead of the reduced output, one per distinct message once standalone numbers, IPs, UUIDs, hex IDs and ISO timestamps are masked, in every mode and however a file is read. They stop at `max_severe_shapes` distinct messages (`max_patterns` by default), and the stats count the severe lines left out as `severe_dropped`. A SQL or ClickHouse source samples in the database first, so a line the sample drops is never seen.
+- Pattern mode streams through a bounded dedup cache, fuzzy index and template store, so memory does not grow with the line count. Line length and the spread of token counts per line still add to it.
+- Lines naming ERROR, FATAL or CRITICAL as a whole word, in any case, come through ahead of the reduced output, one per distinct message once standalone numbers, IPs, MACs, UUIDs, hex IDs and ISO timestamps are masked, in every mode and however a file is read. They stop at `max_severe_shapes` distinct messages (`max_patterns` by default), and `severe_dropped` in the stats counts the severe lines of a message that arrived once the cap was full. A SQL or ClickHouse source samples in the database first, so a line the sample drops is never seen.
 - A core with no IO dependencies: anything re-iterable that yields `str` lines is a source, and anything with `write(lines)` is a sink. SQL, ClickHouse and Kafka adapters are extras, so you install just the one you use.
 - Seeded SQL sampling, PostgreSQL `TABLESAMPLE` and ClickHouse `SAMPLE` for large tables, and `reduce_to_target` to collect about N lines from them.
 - Hooks for a host application's config cascade and logging.
@@ -112,9 +112,9 @@ flowchart LR
 
 *Figure 1. L4 Detail -- Reduction pipeline. Dotted arrows are the anomaly path, which anomaly and hybrid mode take.* Up: [L3 Components -- logreducer](docs/architecture.md#a-reduction-engine-behind-two-protocols).
 
-Pattern mode takes the solid path, anomaly mode the dotted one, and hybrid both. Fuzzy dedup runs at the `enhanced` and `maximum` levels. The reservoir cap is `anomaly_max_rows`, 10,000 rows by default. Severe lines are kept out of both paths and lead the output, one per distinct message.
+Pattern mode takes the solid path, anomaly mode the dotted one, and hybrid both. Fuzzy dedup runs at the `enhanced` and `maximum` levels. The reservoir cap is `anomaly_max_rows`, 10,000 rows by default. Severe lines are kept out of both paths and lead the output, one per distinct message up to `max_severe_shapes`.
 
-The anomaly path and temporal mode do not stream. Isolation Forest is batch ML, so `anomaly_max_rows` caps its input. Temporal mode holds every line in memory to group them by time window.
+The anomaly path and temporal mode do not stream. Isolation Forest is batch ML, so `anomaly_max_rows` caps its input at 10,000 rows by default (`None` takes every row). Temporal mode holds every line in memory to group them by time window.
 
 Pattern suits recurring structure, anomaly rare events, temporal bursts in time, and hybrid fits when you're unsure.
 

@@ -75,14 +75,14 @@ logreducer --dsn postgresql://user@host/db --query "SELECT msg FROM logs" \
 
 ## Bounding memory
 
-Pattern mode streams, and its memory is fixed by the knobs below, not by lines or distinct templates. Temporal mode holds the whole source in memory, and anomaly mode holds up to `anomaly_max_rows` of its unique lines. The knobs:
+Pattern mode streams, and the knobs below set its memory. Temporal mode holds the whole source in memory, and anomaly mode holds up to `anomaly_max_rows` of its unique lines. The knobs:
 
 - `max_memory_gb` - the overall cap, which sets the file read strategy and the watchdog. Presets: 0.5 / 1 / 2 GB by level. Values above 70% of available RAM are clamped with a warning.
 - `dedup_cache_size` - the lines exact dedup remembers, and at enhanced and maximum the lines the fuzzy index holds. Both drop the oldest first, so a repeat or near-repeat older than the window comes through again.
 - `max_clusters` - LRU-bound the Drain3 template store (10,000 by default, `None` for unbounded, so no template is evicted).
 - `max_leaf_clusters` - the templates a line is compared with, those at its leaf that last took a line (128 by default, `None` compares with all of them). It sets the work per line on high-cardinality sources.
 - `anomaly_max_rows` - reservoir-cap the rows fed to anomaly detection (10,000 by default, `None` for every unique line, and it trades anomaly recall for a bounded matrix).
-- `max_severe_shapes` - the severe lines kept, one per distinct message (`max_patterns` by default). The stats count the rest as `severe_dropped`.
+- `max_severe_shapes` - the severe lines kept, one per distinct message (`max_patterns` by default). `severe_dropped` in the stats counts the severe lines of a message that arrived once the cap was full.
 
 ```python
 reducer = LogReducer(level="enhanced", mode="hybrid", max_clusters=50_000, anomaly_max_rows=200_000)

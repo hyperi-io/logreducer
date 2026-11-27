@@ -7,10 +7,10 @@ It ships as a CLI and as a Python library with an IO-agnostic core.
 ## What it gives you
 
 - A `logreducer` command that reduces a file, a SQL or ClickHouse query, or a Kafka topic, straight from the shell.
-- Pattern mode streams through a bounded dedup cache, fuzzy index and template store, so memory does not grow with the line count.
+- Pattern mode streams through a bounded dedup cache, fuzzy index and template store, so memory does not grow with the line count. Line length and the spread of token counts per line still add to it.
 - A memory budget that decides how a file is read: whole, in chunks, or reservoir-sampled once it passes five times the budget.
 - Four modes: pattern (Drain3 template mining), anomaly (Isolation Forest), temporal (one example per template per time window) and hybrid.
-- Lines naming ERROR, FATAL or CRITICAL as a whole word, in any case, come through ahead of the reduced output, one per distinct message once standalone numbers, IPs, UUIDs, hex IDs and ISO timestamps are masked, in every mode and however a file is read, up to `max_severe_shapes` messages (`max_patterns` by default). A SQL or ClickHouse source samples in the database first, so a line the sample drops is never seen.
+- Lines naming ERROR, FATAL or CRITICAL as a whole word, in any case, come through ahead of the reduced output, one per distinct message once standalone numbers, IPs, MACs, UUIDs, hex IDs and ISO timestamps are masked, in every mode and however a file is read, up to `max_severe_shapes` messages (`max_patterns` by default). A SQL or ClickHouse source samples in the database first, so a line the sample drops is never seen.
 - A core with no IO dependencies: anything re-iterable that yields `str` lines is a source, and anything with `write(lines)` is a sink.
 - Seeded SQL sampling, PostgreSQL `TABLESAMPLE` and ClickHouse `SAMPLE` for large tables, and `reduce_to_target` to collect about N representative lines from a large source, holding roughly one batch in memory.
 - Injection points for a host application's config cascade and logging.
