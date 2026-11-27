@@ -110,7 +110,7 @@ flowchart LR
     classDef default fill:#F8FAFC,stroke:#64748B,stroke-width:1px,color:#0F172A
 ```
 
-*Figure 1. L4 Detail -- Reduction pipeline. Dotted arrows are the anomaly path, which anomaly and hybrid mode take.* Up: [L3 Components -- logreducer](docs/architecture.md#a-reduction-engine-behind-two-protocols).
+*Figure 1. L4 Detail -- Reduction pipeline. The path through the reservoir cap and Isolation Forest is the anomaly path, which anomaly and hybrid mode take.* Up: [L3 Components -- logreducer](docs/architecture.md#a-reduction-engine-behind-two-protocols).
 
 Pattern mode takes the solid path, anomaly mode the dotted one, and hybrid both. Fuzzy dedup runs at the `enhanced` and `maximum` levels. The reservoir cap is `anomaly_max_rows`, 10,000 rows by default. Severe lines are kept out of both paths and lead the output, one per distinct message up to `max_severe_shapes`.
 

@@ -53,7 +53,7 @@ flowchart LR
     class empty,check decision
 ```
 
-*Figure 1. L4 Detail -- Collecting a target. The dotted arrow back to the start is the next round.* Up: [L3 Components -- logreducer](architecture.md#a-reduction-engine-behind-two-protocols).
+*Figure 1. L4 Detail -- Collecting a target. The arrow from the stop check back to the pull is the next round.* Up: [L3 Components -- logreducer](architecture.md#a-reduction-engine-behind-two-protocols).
 
 A batch comes from the source's `sample_batch` where it has one (SQL, ClickHouse), else from a client-side reservoir over the whole source. Unless `batch_rows` fixes it, the average row size of a batch sets the next batch size. The stop conditions run in this order: `target` reached, `plateau` after `plateau_rounds` batches that add no unseen line, then the memory watchdog. Still past the soft limit after a garbage collection, it halves the next batch, to no fewer than 1,000 rows, and past the hard limit it stops with `memory`. The loop ends with `max_fetches` once that many batches have been pulled.
 

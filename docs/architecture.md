@@ -56,7 +56,7 @@ flowchart LR
     class caller ext
 ```
 
-*Figure 1. L3 Components -- logreducer. The dashed box is the application or CLI that called `reduce()`.* Up: top of logreducer. Down: [L4 Detail -- Reduction pipeline](../README.md#how-it-works), [L4 Detail -- Choosing a mode](../README.md#how-it-works), [L4 Detail -- Sources and sinks](library-guide.md#sources-and-sinks), [L4 Detail -- Collecting a target](library-guide.md#collecting-a-target-number-of-lines).
+*Figure 1. L3 Components -- logreducer. Caller is the application or CLI that called `reduce()`.* Up: top of logreducer. Down: [L4 Detail -- Reduction pipeline](../README.md#how-it-works), [L4 Detail -- Choosing a mode](../README.md#how-it-works), [L4 Detail -- Sources and sinks](library-guide.md#sources-and-sinks), [L4 Detail -- Collecting a target](library-guide.md#collecting-a-target-number-of-lines).
 
 ## Every source is re-iterable
 
