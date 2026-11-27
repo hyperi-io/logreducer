@@ -155,15 +155,16 @@ A host app with its config cascade and logging standard drives logreducer with t
 import logreducer
 
 # 1. Config: build it from YOUR cascade and inject it (kwargs still win on top)...
-cfg = logreducer.BigDialConfig(max_memory_gb=0.5, max_patterns=800)
+cfg = logreducer.BigDialConfig(max_memory_gb=0.5, max_patterns=800, enable_logging=True)
 reducer = logreducer.LogReducer(mode="hybrid", config=cfg)
 
 # ...or let logreducer read your env cascade directly: prefixed beats bare.
 cfg = logreducer.BigDialConfig.from_env("MYAPP", "LOGREDUCER")   # MYAPP_MAX_MEMORY_GB wins
 
-# 2. Logging: your app owns the stdlib logging handlers; logreducer attaches
-#    nothing and its records flow through YOUR handlers, at YOUR level,
-#    formatted by YOUR standard.
+# 2. Logging: with enable_logging on and no log_file, logreducer attaches no
+#    handler, so its records flow through YOUR handlers, formatted by YOUR
+#    standard. Building a reducer applies its config's logging, so hand the
+#    level to your app after the reducer is built.
 logreducer.setup_logging(enable=True, own_sinks=False)
 ```
 

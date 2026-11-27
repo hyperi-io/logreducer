@@ -41,7 +41,7 @@ Derived from Drain3 at commit 0fb6d6e1828838fa05c8f6fa5cda878e02ea79c7. It keeps
 only the streaming path logreducer drives: mask a line, route it through a
 fixed-depth prefix tree, and merge it into the most similar cluster of the same
 token count, widening differing tokens to ``<*>``. Drain3's copyright and MIT
-licence notice are in the header above; the README credits Drain3 and logparser.
+licence notice are in the header above, and the README credits Drain3 and logparser.
 """
 
 import re
@@ -49,7 +49,7 @@ from collections import OrderedDict
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 
-# Wildcard a widened template slot carries; masks render as <NAME> in the same shape.
+# Wildcard a widened template slot carries. Masks render as <NAME> in the same shape.
 _PARAM_STR = "<*>"
 
 
@@ -80,7 +80,7 @@ class LogCluster:
 class ClusterStore:
     """Cluster id to cluster map, optionally bounded by least-recently-used eviction.
 
-    Storing and ``touch`` mark a cluster as used; ``get`` and ``in`` only look, so
+    Storing and ``touch`` mark a cluster as used. ``get`` and ``in`` only look, so
     scoring candidate clusters never changes which one is evicted next.
     """
 
@@ -159,6 +159,10 @@ class Drain:
         root_node: Root of the prefix tree.
         id_to_cluster: Every live cluster, keyed by id.
         clusters_counter: The id given to the newest cluster.
+
+    One-token lines all reach the same leaf, and with ``sim_th`` above 0 they can
+    only join the cluster holding the same token, so they are looked up by token
+    instead of scored against every cluster at that leaf.
     """
 
     def __init__(
@@ -193,6 +197,12 @@ class Drain:
         self.root_node = Node()
         self.id_to_cluster = ClusterStore(max_clusters)
         self.clusters_counter = 0
+        # (token, severe) to cluster id for one-token clusters, which may name evicted ids.
+        self._one_token_ids: dict[tuple[str, bool], int] = {}
+
+    def _indexes_one_token(self, token: str) -> bool:
+        """True when a one-token line can only join the cluster holding the same token."""
+        return 0 < self.sim_th <= 1 and token != _PARAM_STR
 
     @property
     def clusters(self) -> list[LogCluster]:
@@ -243,6 +253,10 @@ class Drain:
         if token_count == 0:
             return self.id_to_cluster.get(cur_node.cluster_ids[0])
 
+        if token_count == 1 and self._indexes_one_token(tokens[0]):
+            cluster_id = self._one_token_ids.get((tokens[0], severe))
+            return None if cluster_id is None else self.id_to_cluster.get(cluster_id)
+
         cur_node_depth = 1
         for token in tokens:
             if cur_node_depth >= self.max_node_depth or cur_node_depth == token_count:
@@ -271,6 +285,17 @@ class Drain:
 
         if token_count == 0:
             cur_node.cluster_ids = [cluster.cluster_id]
+            return
+
+        if token_count == 1 and self._indexes_one_token(cluster.log_template_tokens[0]):
+            self._one_token_ids[(cluster.log_template_tokens[0], cluster.severe)] = cluster.cluster_id
+            # Dropping evicted ids at twice the live count costs O(1) per line, amortised.
+            if len(self._one_token_ids) >= 2 * len(self.id_to_cluster):
+                self._one_token_ids = {
+                    key: cluster_id
+                    for key, cluster_id in self._one_token_ids.items()
+                    if cluster_id in self.id_to_cluster
+                }
             return
 
         current_depth = 1
@@ -441,7 +466,7 @@ class TemplateMiner:
         """Create an empty miner.
 
         Args:
-            config: Tuning; ``None`` uses the :class:`TemplateMinerConfig` defaults.
+            config: Tuning. ``None`` uses the :class:`TemplateMinerConfig` defaults.
         """
         self.config = config if config is not None else TemplateMinerConfig()
         self.drain = Drain(

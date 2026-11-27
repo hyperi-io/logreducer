@@ -106,9 +106,16 @@ class TestLogReducerProcessFile:
 
         # Should have stats populated
         assert hasattr(reducer, "stats")
-        assert "input_file" in reducer.stats
+        assert reducer.stats["input_file"] == str(small_log_file)
         assert "output_lines" in reducer.stats
         assert "processing_time_seconds" in reducer.stats
+
+    def test_input_file_names_a_list_source_without_copying_it(self):
+        reducer = LogReducer(level="standard")
+        reducer.reduce([f"INFO request {i} served" for i in range(10_000)])
+
+        assert reducer.stats["input_file"].startswith("['INFO request 0 served',")
+        assert len(reducer.stats["input_file"]) < 300
 
     def test_process_file_with_output(self, small_log_file, test_data_dir):
         """Test file processing with output file"""
@@ -255,7 +262,7 @@ class TestLogReducerInternalMethods:
         """Test pattern mode processing (standard level)"""
         reducer = LogReducer(level="standard", mode="pattern")
 
-        # _process_pattern_mode iterates the source directly; a list is a valid
+        # _process_pattern_mode iterates the source directly, and a list is a valid
         # re-iterable source. Mock dedup + extract to control the pipeline.
         with (
             patch.object(reducer.deduplicator, "deduplicate_counted") as mock_dedup,

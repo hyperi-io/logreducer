@@ -90,7 +90,8 @@ time grows with the square of the template count when lines share no tokens.
 `max_clusters` (10,000 by default) bounds the template store and with it the
 comparisons per line. A 2026-10-31 test run on 16,000 lines that share nothing ran about 19 times
 slower with no bound than with `max_clusters=500`, so 10,000 caps growth on long inputs
-and a lower value is the speed setting for high-cardinality sources.
+and a lower value is the speed setting for high-cardinality sources. One-token lines,
+compact JSON among them, are looked up by token instead.
 
 Temporal mode returns one example per time window and template, ranked by severity and count, and does not stream. It reads every line and a parsed entry per line
 into memory before grouping, so it ignores `max_memory_gb`. A 2026-10-31 test run on an 80 MB
@@ -140,7 +141,7 @@ Three hooks, none of which needs the library to know anything about the host.
 | Hook | How |
 |---|---|
 | Config | Build a `BigDialConfig` from the host's cascade and inject it, or call `BigDialConfig.from_env(prefix, fallback)` where the prefixed name beats the bare one. Keyword arguments still win on top |
-| Logging | Off by default. `own_sinks=False` registers nothing, so records flow through the host's handlers formatted by the host's standard |
+| Logging | Off by default. With `enable_logging=True` and no `log_file` the reducer registers no handler, so records flow through the host's handlers formatted by the host's standard. Building a reducer applies its config's logging, so `setup_logging(enable=True, own_sinks=False)` after it hands the level to the host too |
 | IO | The `Source` and `Sink` protocols above |
 
 ## Invariants

@@ -3,6 +3,7 @@
 import json
 import os
 import random
+import reprlib
 import time
 from collections.abc import Iterable
 from dataclasses import replace
@@ -20,6 +21,9 @@ from .sampling import reservoir_sample
 from .sinks import Sink
 from .sources import FileSource, Source
 from .temporal import TemporalProcessor
+
+# Names a source in stats and logs without copying the lines of a list source.
+_SOURCE_LABEL = reprlib.Repr(maxother=200)
 
 
 class LogReducer:
@@ -49,7 +53,7 @@ class LogReducer:
             config: A fully-built BigDialConfig to use INSTEAD of the level
                 preset - the injection seam for a host application that owns
                 its own config cascade (build the config however you like and
-                hand it over; kwargs still apply on top). Copied, so the
+                hand it over, and kwargs still apply on top). Copied, so the
                 caller's object is never mutated. ``level`` then only selects
                 the fuzzy-dedup gate, not preset values.
             **kwargs: Additional config overrides
@@ -93,7 +97,6 @@ class LogReducer:
         # Get logger for this module
         self.logger = get_logger("logreducer.core")
 
-        # Initialize components
         self.memory_monitor = MemoryMonitor(self.config.max_memory_gb)
 
         if mode in [ProcessingMode.ANOMALY, ProcessingMode.HYBRID]:
@@ -223,10 +226,12 @@ class LogReducer:
 
         size_bytes = getattr(source, "size_bytes", None)
         file_size_mb = size_bytes / (1024 * 1024) if size_bytes else None
+        input_path = getattr(source, "path", None)
+        input_label = str(input_path) if input_path is not None else _SOURCE_LABEL.repr(source)
 
         if self.config.enable_logging:
             where = f"{file_size_mb:.1f} MB" if file_size_mb is not None else f"{input_lines:,} lines"
-            self.logger.info(f"Reducing {source!r} ({where})")
+            self.logger.info(f"Reducing {input_label} ({where})")
             self.logger.info(f"Mode: {self.mode.value}, Level: {self.level.value}")
             self.logger.info(f"Memory limit: {self.config.max_memory_gb:.1f} GB")
 
@@ -248,10 +253,9 @@ class LogReducer:
         processing_time = time.time() - start_time
         output_lines = len(result_lines)
         reduction_percent = (1 - output_lines / max(input_lines, 1)) * 100 if input_lines > 0 else 0
-        input_label = getattr(source, "path", None)
 
         self.stats = {
-            "input_file": str(input_label) if input_label is not None else repr(source),
+            "input_file": input_label,
             "input_lines": input_lines,
             "input_size_mb": file_size_mb,
             "output_lines": output_lines,
@@ -433,7 +437,6 @@ class LogReducer:
         if self.config.enable_logging:
             self.logger.info("Hybrid mode: combining pattern and anomaly detection")
 
-        # Get patterns
         pattern_lines = self._process_pattern_mode(source)
 
         # Get anomalies if available
